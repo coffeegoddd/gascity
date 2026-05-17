@@ -173,7 +173,7 @@ func TestPersonalWorkFormulaCompileAndRun(t *testing.T) {
 	issueID, workflowID := startReviewWorkflow(t, cityDir, "mol-personal-work-v2", map[string]string{
 		"issue":         "", // filled after create
 		"base_branch":   "main",
-		"skip_gemini":   "false",
+		"skip_gemini":   "true",
 		"setup_command": "true",
 		"test_command":  "true",
 	})
@@ -188,8 +188,11 @@ func TestPersonalWorkFormulaCompileAndRun(t *testing.T) {
 	steps := listWorkflowSteps(t, cityDir, workflowID)
 	wantSuffixes := []string{
 		"design-review-loop.iteration.1",
+		"design-review-pipeline.persona-gen-claude",
+		"design-review-pipeline.persona-gen-codex",
 		"code-review-loop.iteration.1",
 		"review-pipeline.review-claude",
+		"review-pipeline.review-codex",
 		"review-pipeline.synthesize",
 	}
 	for _, suffix := range wantSuffixes {
@@ -559,6 +562,8 @@ func installReviewFormulaFixtures(t *testing.T, cityDir string) {
 
 	writeLocalFormula(t, cityDir, "expansion-review-pr", reviewworkflows.ExpansionReviewPR)
 	writeLocalFormula(t, cityDir, "expansion-design-review", reviewworkflows.ExpansionDesignReview)
+	writeLocalFormula(t, cityDir, "expansion-review-pr-lite", reviewworkflows.ExpansionReviewPRLite)
+	writeLocalFormula(t, cityDir, "expansion-design-review-lite", reviewworkflows.ExpansionDesignReviewLite)
 	writeLocalFormula(t, cityDir, "mol-adopt-pr-v2", reviewworkflows.AdoptPR)
 	writeLocalFormula(t, cityDir, "mol-personal-work-v2", reviewworkflows.PersonalWork)
 
