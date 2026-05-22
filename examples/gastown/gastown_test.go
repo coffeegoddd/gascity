@@ -202,6 +202,11 @@ func loadExpanded(t *testing.T) *config.City {
 
 func TestCityTomlParses(t *testing.T) {
 	dir := exampleDir()
+	// city.toml is the deployment shell — imports and the default-rig
+	// binding now live in pack.toml. Load reads city.toml without expanding
+	// pack.toml, so this assertion sees only what city.toml literally
+	// declares; the post-expansion shape is exercised separately by
+	// loadExpanded.
 	cfg, err := config.Load(fsys.OSFS{}, filepath.Join(dir, "city.toml"))
 	if err != nil {
 		t.Fatalf("config.Load: %v", err)
@@ -212,7 +217,6 @@ func TestCityTomlParses(t *testing.T) {
 	if len(cfg.Workspace.LegacyIncludes()) != 0 {
 		t.Errorf("Workspace.Includes = %v, want empty (migrated to pack.toml)", cfg.Workspace.LegacyIncludes())
 	}
-	// Imports live in pack.toml (portable definition), not city.toml (deployment).
 	if len(cfg.Imports) != 0 {
 		t.Errorf("cfg.Imports = %v, want empty (imports migrated to pack.toml)", cfg.Imports)
 	}
