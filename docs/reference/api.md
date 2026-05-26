@@ -9,11 +9,11 @@ third-party client can do too — there is no hidden surface.
 
 ## Download the spec
 
-- **<a href="/schema/openapi.txt" download="openapi.json">Download openapi.json</a>** —
+- **<a href="/schema/openapi.json" download="openapi.json">Download openapi.json</a>** —
   the authoritative contract. Drop it into Stoplight, Postman,
   Swagger UI, or any OpenAPI-aware tool to browse operations
   interactively.
-- **<a href="/schema/events.txt" download="events.json">Download events.json</a>** —
+- **<a href="/schema/events.json" download="events.json">Download events.json</a>** —
   the `gc events` JSONL line schema. It references DTO components in
   `openapi.json`, so the API remains the source of truth.
 

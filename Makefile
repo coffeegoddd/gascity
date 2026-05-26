@@ -602,9 +602,9 @@ dashboard-ci: dashboard-check
 	fi
 
 ## spec-ci: regenerate the OpenAPI spec + generated Go client, fail on drift.
-## Used by CI to enforce that internal/api/openapi.json, docs/schema/openapi.{json,txt},
-## docs/schema/events.{json,txt}, and internal/api/genclient/client_gen.go are
-## all in lock-step with Huma.
+## Used by CI to enforce that internal/api/openapi.json, docs/schema JSON
+## artifacts, compatibility .txt mirrors, and internal/api/genclient/client_gen.go
+## are all in lock-step with Huma.
 spec-ci: install-oapi-codegen
 	go run ./cmd/genspec
 	go generate ./internal/api/genclient
