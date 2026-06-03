@@ -33,8 +33,9 @@ func writeTestFile(t *testing.T, dir, name, content string) {
 	}
 }
 
-func stubCleanRepoCacheGit(t *testing.T, commit string) {
+func stubCleanRepoCacheGit(t *testing.T) string {
 	t.Helper()
+	const commit = "abc123def456"
 	prev := runRepoCacheGit
 	runRepoCacheGit = func(dir string, args ...string) (string, error) {
 		if len(args) >= 2 && args[0] == "rev-parse" && args[1] == "HEAD" {
@@ -46,6 +47,7 @@ func stubCleanRepoCacheGit(t *testing.T, commit string) {
 		return prev(dir, args...)
 	}
 	t.Cleanup(func() { runRepoCacheGit = prev })
+	return commit
 }
 
 //nolint:unparam // test helper keeps the permission explicit at each call site.
@@ -710,8 +712,7 @@ func TestImport_RootPackRemoteImportFromLockfileCache(t *testing.T) {
 	mustMkdirAll(t, cityDir, 0o755)
 
 	source := "https://github.com/example/gastown.git"
-	commit := "abc123def456"
-	stubCleanRepoCacheGit(t, commit)
+	commit := stubCleanRepoCacheGit(t)
 	cacheKey := fmt.Sprintf("%x", sha256.Sum256([]byte(source+commit)))
 	cacheDir := filepath.Join(home, ".gc", "cache", "repos", cacheKey)
 	mustMkdirAll(t, filepath.Join(cacheDir, ".git"), 0o755)
@@ -988,8 +989,7 @@ func TestImport_RootPackRemoteSubpathImportFromLockfileCache(t *testing.T) {
 	cityDir := filepath.Join(dir, "city")
 	mustMkdirAll(t, cityDir, 0o755)
 
-	commit := "abc123def456"
-	stubCleanRepoCacheGit(t, commit)
+	commit := stubCleanRepoCacheGit(t)
 	cacheKey := fmt.Sprintf("%x", sha256.Sum256([]byte("file:///tmp/repo.git"+commit)))
 	cacheDir := filepath.Join(home, ".gc", "cache", "repos", cacheKey)
 	mustMkdirAll(t, filepath.Join(cacheDir, ".git"), 0o755)
@@ -1049,8 +1049,7 @@ func TestImport_RootPackGitHubTreeImportFromLockfileCache(t *testing.T) {
 	cityDir := filepath.Join(dir, "city")
 	mustMkdirAll(t, cityDir, 0o755)
 
-	commit := "abc123def456"
-	stubCleanRepoCacheGit(t, commit)
+	commit := stubCleanRepoCacheGit(t)
 	cacheKey := fmt.Sprintf("%x", sha256.Sum256([]byte("https://github.com/example/repo.git"+commit)))
 	cacheDir := filepath.Join(home, ".gc", "cache", "repos", cacheKey)
 	mustMkdirAll(t, filepath.Join(cacheDir, ".git"), 0o755)
@@ -1098,6 +1097,51 @@ scope = "city"
 	}
 	if !found["base.scout"] {
 		t.Errorf("missing base.scout; got: %v", found)
+	}
+}
+
+func TestResolvedPackNamesResolvesGitHubTreeImportsFromLockfileCache(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	t.Setenv("HOME", home)
+
+	cityDir := filepath.Join(dir, "city")
+	mustMkdirAll(t, cityDir, 0o755)
+
+	source := "https://github.com/example/repo/tree/main/gastown"
+	commit := stubCleanRepoCacheGit(t)
+	cacheDir := filepath.Join(home, ".gc", "cache", "repos", RepoCacheKey(source, commit))
+	mustMkdirAll(t, filepath.Join(cacheDir, ".git"), 0o755)
+	writeTestFile(t, cityDir, "packs.lock", fmt.Sprintf(`
+schema = 1
+
+[packs.%q]
+version = "1.2.3"
+commit = %q
+fetched = "2026-04-10T00:00:00Z"
+`, source, commit))
+	writeTestFile(t, filepath.Join(cacheDir, "gastown"), "pack.toml", `
+[pack]
+name = "gastown"
+schema = 2
+
+[imports.maintenance]
+source = "../maintenance"
+`)
+	writeTestFile(t, filepath.Join(cacheDir, "maintenance"), "pack.toml", `
+[pack]
+name = "maintenance"
+schema = 2
+`)
+
+	names := resolvedPackNames(nil, map[string]Import{
+		"gastown": {Source: source, Version: "^1.2"},
+	}, fsys.OSFS{}, cityDir)
+
+	for _, name := range []string{"gastown", "maintenance"} {
+		if !names[name] {
+			t.Fatalf("resolved pack names = %#v, missing %q", names, name)
+		}
 	}
 }
 
