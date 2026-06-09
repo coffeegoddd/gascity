@@ -2536,6 +2536,58 @@ func TestMailArchiveMultiSuccess(t *testing.T) {
 	}
 }
 
+func TestMailArchiveManyJSONEmitsBatchShape(t *testing.T) {
+	store := beads.NewMemStore()
+	mp := beadmail.New(store)
+	for i := 0; i < 3; i++ {
+		if _, err := mp.Send("human", "mayor", "", "batch"); err != nil {
+			t.Fatalf("Send %d: %v", i, err)
+		}
+	}
+
+	var stdout, stderr bytes.Buffer
+	code := doMailArchiveManyJSON(mp, events.Discard, []string{"gc-1", "gc-2", "gc-3"}, true, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("doMailArchiveManyJSON = %d, want 0; stderr: %s", code, stderr.String())
+	}
+	if stderr.Len() > 0 {
+		t.Errorf("unexpected stderr: %q", stderr.String())
+	}
+
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(stdout.Bytes(), &raw); err != nil {
+		t.Fatalf("stdout is not JSON: %v\n%s", err, stdout.String())
+	}
+	if _, ok := raw["id"]; ok {
+		t.Fatalf("batch archive JSON included singular id field: %s", stdout.String())
+	}
+
+	var got struct {
+		SchemaVersion string   `json:"schema_version"`
+		OK            bool     `json:"ok"`
+		Command       string   `json:"command"`
+		Action        string   `json:"action"`
+		IDs           []string `json:"ids"`
+		Count         int      `json:"count"`
+		AlreadyDone   bool     `json:"already_done"`
+	}
+	if err := json.Unmarshal(stdout.Bytes(), &got); err != nil {
+		t.Fatalf("unmarshal JSON result: %v", err)
+	}
+	if got.SchemaVersion != "1" || !got.OK || got.Command != "mail.archive" || got.Action != "archive" {
+		t.Fatalf("unexpected envelope: %+v", got)
+	}
+	if strings.Join(got.IDs, ",") != "gc-1,gc-2,gc-3" {
+		t.Fatalf("ids = %v, want [gc-1 gc-2 gc-3]", got.IDs)
+	}
+	if got.Count != 3 {
+		t.Fatalf("count = %d, want 3", got.Count)
+	}
+	if got.AlreadyDone {
+		t.Fatal("already_done = true, want false")
+	}
+}
+
 func TestMailArchiveMultiPartialFailure(t *testing.T) {
 	mp := mail.NewFake()
 	m1, _ := mp.Send("human", "mayor", "", "one")
