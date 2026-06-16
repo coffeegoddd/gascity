@@ -43,7 +43,8 @@ beads remain.
 ## Skills
 
 You author a skill once at a scope, and Gas City materializes it to every
-eligible agent — no per-agent allow-lists.
+eligible agent — no per-agent allow-lists, and the model decides when a skill
+applies.
 
 - Pick the scope:
   - `skills/<name>/` at **pack level** → shared with **every** agent in the

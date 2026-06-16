@@ -91,7 +91,9 @@ city pack
 ## Registries, Handles, And Sources
 
 A registry is a local catalog of reusable packs. You use a **registry handle**
-to find a pack, but you commit a **durable source** to import it:
+to find a pack on your machine, but you commit a **durable source** to import
+it — so another machine resolves the pack from the committed source, not your
+registry name:
 
 | Value | Example | Used in |
 |---|---|---|
