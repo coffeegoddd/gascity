@@ -48,6 +48,15 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd owns the Dolt data dir and process lifecycle in proxied-server mode.
+  # Orphaned-database discovery/removal is bd's responsibility; gascity must
+  # not scan or rm the bd-owned data dir. bd's own clean command is not yet
+  # reachable through the proxy, so this is a safe no-op.
+  echo "gc dolt cleanup: proxied-server mode — bd owns the Dolt data dir; orphan cleanup is bd's responsibility (no-op)."
+  exit 0
+fi
+
 if [ ! -d "$data_dir" ]; then
   echo "No orphaned databases found."
   exit 0

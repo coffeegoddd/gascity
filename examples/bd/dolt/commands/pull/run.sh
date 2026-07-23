@@ -31,6 +31,13 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd owns the endpoint and per-scope Dolt remotes in proxied-server mode, and
+  # this deployment is local-only (no remotes), so there is nothing to pull.
+  echo "gc dolt pull: proxied-server mode — bd owns remotes; local-only city, nothing to pull."
+  exit 0
+fi
+
 case "$(printf '%s' "$db_filter" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | tr '[:upper:]' '[:lower:]')" in
   information_schema|mysql|dolt_cluster|performance_schema|sys|__gc_probe)
   echo "gc dolt pull: reserved Dolt database name: $(printf '%s' "$db_filter" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//') (used internally by Dolt or gc)" >&2

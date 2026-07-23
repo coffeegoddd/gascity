@@ -113,3 +113,34 @@ func TestRecoverProxiedIsNoOpWhenReachable(t *testing.T) {
 		t.Fatalf("recover: out=%q code=%d, want exit 0 + 'no recovery needed'", out, code)
 	}
 }
+
+// TestRemoteStorageCommandsProxiedNoOp proves sync/pull/cleanup/compact — which
+// have no working bd-native delegation in proxied-server mode (bd's
+// remote/gc/compact/clean paths are unsupported through the proxy, and this
+// deployment is local-only) — exit 0 with an explanatory message and never
+// shell out to dolt. This is what keeps their orders (dolt-remotes-patrol,
+// mol-dog-compactor, mol-dog-doctor/stale-db) from logging OrderFailed.
+func TestRemoteStorageCommandsProxiedNoOp(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		expect string
+	}{
+		{"sync", "nothing to sync"},
+		{"pull", "nothing to pull"},
+		{"cleanup", "no-op"},
+		{"compact", "skipping"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, code := runDoltCommandProxied(t, tc.name, "")
+			if code != 0 {
+				t.Fatalf("%s: exit=%d, want 0\n%s", tc.name, code, out)
+			}
+			if !strings.Contains(out, tc.expect) {
+				t.Fatalf("%s: out=%q, want to contain %q", tc.name, out, tc.expect)
+			}
+			if strings.Contains(out, "dolt must not run") {
+				t.Fatalf("%s shelled out to dolt in proxied no-op mode: %q", tc.name, out)
+			}
+		})
+	}
+}

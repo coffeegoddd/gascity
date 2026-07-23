@@ -83,6 +83,15 @@ esac
 PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 . "$PACK_DIR/assets/scripts/runtime.sh"
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # In bd proxied-server mode bd owns the endpoint and per-scope Dolt remotes.
+  # gascity opens no direct connection and does not manage remotes, and this
+  # deployment is local-only (no Dolt remotes), so there is nothing to push.
+  # When bd exposes remote push through the proxy, delegate here.
+  echo "gc dolt sync: proxied-server mode — bd owns remotes; local-only city, nothing to sync."
+  exit 0
+fi
+
 beads_bd="$GC_BEADS_BD_SCRIPT"
 data_dir="$DOLT_DATA_DIR"
 

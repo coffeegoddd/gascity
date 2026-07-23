@@ -243,6 +243,16 @@ PACK_DIR="${GC_PACK_DIR:-$(unset CDPATH; cd -- "$(dirname "$0")/.." && pwd)}"
 # shellcheck disable=SC1091
 . "$PACK_DIR/assets/scripts/compact-gain-drift-proof.sh"
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # Storage compaction is bd's responsibility in proxied-server mode (bd owns
+  # the endpoint, commit history, and Dolt GC). bd's own compaction/GC is not
+  # reachable through the proxy in this bd version ("compact/gc is not
+  # supported in proxied-server mode"), so skip cleanly rather than fail every
+  # cooldown. Delegate to bd here once it exposes proxied compaction.
+  echo "gc dolt compact: proxied-server mode — storage compaction is bd's responsibility (not yet reachable through the proxy); skipping."
+  exit 0
+fi
+
 if [ "${GC_BEADS_MANAGED_LOCAL:-}" = "1" ]; then
   managed_port=$(managed_runtime_port "$DOLT_STATE_FILE" "$DOLT_DATA_DIR" || true)
   if [ -n "$managed_port" ]; then
