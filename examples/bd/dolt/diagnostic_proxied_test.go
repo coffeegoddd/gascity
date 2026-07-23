@@ -114,21 +114,17 @@ func TestRecoverProxiedIsNoOpWhenReachable(t *testing.T) {
 	}
 }
 
-// TestRemoteStorageCommandsProxiedNoOp proves sync/pull/cleanup/compact — which
-// have no working bd-native delegation in proxied-server mode (bd's
-// remote/gc/compact/clean paths are unsupported through the proxy, and this
-// deployment is local-only) — exit 0 with an explanatory message and never
-// shell out to dolt. This is what keeps their orders (dolt-remotes-patrol,
-// mol-dog-compactor, mol-dog-doctor/stale-db) from logging OrderFailed.
-func TestRemoteStorageCommandsProxiedNoOp(t *testing.T) {
+// TestRemoteCommandsProxiedNoOp proves sync/pull — which gascity keeps local-
+// only (no Dolt remotes; bd owns remotes) — exit 0 with an explanatory message
+// and never shell out to dolt. This keeps dolt-remotes-patrol from logging
+// OrderFailed.
+func TestRemoteCommandsProxiedNoOp(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		expect string
 	}{
 		{"sync", "nothing to sync"},
 		{"pull", "nothing to pull"},
-		{"cleanup", "no-op"},
-		{"compact", "skipping"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, code := runDoltCommandProxied(t, tc.name, "")
@@ -140,6 +136,39 @@ func TestRemoteStorageCommandsProxiedNoOp(t *testing.T) {
 			}
 			if strings.Contains(out, "dolt must not run") {
 				t.Fatalf("%s shelled out to dolt in proxied no-op mode: %q", tc.name, out)
+			}
+		})
+	}
+}
+
+// TestStorageCommandsProxiedDelegateToBd proves compact and cleanup delegate to
+// their bd-native equivalents in proxied mode (bd owns storage maintenance and
+// the data dir): `bd compact --force` and `bd dolt clean-databases --dry-run`.
+// This is what makes mol-dog-compactor and mol-dog-doctor/stale-db do real work
+// instead of dying exit-78.
+func TestStorageCommandsProxiedDelegateToBd(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		wantBdArgs string
+	}{
+		{"compact", "compact --force"},
+		{"cleanup", "dolt clean-databases --dry-run"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			argsFile := filepath.Join(t.TempDir(), "bd.args")
+			out, code := runDoltCommandProxied(t, tc.name, argsFile)
+			if code != 0 {
+				t.Fatalf("%s: exit=%d, want 0\n%s", tc.name, code, out)
+			}
+			if strings.Contains(out, "dolt must not run") {
+				t.Fatalf("%s shelled out to dolt (should delegate to bd): %q", tc.name, out)
+			}
+			logged, err := os.ReadFile(argsFile)
+			if err != nil {
+				t.Fatalf("read bd args: %v", err)
+			}
+			if !strings.Contains(string(logged), tc.wantBdArgs) {
+				t.Fatalf("%s did not delegate to `bd %s`; bd args were: %q", tc.name, tc.wantBdArgs, string(logged))
 			}
 		})
 	}
