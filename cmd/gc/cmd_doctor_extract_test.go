@@ -15,12 +15,11 @@ func TestBuildDoctorChecks_NameSetUnchanged(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	cfg := &config.City{Workspace: config.Workspace{Name: "demo"}}
 
 	checks := buildDoctorChecks(cityDir, cfg, nil, buildDoctorChecksOpts{
 		ControllerRunning:    false,
-		SkipCityDoltCheck:    true,
 		SkipManagedDoltCheck: true,
 	})
 	names := doctorCheckNames(checks)
@@ -41,12 +40,11 @@ func TestBuildDoctorChecksRegistersNamedAlwaysMinConflictCheck(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	cfg := &config.City{Workspace: config.Workspace{Name: "demo"}}
 
 	names := doctorCheckNames(buildDoctorChecks(cityDir, cfg, nil, buildDoctorChecksOpts{
 		ControllerRunning:    false,
-		SkipCityDoltCheck:    true,
 		SkipManagedDoltCheck: true,
 	}))
 
@@ -65,7 +63,7 @@ func TestBuildDoctorChecksSkipsNamedAlwaysMinConflictCheckWithoutConfig(t *testi
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	tests := []struct {
 		name   string
@@ -79,7 +77,6 @@ func TestBuildDoctorChecksSkipsNamedAlwaysMinConflictCheckWithoutConfig(t *testi
 		t.Run(tt.name, func(t *testing.T) {
 			names := doctorCheckNames(buildDoctorChecks(cityDir, tt.cfg, tt.cfgErr, buildDoctorChecksOpts{
 				ControllerRunning:    false,
-				SkipCityDoltCheck:    true,
 				SkipManagedDoltCheck: true,
 			}))
 			if got := doctorCheckIndex(names, "named-always-min-conflict"); got >= 0 {

@@ -955,7 +955,7 @@ func TestEnsureBundledImportBindingSemanticEquivalence(t *testing.T) {
 // rewrite.
 func TestDoDoctorFixConvergesWave1CityRootImportsThroughImportState(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	coreSource, ok := builtinpacks.CanonicalImportSource("core")
 	if !ok {
 		t.Fatal("core builtin source missing")
@@ -1316,7 +1316,7 @@ provider = "file"
 
 func TestBuiltinImportDoctorCheck_OKAfterInit(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	dir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"init", "--skip-provider-readiness", "--provider", "claude", dir}, &stdout, &stderr); code != 0 {
@@ -1335,7 +1335,7 @@ func TestBuiltinImportDoctorCheck_OKAfterInit(t *testing.T) {
 // and must not consume the warning slot.
 func TestStatusWarnsOnMissingBuiltinImports(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	dir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(dir, ".gc"), 0o755); err != nil {
 		t.Fatal(err)
@@ -1466,7 +1466,7 @@ func TestMigrateLegacySystemPacksManifestPreservesImportOptions(t *testing.T) {
 // unresolvable.
 func TestBuiltinImportDoctorCheck_FixSkipsResyncWhenNoOwnedMutation(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	dir := t.TempDir()
 	var stdout, stderr bytes.Buffer
 	if code := run([]string{"init", "--skip-provider-readiness", "--provider", "claude", dir}, &stdout, &stderr); code != 0 {

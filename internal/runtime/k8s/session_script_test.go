@@ -14,17 +14,17 @@ import (
 func TestSessionScriptStartProjectsManagedPayloadPortToPodAlias(t *testing.T) {
 	result := runSessionScriptStart(t, sessionScriptStartOptions{
 		PayloadEnv: map[string]string{
-			"GC_DOLT_PORT": "31364",
+			"GC_BEADS_PORT": "31364",
 		},
 	})
 	if result.err != nil {
 		t.Fatalf("gc-session-k8s start error = %v\noutput:\n%s", result.err, result.output)
 	}
-	if got := result.manifestEnv["GC_DOLT_HOST"]; got != podManagedDoltHost {
-		t.Fatalf("manifest GC_DOLT_HOST = %q, want %q", got, podManagedDoltHost)
+	if got := result.manifestEnv["GC_BEADS_HOST"]; got != podManagedDoltHost {
+		t.Fatalf("manifest GC_BEADS_HOST = %q, want %q", got, podManagedDoltHost)
 	}
-	if got := result.manifestEnv["GC_DOLT_PORT"]; got != podManagedDoltPort {
-		t.Fatalf("manifest GC_DOLT_PORT = %q, want %q", got, podManagedDoltPort)
+	if got := result.manifestEnv["GC_BEADS_PORT"]; got != podManagedDoltPort {
+		t.Fatalf("manifest GC_BEADS_PORT = %q, want %q", got, podManagedDoltPort)
 	}
 	if got := result.manifestEnv["BEADS_DOLT_SERVER_HOST"]; got != podManagedDoltHost {
 		t.Fatalf("manifest BEADS_DOLT_SERVER_HOST = %q, want %q", got, podManagedDoltHost)
@@ -41,19 +41,19 @@ func TestSessionScriptStartPrefersPayloadOverLegacyCompatEnv(t *testing.T) {
 			"GC_K8S_DOLT_PORT": "3308",
 		},
 		PayloadEnv: map[string]string{
-			"GC_DOLT_HOST": "custom-dolt.example.com",
-			"GC_DOLT_PORT": "4406",
+			"GC_BEADS_HOST": "custom-dolt.example.com",
+			"GC_BEADS_PORT": "4406",
 		},
 	})
 	if result.err != nil {
 		t.Fatalf("gc-session-k8s start error = %v\noutput:\n%s", result.err, result.output)
 	}
-	for _, key := range []string{"GC_DOLT_HOST", "BEADS_DOLT_SERVER_HOST"} {
+	for _, key := range []string{"GC_BEADS_HOST", "BEADS_DOLT_SERVER_HOST"} {
 		if got := result.manifestEnv[key]; got != "custom-dolt.example.com" {
 			t.Fatalf("manifest %s = %q, want custom-dolt.example.com", key, got)
 		}
 	}
-	for _, key := range []string{"GC_DOLT_PORT", "BEADS_DOLT_SERVER_PORT"} {
+	for _, key := range []string{"GC_BEADS_PORT", "BEADS_DOLT_SERVER_PORT"} {
 		if got := result.manifestEnv[key]; got != "4406" {
 			t.Fatalf("manifest %s = %q, want 4406", key, got)
 		}
@@ -70,7 +70,7 @@ func TestSessionScriptStartOmitsDoltEnvWhenPayloadTargetMissingDespiteCompatEnv(
 	if result.err != nil {
 		t.Fatalf("gc-session-k8s start error = %v\noutput:\n%s", result.err, result.output)
 	}
-	for _, key := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT"} {
+	for _, key := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT"} {
 		if _, ok := result.manifestEnv[key]; ok {
 			t.Fatalf("manifest unexpectedly projected %s from compat env: %#v", key, result.manifestEnv)
 		}
@@ -80,14 +80,14 @@ func TestSessionScriptStartOmitsDoltEnvWhenPayloadTargetMissingDespiteCompatEnv(
 func TestSessionScriptStartOmitsDoltEnvWhenOnlyAmbientCanonicalEnvExists(t *testing.T) {
 	result := runSessionScriptStart(t, sessionScriptStartOptions{
 		ProcessEnv: map[string]string{
-			"GC_DOLT_HOST": "ambient-dolt.example.com",
-			"GC_DOLT_PORT": "9911",
+			"GC_BEADS_HOST": "ambient-dolt.example.com",
+			"GC_BEADS_PORT": "9911",
 		},
 	})
 	if result.err != nil {
 		t.Fatalf("gc-session-k8s start error = %v\noutput:\n%s", result.err, result.output)
 	}
-	for _, key := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT"} {
+	for _, key := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT"} {
 		if _, ok := result.manifestEnv[key]; ok {
 			t.Fatalf("manifest unexpectedly projected %s from ambient canonical env: %#v", key, result.manifestEnv)
 		}

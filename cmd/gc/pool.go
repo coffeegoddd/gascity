@@ -30,7 +30,7 @@ type poolSessionRef struct {
 // dir specifies the working directory for the command (e.g., rig path
 // for rig-scoped pools so bd queries the correct database). env, when
 // non-nil, is merged into the subprocess environment after sanitizing
-// inherited GC_DOLT_* and BEADS_* keys.
+// inherited GC_BEADS_* and BEADS_* keys.
 //
 // Implementations MUST be safe to invoke concurrently from multiple
 // goroutines. Both evaluatePendingPools and computeWorkSet dispatch
@@ -65,7 +65,7 @@ const hookTimeout = 30 * time.Second
 // shellCommand runs a command via sh -c with the given timeout and
 // returns stdout. dir sets the command's working directory. When env is
 // non-nil, it is merged into the subprocess environment after sanitizing
-// inherited GC_DOLT_* and BEADS_* keys.
+// inherited GC_BEADS_* and BEADS_* keys.
 func shellCommand(command, dir string, timeout time.Duration, env map[string]string) (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()

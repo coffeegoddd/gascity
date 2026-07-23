@@ -2694,144 +2694,6 @@ func TestOrderDispatchExecPackDir(t *testing.T) {
 	}
 }
 
-func TestOrderDispatchExecManagedDoltPreservesOrderPackStateDir(t *testing.T) {
-	store := beads.NewMemStore()
-	cityDir := t.TempDir()
-	dataDir := filepath.Join(cityDir, ".beads", "dolt")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, "city.toml"), `[workspace]
-name = "test-city"
-prefix = "ct"
-`)
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"",
-	}, "\n"))
-	writeFile(t, filepath.Join(cityDir, ".beads", "metadata.json"), `{"database":"dolt","backend":"dolt","dolt_mode":"server","dolt_database":"ct"}`)
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Fatalf("Close listener: %v", err)
-		}
-	}()
-	stateDir := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(stateDir, "dolt-state.json"), fmt.Sprintf(
-		`{"running":true,"pid":%d,"port":%d,"data_dir":%q}`,
-		os.Getpid(),
-		listener.Addr().(*net.TCPAddr).Port,
-		dataDir,
-	))
-
-	envCh := make(chan []string, 1)
-	fakeExec := func(_ context.Context, _, _ string, env []string) ([]byte, error) {
-		envCh <- env
-		return nil, nil
-	}
-	aa := []orders.Order{{
-		Name:         "gate-sweep",
-		Trigger:      "cooldown",
-		Interval:     "1m",
-		Exec:         "$PACK_DIR/scripts/gate-sweep.sh",
-		Source:       filepath.Join(cityDir, "packs", "maintenance", "orders", "gate-sweep.toml"),
-		FormulaLayer: filepath.Join(cityDir, "packs", "maintenance", "formulas"),
-	}}
-	ad := buildOrderDispatcherFromListExec(aa, store, nil, fakeExec, nil)
-	ad.dispatch(context.Background(), cityDir, time.Now())
-
-	got := orderDispatchTestEnv(t, envCh)
-	wantPackState := filepath.Join(cityDir, ".gc", "runtime", "packs", "maintenance")
-	if got["GC_PACK_STATE_DIR"] != wantPackState {
-		t.Fatalf("GC_PACK_STATE_DIR = %q, want order pack state %q; env=%v", got["GC_PACK_STATE_DIR"], wantPackState, got)
-	}
-	wantDoltState := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt", "dolt-state.json")
-	if got["GC_DOLT_STATE_FILE"] != wantDoltState {
-		t.Fatalf("GC_DOLT_STATE_FILE = %q, want %q; env=%v", got["GC_DOLT_STATE_FILE"], wantDoltState, got)
-	}
-}
-
-func TestOrderDispatchExecManagedDoltUsesTrustedCityRuntimeDir(t *testing.T) {
-	store := beads.NewMemStore()
-	cityDir := t.TempDir()
-	dataDir := filepath.Join(cityDir, ".beads", "dolt")
-	customRuntimeDir := filepath.Join(t.TempDir(), "runtime-root")
-	packStateDir := filepath.Join(customRuntimeDir, "packs", "dolt")
-	t.Setenv("GC_CITY_PATH", cityDir)
-	t.Setenv("GC_CITY_RUNTIME_DIR", customRuntimeDir)
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(packStateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, "city.toml"), `[workspace]
-name = "test-city"
-prefix = "ct"
-
-[beads]
-provider = "bd"
-`)
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"",
-	}, "\n"))
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Fatalf("Close listener: %v", err)
-		}
-	}()
-	writeFile(t, filepath.Join(packStateDir, "dolt-state.json"), fmt.Sprintf(
-		`{"running":true,"pid":%d,"port":%d,"data_dir":%q}`,
-		os.Getpid(),
-		listener.Addr().(*net.TCPAddr).Port,
-		dataDir,
-	))
-
-	envCh := make(chan []string, 1)
-	fakeExec := func(_ context.Context, _, _ string, env []string) ([]byte, error) {
-		envCh <- env
-		return nil, nil
-	}
-	aa := []orders.Order{{
-		Name:     "dolt-test-cooldown",
-		Trigger:  "cooldown",
-		Interval: "1m",
-		Exec:     "echo test",
-	}}
-	ad := buildOrderDispatcherFromListExec(aa, store, nil, fakeExec, nil)
-	ad.dispatch(context.Background(), cityDir, time.Now())
-
-	got := orderDispatchTestEnv(t, envCh)
-	if got["GC_CITY_RUNTIME_DIR"] != customRuntimeDir {
-		t.Fatalf("GC_CITY_RUNTIME_DIR = %q, want %q; env=%v", got["GC_CITY_RUNTIME_DIR"], customRuntimeDir, got)
-	}
-	wantControlTrace := filepath.Join(customRuntimeDir, "control-dispatcher-trace.log")
-	if got["GC_CONTROL_DISPATCHER_TRACE_DEFAULT"] != wantControlTrace {
-		t.Fatalf("GC_CONTROL_DISPATCHER_TRACE_DEFAULT = %q, want %q; env=%v", got["GC_CONTROL_DISPATCHER_TRACE_DEFAULT"], wantControlTrace, got)
-	}
-	wantStateFile := filepath.Join(packStateDir, "dolt-state.json")
-	if got["GC_DOLT_STATE_FILE"] != wantStateFile {
-		t.Fatalf("GC_DOLT_STATE_FILE = %q, want %q; env=%v", got["GC_DOLT_STATE_FILE"], wantStateFile, got)
-	}
-}
-
 func TestOrderDispatchExecManagedDoltCoercesInCityRuntimeDirForControlTraceDefault(t *testing.T) {
 	store := beads.NewMemStore()
 	cityDir := t.TempDir()
@@ -2993,293 +2855,11 @@ func TestOrderDispatchExecRigUsesScopedWorkdirAndStoreEnv(t *testing.T) {
 	}
 }
 
-func TestOrderDispatchExecMarksExternalDoltTargetForManagedLocalOnlyOrders(t *testing.T) {
-	store := beads.NewMemStore()
-	cityDir := t.TempDir()
-	t.Setenv("GC_PACK_STATE_DIR", filepath.Join(t.TempDir(), "poison-pack-state"))
-	t.Setenv("GC_DOLT_DATA_DIR", filepath.Join(t.TempDir(), "poison-dolt-data"))
-	t.Setenv("GC_DOLT_CONFIG_FILE", filepath.Join(t.TempDir(), "poison-dolt-config.yaml"))
-	t.Setenv("GC_DOLT_STATE_FILE", filepath.Join(t.TempDir(), "poison-state.json"))
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: city_canonical",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"dolt.host: external.example.internal",
-		"dolt.port: 4406",
-		"",
-	}, "\n"))
-
-	envCh := make(chan []string, 1)
-	fakeExec := func(_ context.Context, _, _ string, env []string) ([]byte, error) {
-		envCh <- env
-		return nil, nil
-	}
-	aa := []orders.Order{{
-		Name:     "dolt-test-cooldown",
-		Trigger:  "cooldown",
-		Interval: "1m",
-		Exec:     "echo test",
-	}}
-	ad := buildOrderDispatcherFromListExec(aa, store, nil, fakeExec, nil)
-	ad.dispatch(context.Background(), cityDir, time.Now())
-
-	got := orderDispatchTestEnv(t, envCh)
-	externalRoot := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt", "external-target")
-	checks := map[string]string{
-		"GC_DOLT_MANAGED_LOCAL": "0",
-		"GC_DOLT_HOST":          "external.example.internal",
-		"GC_DOLT_PORT":          "4406",
-		"GC_DOLT_DATA_DIR":      externalRoot,
-		"GC_DOLT_CONFIG_FILE":   filepath.Join(externalRoot, "dolt-config.yaml"),
-		"GC_DOLT_STATE_FILE":    filepath.Join(externalRoot, "dolt-state.json"),
-	}
-	for key, want := range checks {
-		if got[key] != want {
-			t.Fatalf("%s = %q, want %q; env=%v", key, got[key], want, got)
-		}
-	}
-}
-
-func TestOrderDispatchExecPropagatesManagedDoltLayout(t *testing.T) {
-	store := beads.NewMemStore()
-	cityDir := normalizePathForCompare(t.TempDir())
-	dataDir := normalizePathForCompare(filepath.Join(t.TempDir(), "managed-dolt"))
-	configFile := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt", "dolt-config.yaml")
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"",
-	}, "\n"))
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Fatalf("Close listener: %v", err)
-		}
-	}()
-	port := fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
-	stateDir := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(stateDir, "dolt-state.json"), fmt.Sprintf(
-		`{"running":true,"pid":%d,"port":%s,"data_dir":%q}`,
-		os.Getpid(),
-		port,
-		dataDir,
-	))
-	t.Setenv("GC_DOLT_DATA_DIR", filepath.Join(t.TempDir(), "poison-dolt-data"))
-	t.Setenv("GC_DOLT_CONFIG_FILE", filepath.Join(t.TempDir(), "poison-dolt-config.yaml"))
-	t.Setenv("GC_PACK_STATE_DIR", filepath.Join(t.TempDir(), "poison-pack-state"))
-	t.Setenv("GC_DOLT_STATE_FILE", filepath.Join(t.TempDir(), "poison-state.json"))
-
-	envCh := make(chan []string, 1)
-	fakeExec := func(_ context.Context, _, _ string, env []string) ([]byte, error) {
-		envCh <- env
-		return nil, nil
-	}
-	aa := []orders.Order{{
-		Name:     "dolt-test-cooldown",
-		Trigger:  "cooldown",
-		Interval: "1m",
-		Exec:     "echo test",
-	}}
-	ad := buildOrderDispatcherFromListExec(aa, store, nil, fakeExec, nil)
-	ad.dispatch(context.Background(), cityDir, time.Now())
-
-	got := orderDispatchTestEnv(t, envCh)
-	checks := map[string]string{
-		"GC_DOLT_MANAGED_LOCAL": "1",
-		"GC_DOLT_PORT":          port,
-		"GC_DOLT_DATA_DIR":      dataDir,
-		"GC_DOLT_CONFIG_FILE":   configFile,
-	}
-	for key, want := range checks {
-		if got[key] != want {
-			t.Fatalf("%s = %q, want %q; env=%v", key, got[key], want, got)
-		}
-	}
-}
-
-func TestOrderDispatchExecPropagatesLegacyManagedDoltDataDir(t *testing.T) {
-	store := beads.NewMemStore()
-	cityDir := normalizePathForCompare(t.TempDir())
-	dataDir := normalizePathForCompare(filepath.Join(cityDir, ".gc", "dolt-data"))
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"",
-	}, "\n"))
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Fatalf("Close listener: %v", err)
-		}
-	}()
-	port := fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
-	stateDir := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(stateDir, "dolt-state.json"), fmt.Sprintf(
-		`{"running":true,"pid":%d,"port":%s,"data_dir":%q}`,
-		os.Getpid(),
-		port,
-		dataDir,
-	))
-
-	envCh := make(chan []string, 1)
-	fakeExec := func(_ context.Context, _, _ string, env []string) ([]byte, error) {
-		envCh <- env
-		return nil, nil
-	}
-	aa := []orders.Order{{
-		Name:     "dolt-test-cooldown",
-		Trigger:  "cooldown",
-		Interval: "1m",
-		Exec:     "echo test",
-	}}
-	ad := buildOrderDispatcherFromListExec(aa, store, nil, fakeExec, nil)
-	ad.dispatch(context.Background(), cityDir, time.Now())
-
-	got := orderDispatchTestEnv(t, envCh)
-	checks := map[string]string{
-		"GC_DOLT_MANAGED_LOCAL": "1",
-		"GC_DOLT_PORT":          port,
-		"GC_DOLT_DATA_DIR":      dataDir,
-	}
-	for key, want := range checks {
-		if got[key] != want {
-			t.Fatalf("%s = %q, want %q; env=%v", key, got[key], want, got)
-		}
-	}
-}
-
-func TestOrderDispatchExecIgnoresPublishedRunningDataDirWithUnreachablePort(t *testing.T) {
-	store := beads.NewMemStore()
-	cityDir := t.TempDir()
-	staleDataDir := filepath.Join(t.TempDir(), "stale-published-dolt")
-	defaultDataDir := filepath.Join(cityDir, ".beads", "dolt")
-	if err := os.MkdirAll(defaultDataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(staleDataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"",
-	}, "\n"))
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	port := fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
-	if err := listener.Close(); err != nil {
-		t.Fatalf("Close listener: %v", err)
-	}
-	stateDir := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(stateDir, "dolt-state.json"), fmt.Sprintf(
-		`{"running":true,"pid":%d,"port":%s,"data_dir":%q}`,
-		os.Getpid(),
-		port,
-		staleDataDir,
-	))
-
-	envCh := make(chan []string, 1)
-	fakeExec := func(_ context.Context, _, _ string, env []string) ([]byte, error) {
-		envCh <- env
-		return nil, nil
-	}
-	aa := []orders.Order{{
-		Name:     "dolt-test-cooldown",
-		Trigger:  "cooldown",
-		Interval: "1m",
-		Exec:     "echo test",
-	}}
-	ad := buildOrderDispatcherFromListExec(aa, store, nil, fakeExec, nil)
-	ad.dispatch(context.Background(), cityDir, time.Now())
-
-	got := orderDispatchTestEnv(t, envCh)
-	if got["GC_DOLT_DATA_DIR"] != defaultDataDir {
-		t.Fatalf("GC_DOLT_DATA_DIR = %q, want default %q; env=%v", got["GC_DOLT_DATA_DIR"], defaultDataDir, got)
-	}
-}
-
-func TestOrderExecManagedDoltFallbackSkipsInheritedExternalCity(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "frontend")
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(rigDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: city_canonical",
-		"gc.endpoint_status: verified",
-		"dolt.host: external.example.internal",
-		"dolt.port: 4406",
-		"",
-	}, "\n"))
-	writeFile(t, filepath.Join(rigDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: fe",
-		"gc.endpoint_origin: inherited_city",
-		"gc.endpoint_status: verified",
-		"dolt.host: external.example.internal",
-		"dolt.port: 4406",
-		"",
-	}, "\n"))
-
-	env := map[string]string{
-		"GC_DOLT_HOST": "external.example.internal",
-		"GC_DOLT_PORT": "4406",
-	}
-	if applyOrderExecManagedDoltFallback(cityDir, rigDir, env, fmt.Errorf("simulated target error")) {
-		t.Fatal("managed fallback applied to inherited external city endpoint")
-	}
-	if env["GC_DOLT_MANAGED_LOCAL"] == "1" {
-		t.Fatalf("GC_DOLT_MANAGED_LOCAL = %q, want not managed-local; env=%v", env["GC_DOLT_MANAGED_LOCAL"], env)
-	}
-}
-
 func TestApplyOrderExecCanonicalDoltEnvClearsProjectedPasswordForExplicitRig(t *testing.T) {
-	t.Setenv("GC_DOLT_HOST", "")
-	t.Setenv("GC_DOLT_PORT", "")
-	t.Setenv("GC_DOLT_USER", "")
-	t.Setenv("GC_DOLT_PASSWORD", "")
+	t.Setenv("GC_BEADS_HOST", "")
+	t.Setenv("GC_BEADS_PORT", "")
+	t.Setenv("GC_BEADS_USER", "")
+	t.Setenv("GC_BEADS_PASSWORD", "")
 	t.Setenv("BEADS_DOLT_PASSWORD", "")
 
 	cityDir := t.TempDir()
@@ -3316,18 +2896,18 @@ func TestApplyOrderExecCanonicalDoltEnvClearsProjectedPasswordForExplicitRig(t *
 	t.Setenv("BEADS_CREDENTIALS_FILE", credentialsPath)
 
 	env := map[string]string{
-		"GC_DOLT_HOST":           "city-db.example.com",
-		"GC_DOLT_PORT":           "4406",
-		"GC_DOLT_PASSWORD":       "city-secret",
+		"GC_BEADS_HOST":          "city-db.example.com",
+		"GC_BEADS_PORT":          "4406",
+		"GC_BEADS_PASSWORD":      "city-secret",
 		"BEADS_DOLT_PASSWORD":    "city-secret",
 		"BEADS_CREDENTIALS_FILE": credentialsPath,
 	}
 	applyOrderExecCanonicalDoltEnv(cityDir, rigDir, env)
-	if got := env["GC_DOLT_HOST"]; got != "rig-db.example.com" {
-		t.Fatalf("GC_DOLT_HOST = %q, want %q", got, "rig-db.example.com")
+	if got := env["GC_BEADS_HOST"]; got != "rig-db.example.com" {
+		t.Fatalf("GC_BEADS_HOST = %q, want %q", got, "rig-db.example.com")
 	}
-	if got := env["GC_DOLT_PASSWORD"]; got != "rig-credentials-secret" {
-		t.Fatalf("GC_DOLT_PASSWORD = %q, want %q", got, "rig-credentials-secret")
+	if got := env["GC_BEADS_PASSWORD"]; got != "rig-credentials-secret" {
+		t.Fatalf("GC_BEADS_PASSWORD = %q, want %q", got, "rig-credentials-secret")
 	}
 	if got := env["BEADS_DOLT_PASSWORD"]; got != "rig-credentials-secret" {
 		t.Fatalf("BEADS_DOLT_PASSWORD = %q, want %q", got, "rig-credentials-secret")
@@ -9063,7 +8643,7 @@ func TestLockedWriterSerializesConcurrentWrites(t *testing.T) {
 // the dashboard fine-grained attribution per order.
 func TestOrderExecEnvSetsBeadsActorToOrderName(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	_ = os.Unsetenv("BEADS_ACTOR")
 
 	cityDir := t.TempDir()
@@ -9091,13 +8671,13 @@ func TestOrderExecEnvSetsBeadsActorToOrderName(t *testing.T) {
 // TestOrderExecEnvScrubsAmbientDoltEnvForCityWithoutDoltTarget pins the
 // projection contract the core maintenance scripts' no-Dolt guard relies
 // on: for a city without a canonical Dolt target (e.g. `[beads] provider =
-// "file"`), the order exec env defines every projected GC_DOLT_* key as
+// "file"`), the order exec env defines every projected GC_BEADS_* key as
 // explicitly empty, so mergeOrderExecEnv drops ambient operator values and
 // Dolt-dependent core orders cannot be aimed at a server outside the city.
 func TestOrderExecEnvScrubsAmbientDoltEnvForCityWithoutDoltTarget(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT_HOST", "ambient.example.internal")
-	t.Setenv("GC_DOLT_PORT", "4406")
+	t.Setenv("GC_BEADS_HOST", "ambient.example.internal")
+	t.Setenv("GC_BEADS_PORT", "4406")
 	_ = os.Unsetenv("BEADS_ACTOR")
 
 	cityDir := t.TempDir()
@@ -9115,7 +8695,7 @@ func TestOrderExecEnvScrubsAmbientDoltEnvForCityWithoutDoltTarget(t *testing.T) 
 			overrides[key] = value
 		}
 	}
-	for _, key := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT"} {
+	for _, key := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT"} {
 		value, defined := overrides[key]
 		if !defined {
 			t.Fatalf("order env does not define %s; ambient controller env would leak through: %v", key, envSlice)
@@ -9125,9 +8705,9 @@ func TestOrderExecEnvScrubsAmbientDoltEnvForCityWithoutDoltTarget(t *testing.T) 
 		}
 	}
 
-	merged := mergeOrderExecEnv([]string{"GC_DOLT_HOST=ambient.example.internal", "GC_DOLT_PORT=4406"}, envSlice)
+	merged := mergeOrderExecEnv([]string{"GC_BEADS_HOST=ambient.example.internal", "GC_BEADS_PORT=4406"}, envSlice)
 	for _, entry := range merged {
-		if entry == "GC_DOLT_PORT=4406" || entry == "GC_DOLT_HOST=ambient.example.internal" {
+		if entry == "GC_BEADS_PORT=4406" || entry == "GC_BEADS_HOST=ambient.example.internal" {
 			t.Fatalf("ambient dolt env survived merge: %q in %v", entry, merged)
 		}
 	}
@@ -9140,7 +8720,7 @@ func TestOrderExecEnvScrubsAmbientDoltEnvForCityWithoutDoltTarget(t *testing.T) 
 // otherwise require editing the controller's parent environment.
 func TestOrderExecEnvAppliesOrderEnvOverrides(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	_ = os.Unsetenv("BEADS_ACTOR")
 
 	cityDir := t.TempDir()
@@ -9186,7 +8766,7 @@ func TestOrderExecEnvAppliesOrderEnvOverrides(t *testing.T) {
 // would otherwise strip them and every merge order's `gh` call would fail auth.
 func TestOrderExecEnvProjectsGitHubToken(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GH_TOKEN", "ghs_controller_token")
 	t.Setenv("GITHUB_TOKEN", "github_pat_controller")
 	_ = os.Unsetenv("BEADS_ACTOR")
@@ -9257,7 +8837,7 @@ func TestOrderExecEnvProjectsGitHubToken(t *testing.T) {
 // scope its own credential when needed.
 func TestOrderExecEnvGitHubTokenOrderEnvOverrideWins(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GH_TOKEN", "ghs_ambient")
 	_ = os.Unsetenv("BEADS_ACTOR")
 
@@ -9297,7 +8877,7 @@ func TestOrderExecEnvGitHubTokenOrderEnvOverrideWins(t *testing.T) {
 // store target has already been resolved.
 func TestOrderExecEnvRejectsReservedOrderEnvKeys(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	target := execStoreTarget{ScopeRoot: cityDir, ScopeKind: "city", Prefix: "pc"}
@@ -9333,7 +8913,7 @@ func TestOrderExecEnvRejectsReservedOrderEnvKeys(t *testing.T) {
 
 func TestOrderExecEnvReservedKeysCoverProjectedEnv(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	packDir := filepath.Join(cityDir, "packs", "maintenance")
@@ -9373,7 +8953,7 @@ func TestOrderExecEnvReservedKeysCoverProjectedEnv(t *testing.T) {
 // edits don't regress.
 func TestOrderExecEnvSkipsBeadsActorForUnnamedOrder(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	_ = os.Unsetenv("BEADS_ACTOR")
 
 	cityDir := t.TempDir()
@@ -9420,7 +9000,7 @@ dolt.auto-start: false
 func TestOrderExecEnvWithError_PostgresCityClearsDoltOverlay(t *testing.T) {
 	clearAmbientPostgresEnv(t)
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	writePGScopeFixture(t, cityDir, "citypw")
@@ -9449,7 +9029,7 @@ dolt.auto-start: false
 func TestOrderTriggerOptionsForTarget_PostgresRigClearsDoltOverlay(t *testing.T) {
 	clearAmbientPostgresEnv(t)
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o700); err != nil {
@@ -9499,7 +9079,7 @@ dolt.auto-start: false
 // cover on their own.
 func TestOrderTriggerOptionsForTargetSetsCheckTimeout(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	target := execStoreTarget{ScopeRoot: cityDir, ScopeKind: "city", Prefix: "pc"}
@@ -9684,13 +9264,13 @@ func assertNoDoltOrderEnv(t *testing.T, env map[string]string) {
 		}
 	}
 	for _, key := range []string{
-		"GC_DOLT_MANAGED_LOCAL",
-		"GC_DOLT_DATA_DIR",
-		"GC_DOLT_LOG_FILE",
-		"GC_DOLT_STATE_FILE",
-		"GC_DOLT_PID_FILE",
-		"GC_DOLT_LOCK_FILE",
-		"GC_DOLT_CONFIG_FILE",
+		"GC_BEADS_MANAGED_LOCAL",
+		"GC_BEADS_DATA_DIR",
+		"GC_BEADS_LOG_FILE",
+		"GC_BEADS_STATE_FILE",
+		"GC_BEADS_PID_FILE",
+		"GC_BEADS_LOCK_FILE",
+		"GC_BEADS_CONFIG_FILE",
 	} {
 		if value, ok := env[key]; ok && value != "" {
 			t.Errorf("env[%q] = %q, want empty/absent for PG-backed order", key, value)

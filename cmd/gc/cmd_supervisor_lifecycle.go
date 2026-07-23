@@ -49,7 +49,7 @@ var (
 		return err == nil && launchdPrintReportsRunning(out)
 	}
 	// supervisorLaunchctlGetenv reads a value from `launchctl getenv` on
-	// macOS so users can set per-domain env (e.g. GC_DOLT_LOGLEVEL) and
+	// macOS so users can set per-domain env (e.g. GC_BEADS_LOGLEVEL) and
 	// have it flow into the supervisor's launchd plist. Returns "" on
 	// non-Darwin or when the key is unset / launchctl is unavailable.
 	supervisorLaunchctlGetenv = func(key string) string {
@@ -1111,9 +1111,9 @@ var supervisorServiceEnvKeys = map[string]bool{
 	"CLAUDE_CODE_OAUTH_TOKEN":                  true,
 	"CLAUDE_CODE_SUBAGENT_MODEL":               true,
 	"CLAUDE_CONFIG_DIR":                        true,
-	"GC_DOLT_LOGLEVEL":                         true,
-	"GC_DOLT_PASSWORD":                         true,
-	"GC_DOLT_USER":                             true,
+	"GC_BEADS_LOGLEVEL":                        true,
+	"GC_BEADS_PASSWORD":                        true,
+	"GC_BEADS_USER":                            true,
 	"T3_HOME":                                  true,
 	"T3_WS_URL":                                true,
 	"T3CODE_HOME":                              true,
@@ -2140,4 +2140,12 @@ func uninstallSupervisorSystemd(_ *supervisorServiceData, stdout, stderr io.Writ
 	_ = supervisorSystemctlRun("--user", "daemon-reload")
 	fmt.Fprintf(stdout, "Uninstalled systemd service: %s\n", path) //nolint:errcheck // best-effort stdout
 	return 0
+}
+func pathWithinOrSame(path, root string) bool {
+	path = normalizePathForCompare(strings.TrimSpace(strings.TrimSuffix(path, " (deleted)")))
+	root = normalizePathForCompare(strings.TrimSpace(root))
+	if path == "" || root == "" {
+		return false
+	}
+	return path == root || strings.HasPrefix(path, root+string(filepath.Separator))
 }

@@ -38,7 +38,7 @@ func repoRoot(t *testing.T) string {
 // every GC_* / DOLT_* entry stripped unconditionally. The blanket
 // scrub keeps shell-script tests hermetic when invoked from an agent
 // worktree, where the host shell carries managed-runtime
-// state (GC_DOLT_STATE_FILE, GC_CITY_RUNTIME_DIR, GC_DOLT_PORT, etc.)
+// state (GC_BEADS_STATE_FILE, GC_CITY_RUNTIME_DIR, GC_BEADS_PORT, etc.)
 // that would otherwise override the test fixture's temp paths and
 // route runtime.sh at the production state file. The explicit keys
 // argument remains for non-GC_/DOLT_ scrubbing such as PATH.
@@ -70,8 +70,8 @@ func filteredEnv(keys ...string) []string {
 // This test injects the leak explicitly and asserts it never reaches
 // the returned slice.
 func TestFilteredEnvStripsGCAndDOLTPrefixes(t *testing.T) {
-	t.Setenv("GC_DOLT_STATE_FILE", "/host/leak/dolt-state.json")
-	t.Setenv("GC_DOLT_PORT", "38676")
+	t.Setenv("GC_BEADS_STATE_FILE", "/host/leak/dolt-state.json")
+	t.Setenv("GC_BEADS_PORT", "38676")
 	t.Setenv("GC_CITY_RUNTIME_DIR", "/host/leak/runtime")
 	t.Setenv("DOLT_CLI_PASSWORD", "host-leak")
 	t.Setenv("FILTERED_ENV_TEST_KEEP", "kept")
@@ -180,10 +180,10 @@ func TestHealthScriptIsBounded(t *testing.T) {
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+strconv.Itoa(port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+strconv.Itoa(port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		// Skip zombie enumeration: we're testing bounded-probe
 		// behavior, and per-PID `ps` calls on machines with many
 		// ambient dolt processes dominate the runtime budget.
@@ -326,15 +326,15 @@ func TestHealthOrphansFromCleanupAuthority(t *testing.T) {
 	root := repoRoot(t)
 	script := filepath.Join(root, healthScript)
 	cmd := exec.Command("sh", script, "--json")
-	cmd.Env = append(filteredEnv("GC_DOLT_PORT", "PATH", "GC_DOLT_DATA_DIR"),
+	cmd.Env = append(filteredEnv("GC_BEADS_PORT", "PATH", "GC_BEADS_DATA_DIR"),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+strconv.Itoa(port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+strconv.Itoa(port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 	)
 	out, err := cmd.Output()
@@ -429,15 +429,15 @@ exit 1
 
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
-	cmd.Env = append(filteredEnv("GC_DOLT_PORT", "PATH", "GC_DOLT_DATA_DIR", "GC_DOLT_RIG_LIST_TIMEOUT_SECS"),
+	cmd.Env = append(filteredEnv("GC_BEADS_PORT", "PATH", "GC_BEADS_DATA_DIR", "GC_BEADS_RIG_LIST_TIMEOUT_SECS"),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT=3306",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT=3306",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 	)
 	out, err := cmd.Output()
@@ -536,8 +536,8 @@ func TestRuntimeScriptPortPrecedence(t *testing.T) {
 			cityPath := t.TempDir()
 			want := tt.setup(t, cityPath)
 
-			cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_DOLT_PORT"`)
-			cmd.Env = filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_PORT", "GC_DOLT_HOST")
+			cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_BEADS_PORT"`)
+			cmd.Env = filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_PORT", "GC_BEADS_HOST")
 			cmd.Env = append(cmd.Env,
 				"GC_CITY_PATH="+cityPath,
 				"GC_PACK_DIR="+root,
@@ -551,7 +551,7 @@ func TestRuntimeScriptPortPrecedence(t *testing.T) {
 				t.Fatalf("runtime.sh failed: %v\n%s", err, out)
 			}
 			if got := strings.TrimSpace(string(out)); got != want {
-				t.Fatalf("GC_DOLT_PORT = %q, want %q", got, want)
+				t.Fatalf("GC_BEADS_PORT = %q, want %q", got, want)
 			}
 		})
 	}
@@ -568,29 +568,29 @@ func TestRuntimeScriptManagedStateBeatsStaleEnvPort(t *testing.T) {
 	writeManagedRuntimeStateForScript(t, cityPath, port)
 
 	root := repoRoot(t)
-	cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_DOLT_PORT"`)
+	cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_BEADS_PORT"`)
 	cmd.Env = append(filteredEnv(
 		"GC_CITY_PATH",
 		"GC_PACK_DIR",
 		"GC_CITY_RUNTIME_DIR",
 		"GC_PACK_STATE_DIR",
-		"GC_DOLT_DATA_DIR",
-		"GC_DOLT_LOG_FILE",
-		"GC_DOLT_STATE_FILE",
-		"GC_DOLT_PID_FILE",
-		"GC_DOLT_PORT",
-		"GC_DOLT_HOST",
+		"GC_BEADS_DATA_DIR",
+		"GC_BEADS_LOG_FILE",
+		"GC_BEADS_STATE_FILE",
+		"GC_BEADS_PID_FILE",
+		"GC_BEADS_PORT",
+		"GC_BEADS_HOST",
 	),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_PORT=4406",
+		"GC_BEADS_PORT=4406",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		t.Fatalf("runtime.sh failed: %v\n%s", err, out)
 	}
 	if got := strings.TrimSpace(string(out)); got != strconv.Itoa(port) {
-		t.Fatalf("GC_DOLT_PORT = %q, want live managed state port %d", got, port)
+		t.Fatalf("GC_BEADS_PORT = %q, want live managed state port %d", got, port)
 	}
 }
 
@@ -661,8 +661,8 @@ exit 1
 			writeExecutable(t, filepath.Join(fakeBin, "lsof"), tt.lsofBody)
 			writeExecutable(t, filepath.Join(fakeBin, "nc"), tt.ncBody(managedPort))
 
-			cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_DOLT_PORT"`)
-			cmd.Env = filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_PORT", "GC_DOLT_HOST", "PATH")
+			cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_BEADS_PORT"`)
+			cmd.Env = filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_PORT", "GC_BEADS_HOST", "PATH")
 			cmd.Env = append(cmd.Env,
 				"GC_CITY_PATH="+cityPath,
 				"GC_PACK_DIR="+root,
@@ -677,7 +677,7 @@ exit 1
 				t.Fatalf("runtime.sh failed: %v\n%s", err, out)
 			}
 			if got := strings.TrimSpace(string(out)); got != want {
-				t.Fatalf("GC_DOLT_PORT = %q, want %q", got, want)
+				t.Fatalf("GC_BEADS_PORT = %q, want %q", got, want)
 			}
 		})
 	}
@@ -757,8 +757,8 @@ fi
 exit 1
 `)
 
-			cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_DOLT_PORT"`)
-			cmd.Env = filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_PORT", "GC_DOLT_HOST", "PATH")
+			cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_BEADS_PORT"`)
+			cmd.Env = filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_PORT", "GC_BEADS_HOST", "PATH")
 			cmd.Env = append(cmd.Env,
 				"GC_CITY_PATH="+cityPath,
 				"GC_PACK_DIR="+root,
@@ -769,7 +769,7 @@ exit 1
 				t.Fatalf("runtime.sh failed: %v\n%s", err, out)
 			}
 			if got := strings.TrimSpace(string(out)); got != managedPort {
-				t.Fatalf("GC_DOLT_PORT = %q, want %q", got, managedPort)
+				t.Fatalf("GC_BEADS_PORT = %q, want %q", got, managedPort)
 			}
 		})
 	}
@@ -803,8 +803,8 @@ exec %q "$@"
 `, realSed))
 
 	root := repoRoot(t)
-	cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_DOLT_PORT"`)
-	cmd.Env = filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_PORT", "GC_DOLT_HOST", "PATH")
+	cmd := exec.Command("sh", "-c", `. "$GC_PACK_DIR/assets/scripts/runtime.sh"; printf '%s\n' "$GC_BEADS_PORT"`)
+	cmd.Env = filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_PORT", "GC_BEADS_HOST", "PATH")
 	cmd.Env = append(cmd.Env,
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
@@ -815,7 +815,7 @@ exec %q "$@"
 		t.Fatalf("runtime.sh failed: %v\n%s", err, out)
 	}
 	if got := strings.TrimSpace(string(out)); got != managedPort {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", got, managedPort)
+		t.Fatalf("GC_BEADS_PORT = %q, want %q", got, managedPort)
 	}
 }
 
@@ -847,13 +847,13 @@ exit 0
 
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
-	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
+	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=",
-		"GC_DOLT_PORT="+port,
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=",
+		"GC_BEADS_PORT="+port,
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
@@ -940,10 +940,10 @@ exec /bin/date "$@"
 				"FAKE_DATE_SECONDS_SECOND",
 				"GC_CITY_PATH",
 				"GC_PACK_DIR",
-				"GC_DOLT_HOST",
-				"GC_DOLT_PORT",
-				"GC_DOLT_USER",
-				"GC_DOLT_PASSWORD",
+				"GC_BEADS_HOST",
+				"GC_BEADS_PORT",
+				"GC_BEADS_USER",
+				"GC_BEADS_PASSWORD",
 				"GC_HEALTH_SKIP_ZOMBIE_SCAN",
 				"PATH",
 			),
@@ -953,10 +953,10 @@ exec /bin/date "$@"
 				"FAKE_DATE_SECONDS_SECOND=1776740123",
 				"GC_CITY_PATH="+cityPath,
 				"GC_PACK_DIR="+root,
-				"GC_DOLT_HOST=127.0.0.1",
-				"GC_DOLT_PORT="+port,
-				"GC_DOLT_USER=root",
-				"GC_DOLT_PASSWORD=",
+				"GC_BEADS_HOST=127.0.0.1",
+				"GC_BEADS_PORT="+port,
+				"GC_BEADS_USER=root",
+				"GC_BEADS_PASSWORD=",
 				"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 				"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 			)
@@ -1043,7 +1043,7 @@ func TestHealthScriptProbesConfiguredExternalHost(t *testing.T) {
 	emptyDataDir := t.TempDir()
 
 	// Force the local managed-server precheck to fail. External hosts must still
-	// be probed via SQL against GC_DOLT_HOST:GC_DOLT_PORT.
+	// be probed via SQL against GC_BEADS_HOST:GC_BEADS_PORT.
 	writeExecutable(t, filepath.Join(fakeBin, "gc"), "#!/bin/sh\nexit 1\n")
 	writeExecutable(t, filepath.Join(fakeBin, "lsof"), "#!/bin/sh\nexit 1\n")
 	writeExecutable(t, filepath.Join(fakeBin, "nc"), "#!/bin/sh\nexit 1\n")
@@ -1056,16 +1056,16 @@ exit 0
 `)
 
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
-	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-		"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH", "FAKE_DOLT_ARGS",
-		"GC_DOLT_DATA_DIR"),
+	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+		"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH", "FAKE_DOLT_ARGS",
+		"GC_BEADS_DATA_DIR"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+emptyDataDir,
-		"GC_DOLT_HOST=superlzy-dolt",
-		"GC_DOLT_PORT=3306",
-		"GC_DOLT_USER=superlzy",
-		"GC_DOLT_PASSWORD=secret",
+		"GC_BEADS_DATA_DIR="+emptyDataDir,
+		"GC_BEADS_HOST=superlzy-dolt",
+		"GC_BEADS_PORT=3306",
+		"GC_BEADS_USER=superlzy",
+		"GC_BEADS_PASSWORD=secret",
 		"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 		"FAKE_DOLT_ARGS="+argsFile,
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
@@ -1154,15 +1154,15 @@ func TestHealthScriptExternalEndpointEnumeratesDatabasesViaSQL(t *testing.T) {
 	writeExecutable(t, filepath.Join(fakeBin, "dolt"), smartFakeDoltForExternal)
 
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
-	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-		"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH", "GC_DOLT_DATA_DIR"),
+	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+		"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH", "GC_BEADS_DATA_DIR"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+emptyDataDir,
-		"GC_DOLT_HOST=superlzy-dolt",
-		"GC_DOLT_PORT=3306",
-		"GC_DOLT_USER=superlzy",
-		"GC_DOLT_PASSWORD=secret",
+		"GC_BEADS_DATA_DIR="+emptyDataDir,
+		"GC_BEADS_HOST=superlzy-dolt",
+		"GC_BEADS_PORT=3306",
+		"GC_BEADS_USER=superlzy",
+		"GC_BEADS_PASSWORD=secret",
 		"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
@@ -1253,14 +1253,14 @@ exit 1
 
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
-	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-		"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
+	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+		"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+port,
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+port,
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
@@ -1317,15 +1317,15 @@ func TestHealthScriptNonOneLoopbackHostIsExternal(t *testing.T) {
 	writeExecutable(t, filepath.Join(fakeBin, "dolt"), smartFakeDoltForExternal)
 
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
-	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-		"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH", "GC_DOLT_DATA_DIR"),
+	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+		"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH", "GC_BEADS_DATA_DIR"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+emptyDataDir,
-		"GC_DOLT_HOST=127.0.0.2",
-		"GC_DOLT_PORT=3306",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+emptyDataDir,
+		"GC_BEADS_HOST=127.0.0.2",
+		"GC_BEADS_PORT=3306",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
@@ -1442,14 +1442,14 @@ exit 1
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
 	cmd.Env = append(
-		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-			"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
+		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+			"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+mainPort,
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+mainPort,
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
 
@@ -1586,14 +1586,14 @@ exit 1
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
 	cmd.Env = append(
-		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-			"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
+		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+			"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+mainPort,
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+mainPort,
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
 
@@ -1688,14 +1688,14 @@ exit 1
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
 	cmd.Env = append(
-		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-			"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
+		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+			"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+mainPort,
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+mainPort,
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
 
@@ -1796,14 +1796,14 @@ exit 1
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
 	cmd.Env = append(
-		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-			"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
+		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+			"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+mainPort,
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+mainPort,
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
 
@@ -1893,14 +1893,14 @@ exit 1
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, healthScript), "--json")
 	cmd.Env = append(
-		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT",
-			"GC_DOLT_USER", "GC_DOLT_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
+		filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT",
+			"GC_BEADS_USER", "GC_BEADS_PASSWORD", "GC_HEALTH_SKIP_ZOMBIE_SCAN", "PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+mainPort,
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+mainPort,
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"PATH="+fakeBin+string(os.PathListSeparator)+os.Getenv("PATH"),
 	)
 	out, err := cmd.CombinedOutput()
@@ -1982,10 +1982,10 @@ func TestHealthScriptJSONAlwaysExitsZero(t *testing.T) {
 	cmd.Env = append(os.Environ(),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+strconv.Itoa(port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+strconv.Itoa(port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 		"GC_HEALTH_SKIP_ZOMBIE_SCAN=1",
 	)
 

@@ -17,7 +17,7 @@ func TestPortResolveOrDieEnvOverride(t *testing.T) {
 		stateFile: filepath.Join(t.TempDir(), "missing-state.json"),
 		dataDir:   filepath.Join(t.TempDir(), "data"),
 		cityPath:  t.TempDir(),
-		env:       []string{"GC_DOLT_PORT=4242"},
+		env:       []string{"GC_BEADS_PORT=4242"},
 	})
 
 	assertPortResolveResult(t, result, 0, "4242\n", "")
@@ -83,7 +83,7 @@ func TestPortResolveOrDieExplicitStateSkipsProviderFallback(t *testing.T) {
 		dataDir:             filepath.Join(t.TempDir(), "data"),
 		cityPath:            cityPath,
 		providerManagedPort: "47824",
-		env:                 []string{"GC_DOLT_STATE_FILE=" + stateFile},
+		env:                 []string{"GC_BEADS_STATE_FILE=" + stateFile},
 	})
 
 	assertPortResolveResult(t, result, 78, "", expectedPortResolveError(stateFile, cityPath, "missing"))
@@ -188,7 +188,7 @@ fi
 `, shellQuote(filepath.Join(root, "assets", "scripts", "port_resolve.sh")))
 
 	cmd := exec.Command("sh", "-c", driver)
-	cmd.Env = filteredEnv("GC_DOLT_PORT", "GC_DOLT_STATE_FILE", "STATE_FILE", "PROVIDER_STATE_FILE", "DATA_DIR", "CITY_PATH", "TEST_MANAGED_PORT", "TEST_PROVIDER_MANAGED_PORT")
+	cmd.Env = filteredEnv("GC_BEADS_PORT", "GC_BEADS_STATE_FILE", "STATE_FILE", "PROVIDER_STATE_FILE", "DATA_DIR", "CITY_PATH", "TEST_MANAGED_PORT", "TEST_PROVIDER_MANAGED_PORT")
 	cmd.Env = append(cmd.Env,
 		"STATE_FILE="+tc.stateFile,
 		"PROVIDER_STATE_FILE="+tc.providerStateFile,
@@ -236,9 +236,9 @@ func expectedPortResolveError(stateFile, cityPath, stateStatus string) string {
 	return fmt.Sprintf(`gc dolt: cannot resolve runtime port
   state_file: %s (%s)
   city_path:  %s
-  consulted:  GC_DOLT_PORT (unset), GC_DOLT_STATE_FILE
+  consulted:  GC_BEADS_PORT (unset), GC_BEADS_STATE_FILE
   remediation: run `+"`"+`gc start`+"`"+` to bring up the city, or set
-               GC_DOLT_PORT explicitly to an already-running
+               GC_BEADS_PORT explicitly to an already-running
                server.
 `, stateFile, stateStatus, cityPath)
 }
@@ -247,9 +247,9 @@ func expectedPortResolveErrorWithProvider(stateFile, cityPath, stateStatus strin
 	return fmt.Sprintf(`gc dolt: cannot resolve runtime port
   state_file: %s (%s)
   city_path:  %s
-  consulted:  GC_DOLT_PORT (unset), GC_DOLT_STATE_FILE, dolt-provider-state.json
+  consulted:  GC_BEADS_PORT (unset), GC_BEADS_STATE_FILE, dolt-provider-state.json
   remediation: run `+"`"+`gc start`+"`"+` to bring up the city, or set
-               GC_DOLT_PORT explicitly to an already-running
+               GC_BEADS_PORT explicitly to an already-running
                server.
 `, stateFile, stateStatus, cityPath)
 }

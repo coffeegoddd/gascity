@@ -56,11 +56,11 @@ func clearInheritedBeadsEnv(t *testing.T) {
 		"GC_BEADS",
 		"GC_BEADS_SCOPE_ROOT",
 		"GC_BIN",
-		"GC_DOLT",
-		"GC_DOLT_HOST",
-		"GC_DOLT_PORT",
-		"GC_DOLT_USER",
-		"GC_DOLT_PASSWORD",
+		"GC_BEADS_SKIP",
+		"GC_BEADS_HOST",
+		"GC_BEADS_PORT",
+		"GC_BEADS_USER",
+		"GC_BEADS_PASSWORD",
 		"BEADS_DOLT_SERVER_HOST",
 		"BEADS_DOLT_SERVER_PORT",
 		"BEADS_DOLT_SERVER_USER",
@@ -1064,52 +1064,17 @@ func TestBeadsStoreCheck_FileProviderSkipsDoltPreflight(t *testing.T) {
 	}
 }
 
-// TestBeadsStoreCheck_WarnsOnBdStoreFallback covers gastownhall/gascity#4245:
-// a silent native-store-eligibility fallback to the fork-per-op BdStore
-// looked identical to a healthy native store ("store accessible", StatusOK)
-// because the check only ever saw the opened Store, never the selection
-// diagnostic that already named the preflight gate and reason.
-func TestBeadsStoreCheck_WarnsOnBdStoreFallback(t *testing.T) {
+// TestBeadsStoreCheck_FileStoreDiagnosticStaysOK is the inverse of
+// TestBeadsStoreCheck_WarnsOnBdStoreFallback: a store that opened as a
+// non-fallback selection (here the file store) must not warn.
+func TestBeadsStoreCheck_FileStoreDiagnosticStaysOK(t *testing.T) {
 	dir := setupCity(t, "[workspace]\nname = \"test\"\n\n[beads]\nprovider = \"file\"\n")
 	spy := &spyPingStore{pingFunc: func() error { return nil }}
 	c := NewBeadsStoreCheck(dir, func(_ string) (beads.StoreOpenResult, error) {
 		return beads.StoreOpenResult{
 			Store: spy,
 			Diagnostic: beads.BeadsDiagnostic{
-				Store:               beads.BeadsStoreNameBdStore,
-				NativeStoreEligible: false,
-				PreflightGate:       "bd_context_agreement",
-				PreflightReason:     "bd context is unreachable; cannot cross-verify backend agreement",
-			},
-		}, nil
-	})
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusWarning {
-		t.Fatalf("status = %d, want Warning; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "bd_context_agreement") {
-		t.Errorf("message = %q, want it to name the preflight gate", r.Message)
-	}
-	if !strings.Contains(r.Message, "cannot cross-verify backend agreement") {
-		t.Errorf("message = %q, want it to name the preflight reason", r.Message)
-	}
-	if r.FixHint == "" {
-		t.Error("FixHint is empty, want repair guidance")
-	}
-}
-
-// TestBeadsStoreCheck_NativeStoreDiagnosticStaysOK is the inverse of
-// TestBeadsStoreCheck_WarnsOnBdStoreFallback: a store that opened as the
-// native store (the healthy, non-fallback selection) must not warn.
-func TestBeadsStoreCheck_NativeStoreDiagnosticStaysOK(t *testing.T) {
-	dir := setupCity(t, "[workspace]\nname = \"test\"\n\n[beads]\nprovider = \"file\"\n")
-	spy := &spyPingStore{pingFunc: func() error { return nil }}
-	c := NewBeadsStoreCheck(dir, func(_ string) (beads.StoreOpenResult, error) {
-		return beads.StoreOpenResult{
-			Store: spy,
-			Diagnostic: beads.BeadsDiagnostic{
-				Store:               beads.BeadsStoreNameNativeDoltStore,
-				NativeStoreEligible: true,
+				Store: beads.BeadsStoreNameFileStore,
 			},
 		}, nil
 	})
@@ -1194,8 +1159,6 @@ func TestBDSplitStoreCheck_ExternalCityTreatsLocalReposAsLegacy(t *testing.T) {
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
 		DoltHost:       "db.example.com",
 		DoltPort:       "3307",
 	})
@@ -1220,8 +1183,6 @@ func TestBDSplitStoreCheck_InvalidExternalCityConfigUsesNeutralGuidance(t *testi
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
 		DoltHost:       "db.example.com",
 	})
 	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
@@ -1274,8 +1235,6 @@ func TestBDSplitStoreCheck_ManagedCityUsesCanonicalSourceInMessage(t *testing.T)
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
 	})
 	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
 	writeDoltRepoMarker(t, filepath.Join(dir, ".beads", "dolt", "hq"))
@@ -1286,42 +1245,10 @@ func TestBDSplitStoreCheck_ManagedCityUsesCanonicalSourceInMessage(t *testing.T)
 	if r.Status != StatusWarning {
 		t.Fatalf("status = %d, want Warning; msg = %s", r.Status, r.Message)
 	}
-	if strings.Contains(r.Message, "metadata.json dolt_mode=managed_city") {
-		t.Fatalf("message = %q, should not label endpoint origin as metadata dolt_mode", r.Message)
-	}
-	if !strings.Contains(r.Message, "canonical endpoint_origin=managed_city") {
-		t.Fatalf("message = %q, want canonical endpoint source", r.Message)
-	}
-}
-
-func TestRigBDSplitStoreCheck_InheritedRigTreatsLocalReposAsLegacy(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "demo")
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, cityDir, "hq")
-	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
-	writeDoltRepoMarker(t, filepath.Join(rigDir, ".beads", "dolt", "de"))
-	if err := os.MkdirAll(filepath.Join(rigDir, ".beads", "embeddeddolt"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-
-	c := NewRigBDSplitStoreCheck(cityDir, config.Rig{Name: "demo", Path: rigDir})
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusWarning {
-		t.Fatalf("status = %d, want Warning; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "no active local store") {
-		t.Fatalf("message = %q, want no active local store warning", r.Message)
+	// A bare local (bd-owned) scope carries no external endpoint coords, so the
+	// active dolt store is identified via its metadata (dolt_mode=server).
+	if !strings.Contains(r.Message, "active .beads/dolt") || !strings.Contains(r.Message, "embeddeddolt") {
+		t.Fatalf("message = %q, want active .beads/dolt vs legacy embeddeddolt", r.Message)
 	}
 }
 
@@ -1388,8 +1315,6 @@ func TestRigBDSplitStoreCheck_InvalidExternalCityConfigUsesNeutralGuidance(t *te
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
 		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
 		DoltHost:       "db.example.com",
 	})
 	writeDoctorCanonicalMetadata(t, fs, cityDir, "hq")
@@ -1497,232 +1422,6 @@ func (s *spyPingStore) Ping() error {
 	return nil
 }
 
-// --- DoltServerCheck ---
-
-func TestDoltServerCheck_ManagedCityUsesRuntimeState(t *testing.T) {
-	dir := setupCity(t, "[workspace]\nname = \"test\"\n")
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	t.Cleanup(func() { _ = ln.Close() })
-	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
-	writeDoctorRuntimeState(t, fs, dir, port)
-
-	c := NewDoltServerCheck(dir, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusOK {
-		t.Fatalf("status = %d, want OK; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "127.0.0.1:"+port) {
-		t.Fatalf("message = %q, want runtime port %s", r.Message, port)
-	}
-}
-
-func TestDoltServerCheck_ManagedCityReportsStartHint(t *testing.T) {
-	dir := t.TempDir()
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
-	if err := ln.Close(); err != nil {
-		t.Fatalf("close listener: %v", err)
-	}
-	writeDoctorRuntimeState(t, fs, dir, port)
-
-	c := NewDoltServerCheck(dir, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "resolve dolt target") {
-		t.Fatalf("message = %q, want resolve failure when runtime state is unavailable", r.Message)
-	}
-	if !strings.Contains(r.FixHint, "gc start") {
-		t.Fatalf("fix hint = %q, want gc start hint", r.FixHint)
-	}
-}
-
-func TestDoltServerCheck_ManagedCityRejectsInvalidRuntimeStateEvenWhenPortReachable(t *testing.T) {
-	dir := t.TempDir()
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	t.Cleanup(func() { _ = ln.Close() })
-	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
-	runtimeDir := filepath.Join(dir, ".gc", "runtime", "packs", "dolt")
-	if err := fs.MkdirAll(runtimeDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	state := fmt.Sprintf(`{"running":true,"pid":%d,"port":%s,"data_dir":%q}`, os.Getpid(), port, filepath.Join(dir, ".beads", "wrong"))
-	if err := fs.WriteFile(filepath.Join(runtimeDir, "dolt-state.json"), []byte(state), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	c := NewDoltServerCheck(dir, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "resolve dolt target") {
-		t.Fatalf("message = %q, want resolve failure for invalid runtime state", r.Message)
-	}
-	if strings.Contains(r.Message, "127.0.0.1:"+port) {
-		t.Fatalf("message = %q, want invalid runtime state to fail before TCP fallback", r.Message)
-	}
-}
-
-func TestDoltServerCheck_ExternalCityUsesCanonicalTarget(t *testing.T) {
-	dir := t.TempDir()
-	fs := fsys.OSFS{}
-	port := strconv.Itoa(4411)
-
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       port,
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	c := NewDoltServerCheck(dir, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "db.example.com:"+port) {
-		t.Fatalf("message = %q, want canonical external target %s", r.Message, port)
-	}
-	if strings.Contains(r.Message, "127.0.0.1:") {
-		t.Fatalf("message = %q, want canonical host not localhost heuristic", r.Message)
-	}
-	if !strings.Contains(r.FixHint, "external") {
-		t.Fatalf("fix hint = %q, want external endpoint hint", r.FixHint)
-	}
-	if strings.Contains(r.FixHint, "gc start") {
-		t.Fatalf("fix hint = %q, want external hint instead of gc start", r.FixHint)
-	}
-}
-
-func TestDoltServerCheck_LegacyExternalCityUsesExternalHint(t *testing.T) {
-	dir := t.TempDir()
-	fs := fsys.OSFS{}
-	port := strconv.Itoa(4412)
-
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix: "gc",
-		DoltHost:    "db.example.com",
-		DoltPort:    port,
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	c := NewDoltServerCheck(dir, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "db.example.com:"+port) {
-		t.Fatalf("message = %q, want legacy external target %s", r.Message, port)
-	}
-	if !strings.Contains(r.FixHint, "external") {
-		t.Fatalf("fix hint = %q, want external endpoint hint", r.FixHint)
-	}
-	if strings.Contains(r.FixHint, "gc start") {
-		t.Fatalf("fix hint = %q, want external hint instead of gc start", r.FixHint)
-	}
-}
-
-func TestDoltServerCheck_InvalidCityExplicitOriginFailsResolution(t *testing.T) {
-	dir := t.TempDir()
-	fs := fsys.OSFS{}
-
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "4411",
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	c := NewDoltServerCheck(dir, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "invalid for city scope") {
-		t.Fatalf("message = %q, want city-scope origin rejection", r.Message)
-	}
-}
-
-func TestDoltServerCheck_Skipped(t *testing.T) {
-	c := NewDoltServerCheck("/tmp", true)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusOK {
-		t.Errorf("status = %d, want OK (skipped)", r.Status)
-	}
-}
-
-func TestRigDoltServerCheck_ExplicitRigUsesCanonicalTarget(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "demo")
-	fs := fsys.OSFS{}
-
-	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, cityDir, "hq")
-	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "4406",
-	})
-	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
-
-	c := NewRigDoltServerCheck(cityDir, config.Rig{Name: "demo", Path: rigDir}, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "rig-db.example.com:4406") {
-		t.Fatalf("message = %q, want explicit rig target", r.Message)
-	}
-	if strings.Contains(r.FixHint, "gc start") {
-		t.Fatalf("fix hint = %q, want external hint instead of gc start", r.FixHint)
-	}
-}
-
 func TestRigHasExplicitEndpointConfigLegacyExplicitRig(t *testing.T) {
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "demo")
@@ -1730,8 +1429,6 @@ func TestRigHasExplicitEndpointConfigLegacyExplicitRig(t *testing.T) {
 
 	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
 		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
 		DoltHost:       "db.example.com",
 		DoltPort:       "3307",
 	})
@@ -1748,289 +1445,12 @@ dolt.port: 4406
 	}
 	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
 
-	explicit, err := contract.ScopeUsesExplicitEndpoint(fs, cityDir, rigDir)
-	if err != nil {
-		t.Fatalf("ScopeUsesExplicitEndpoint() error = %v", err)
+	cfg, ok, err := contract.ReadConfigState(fs, filepath.Join(rigDir, ".beads", "config.yaml"))
+	if err != nil || !ok {
+		t.Fatalf("ReadConfigState() = ok %v, err %v", ok, err)
 	}
-	if !explicit {
-		t.Fatal("ScopeUsesExplicitEndpoint() = false, want true for legacy explicit rig")
-	}
-}
-
-func TestRigDoltServerCheck_LegacyExplicitRigUsesDerivedTarget(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "demo")
-	fs := fsys.OSFS{}
-
-	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-	})
-	writeDoctorCanonicalMetadata(t, fs, cityDir, "hq")
-	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
-		IssuePrefix: "de",
-		DoltHost:    "rig-db.example.com",
-		DoltPort:    "4406",
-	})
-	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
-
-	c := NewRigDoltServerCheck(cityDir, config.Rig{Name: "demo", Path: rigDir}, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "rig-db.example.com:4406") {
-		t.Fatalf("message = %q, want derived explicit rig target", r.Message)
-	}
-	if strings.Contains(r.FixHint, "gc start") {
-		t.Fatalf("fix hint = %q, want external hint instead of gc start", r.FixHint)
-	}
-}
-
-func TestRigDoltServerCheck_ExplicitRigReachable(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "demo")
-	fs := fsys.OSFS{}
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	defer func() { _ = ln.Close() }()
-	port := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
-
-	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, cityDir, "hq")
-	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "127.0.0.1",
-		DoltPort:       port,
-	})
-	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
-
-	c := NewRigDoltServerCheck(cityDir, config.Rig{Name: "demo", Path: rigDir}, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusOK {
-		t.Fatalf("status = %d, want OK; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "127.0.0.1:"+port) {
-		t.Fatalf("message = %q, want reachable explicit rig target", r.Message)
-	}
-}
-
-func TestRigDoltServerCheck_InheritedRigIsSkipped(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "demo")
-	fs := fsys.OSFS{}
-
-	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-	})
-	writeDoctorCanonicalMetadata(t, fs, cityDir, "hq")
-	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-	})
-	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
-
-	c := NewRigDoltServerCheck(cityDir, config.Rig{Name: "demo", Path: rigDir}, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusOK {
-		t.Fatalf("status = %d, want OK; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "inherits city") {
-		t.Fatalf("message = %q, want inherited-city skip message", r.Message)
-	}
-}
-
-func TestRigDoltServerCheck_InheritedRigDriftIsError(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "demo")
-	fs := fsys.OSFS{}
-
-	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-	})
-	writeDoctorCanonicalMetadata(t, fs, cityDir, "hq")
-	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "stale.example.com",
-		DoltPort:       "5507",
-	})
-	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
-
-	c := NewRigDoltServerCheck(cityDir, config.Rig{Name: "demo", Path: rigDir}, false)
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "inherited city endpoint drift") {
-		t.Fatalf("message = %q, want inherited drift message", r.Message)
-	}
-	if !strings.Contains(r.FixHint, "inherited city endpoint mirror") {
-		t.Fatalf("fix hint = %q, want inherited mirror reconciliation", r.FixHint)
-	}
-}
-
-func TestBeadsStoreCheck_ManagedCityMissingRuntimeStateFailsBeforePing(t *testing.T) {
-	dir := setupCity(t, "[workspace]\nname = \"test\"\n")
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	pinged := false
-	spy := &spyPingStore{pingFunc: func() error {
-		pinged = true
-		return nil
-	}}
-	c := NewBeadsStoreCheck(dir, func(_ string) (beads.StoreOpenResult, error) { return beads.StoreOpenResult{Store: spy}, nil })
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "resolve dolt target") {
-		t.Fatalf("message = %q, want resolve error", r.Message)
-	}
-	if !strings.Contains(r.FixHint, "gc start") {
-		t.Fatalf("fix hint = %q, want gc start hint", r.FixHint)
-	}
-	if pinged {
-		t.Fatal("Ping should not run when managed runtime state is missing")
-	}
-}
-
-func TestBeadsStoreCheck_ExternalCityUnavailableFailsBeforePing(t *testing.T) {
-	dir := setupCity(t, "[workspace]\nname = \"test\"\n")
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusUnverified,
-		DoltHost:       "127.0.0.1",
-		DoltPort:       "4416",
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	pinged := false
-	spy := &spyPingStore{pingFunc: func() error {
-		pinged = true
-		return nil
-	}}
-	c := NewBeadsStoreCheck(dir, func(_ string) (beads.StoreOpenResult, error) { return beads.StoreOpenResult{Store: spy}, nil })
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "dolt server not reachable at 127.0.0.1:4416") {
-		t.Fatalf("message = %q, want normalized reachability error", r.Message)
-	}
-	if !strings.Contains(r.FixHint, "external") {
-		t.Fatalf("fix hint = %q, want external endpoint hint", r.FixHint)
-	}
-	if pinged {
-		t.Fatal("Ping should not run when external endpoint is unreachable")
-	}
-}
-
-func TestBeadsStoreCheck_ExecGcBeadsBdExternalCityUnavailableFailsBeforePing(t *testing.T) {
-	dir := setupCity(t, `[workspace]
-name = "test"
-[beads]
-provider = "exec:/tmp/gc-beads-bd"
-`)
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusUnverified,
-		DoltHost:       "127.0.0.1",
-		DoltPort:       "4417",
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	pinged := false
-	spy := &spyPingStore{pingFunc: func() error {
-		pinged = true
-		return nil
-	}}
-	c := NewBeadsStoreCheck(dir, func(_ string) (beads.StoreOpenResult, error) { return beads.StoreOpenResult{Store: spy}, nil })
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "dolt server not reachable at 127.0.0.1:4417") {
-		t.Fatalf("message = %q, want normalized reachability error", r.Message)
-	}
-	if !strings.Contains(r.FixHint, "external") {
-		t.Fatalf("fix hint = %q, want external endpoint hint", r.FixHint)
-	}
-	if pinged {
-		t.Fatal("Ping should not run when exec:gc-beads-bd external endpoint is unreachable")
-	}
-}
-
-func TestBeadsStoreCheck_GCBeadsExecOverrideExternalCityUnavailableFailsBeforePing(t *testing.T) {
-	clearInheritedBeadsEnv(t)
-	dir := setupCity(t, `[workspace]
-name = "test"
-[beads]
-provider = "file"
-`)
-	t.Setenv("GC_BEADS", "exec:/tmp/gc-beads-bd")
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusUnverified,
-		DoltHost:       "127.0.0.1",
-		DoltPort:       "4418",
-	})
-	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-
-	pinged := false
-	spy := &spyPingStore{pingFunc: func() error {
-		pinged = true
-		return nil
-	}}
-	c := NewBeadsStoreCheck(dir, func(_ string) (beads.StoreOpenResult, error) { return beads.StoreOpenResult{Store: spy}, nil })
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "dolt server not reachable at 127.0.0.1:4418") {
-		t.Fatalf("message = %q, want normalized reachability error", r.Message)
-	}
-	if !strings.Contains(r.FixHint, "external") {
-		t.Fatalf("fix hint = %q, want external endpoint hint", r.FixHint)
-	}
-	if pinged {
-		t.Fatal("Ping should not run when GC_BEADS exec override makes the city bd-backed")
+	if !contract.ConfigHasEndpointAuthority(cfg) {
+		t.Fatal("ConfigHasEndpointAuthority() = false, want true for a rig with its own external coords")
 	}
 }
 
@@ -2043,8 +1463,6 @@ name = "test"
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusUnverified,
 		DoltHost:       "127.0.0.1",
 		DoltPort:       "4419",
 	})
@@ -2062,47 +1480,6 @@ name = "test"
 	}
 	if !pinged {
 		t.Fatal("Ping should run when GC_BEADS=file overrides bd-backed defaults")
-	}
-}
-
-func TestRigBeadsCheck_ManagedInheritedMissingRuntimeStateFailsBeforePing(t *testing.T) {
-	cityDir := setupCity(t, "[workspace]\nname = \"test\"\n")
-	rigDir := filepath.Join(cityDir, "frontend")
-	if err := os.MkdirAll(rigDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	fs := fsys.OSFS{}
-	writeDoctorCanonicalConfig(t, fs, cityDir, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, cityDir, "hq")
-	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
-		IssuePrefix:    "fr",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeDoctorCanonicalMetadata(t, fs, rigDir, "fr")
-
-	pinged := false
-	spy := &spyPingStore{pingFunc: func() error {
-		pinged = true
-		return nil
-	}}
-	c := NewRigBeadsCheck(cityDir, config.Rig{Name: "frontend", Path: rigDir}, func(_ string) (beads.Store, error) { return spy, nil })
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusError {
-		t.Fatalf("status = %d, want Error; msg = %s", r.Status, r.Message)
-	}
-	if !strings.Contains(r.Message, "resolve dolt target") {
-		t.Fatalf("message = %q, want resolve error", r.Message)
-	}
-	if !strings.Contains(r.FixHint, "gc start") {
-		t.Fatalf("fix hint = %q, want gc start hint", r.FixHint)
-	}
-	if pinged {
-		t.Fatal("Ping should not run when inherited managed runtime state is missing")
 	}
 }
 
@@ -2480,15 +1857,13 @@ func TestWorktreeCheckFix(t *testing.T) {
 // and returns its path. Runtime state is written for the pinned database.
 func setupManagedDoltCity(t *testing.T) string {
 	t.Helper()
-	t.Setenv("GC_DOLT_DATA_DIR", "")
-	t.Setenv("GC_DOLT_CONFIG_FILE", "")
+	t.Setenv("GC_BEADS_DATA_DIR", "")
+	t.Setenv("GC_BEADS_CONFIG_FILE", "")
 	const db = "hq"
 	dir := t.TempDir()
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
 	})
 	if err := os.MkdirAll(filepath.Join(dir, ".beads", "dolt"), 0o755); err != nil {
 		t.Fatal(err)
@@ -2560,8 +1935,8 @@ while True:
 
 func setupFreshManagedDoltCity(t *testing.T) string {
 	t.Helper()
-	t.Setenv("GC_DOLT_DATA_DIR", "")
-	t.Setenv("GC_DOLT_CONFIG_FILE", "")
+	t.Setenv("GC_BEADS_DATA_DIR", "")
+	t.Setenv("GC_BEADS_CONFIG_FILE", "")
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "city.toml"), []byte(`[workspace]
 name = "demo"
@@ -2628,8 +2003,6 @@ func TestDoltNomsSizeCheck_SkipsExternalTargets(t *testing.T) {
 		fs := fsys.OSFS{}
 		writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 			IssuePrefix:    "gc",
-			EndpointOrigin: contract.EndpointOriginCityCanonical,
-			EndpointStatus: contract.EndpointStatusVerified,
 			DoltHost:       "db.example.com",
 			DoltPort:       "4411",
 		})
@@ -2660,51 +2033,11 @@ path = "demo"
 		fs := fsys.OSFS{}
 		writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
 			IssuePrefix:    "de",
-			EndpointOrigin: contract.EndpointOriginExplicit,
-			EndpointStatus: contract.EndpointStatusVerified,
 			DoltHost:       "rig-db.example.com",
 			DoltPort:       "4406",
 		})
 		writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
 
-		c := newTestDoltNomsSizeCheck(dir, false)
-		r := c.Run(&CheckContext{})
-		if r.Status != StatusOK {
-			t.Fatalf("status = %d, want OK skip; msg = %s", r.Status, r.Message)
-		}
-		if !strings.Contains(r.Message, "skipped") {
-			t.Fatalf("message = %q, want skipped", r.Message)
-		}
-	})
-
-	t.Run("inherited external city", func(t *testing.T) {
-		dir := setupCity(t, `[workspace]
-name = "test"
-
-[[rigs]]
-name = "demo"
-path = "demo"
-`)
-		rigDir := filepath.Join(dir, "demo")
-		fs := fsys.OSFS{}
-		writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
-			IssuePrefix:    "gc",
-			EndpointOrigin: contract.EndpointOriginCityCanonical,
-			EndpointStatus: contract.EndpointStatusVerified,
-			DoltHost:       "db.example.com",
-			DoltPort:       "4411",
-		})
-		writeDoctorCanonicalMetadata(t, fs, dir, "hq")
-		writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
-			IssuePrefix:    "de",
-			EndpointOrigin: contract.EndpointOriginInheritedCity,
-			EndpointStatus: contract.EndpointStatusVerified,
-		})
-		writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
-
-		if ManagedLocalDoltChecksApplicable(dir) {
-			t.Fatal("ManagedLocalDoltChecksApplicable() = true, want false for inherited external city endpoint")
-		}
 		c := newTestDoltNomsSizeCheck(dir, false)
 		r := c.Run(&CheckContext{})
 		if r.Status != StatusOK {
@@ -2804,8 +2137,6 @@ path = "demo"
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
 		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
 	})
 	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
 	writeFakeFile(t, filepath.Join(dir, ".beads", "dolt", "de", ".dolt", "noms", "big"), 3*1024*1024*1024)
@@ -2830,8 +2161,6 @@ func TestDoltNomsSizeCheck_ConfigErrorScansManagedRigMetadata(t *testing.T) {
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
 		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
 	})
 	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
 
@@ -2861,8 +2190,6 @@ func TestManagedLocalDoltChecksApplicable_ConfigErrorScansManagedRigMetadata(t *
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
 		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
 	})
 	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
 
@@ -2890,8 +2217,6 @@ path = "demo"
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
 		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
 	})
 	writeDoctorCanonicalMetadata(t, fs, rigDir, "de")
 	writeFakeFile(t, filepath.Join(dir, ".beads", "dolt", "hq", ".dolt", "noms", "one"), 1536*1024*1024)
@@ -2967,8 +2292,6 @@ func TestDoltNomsSizeCheck_LegacyManagedDataDirWarnAtThreshold(t *testing.T) {
 	fs := fsys.OSFS{}
 	writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
 	})
 	writeDoctorCanonicalMetadata(t, fs, dir, "hq")
 	if err := os.MkdirAll(filepath.Join(dir, ".gc", "runtime", "packs", "dolt"), 0o755); err != nil {
@@ -2988,7 +2311,7 @@ func TestDoltNomsSizeCheck_LegacyManagedDataDirWarnAtThreshold(t *testing.T) {
 
 func TestDoltNomsSizeCheck_IgnoresAmbientDataDirOverride(t *testing.T) {
 	dir := setupManagedDoltCity(t)
-	t.Setenv("GC_DOLT_DATA_DIR", filepath.Join(t.TempDir(), "wrong-dolt-data"))
+	t.Setenv("GC_BEADS_DATA_DIR", filepath.Join(t.TempDir(), "wrong-dolt-data"))
 
 	c := NewDoltNomsSizeCheck(dir, false)
 	c.measureDir = func(path string) (int64, bool, error) {
@@ -3000,165 +2323,6 @@ func TestDoltNomsSizeCheck_IgnoresAmbientDataDirOverride(t *testing.T) {
 	r := c.Run(&CheckContext{})
 	if r.Status != StatusOK {
 		t.Fatalf("status = %d, want OK ignoring ambient data override; msg = %s", r.Status, r.Message)
-	}
-}
-
-func TestDoltNomsSizeCheck_UsesPublishedRuntimeDataDir(t *testing.T) {
-	dir := setupManagedDoltCity(t)
-	dataDir := filepath.Join(t.TempDir(), "relocated-dolt-data")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	proc, port := startDoctorTCPListenerProcess(t, dataDir)
-	statePath := filepath.Join(dir, ".gc", "runtime", "packs", "dolt", "dolt-state.json")
-	state := fmt.Sprintf(`{"running":true,"pid":%d,"port":%d,"data_dir":%q}`, proc.Process.Pid, port, dataDir)
-	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	c := NewDoltNomsSizeCheck(dir, false)
-	c.measureDir = func(path string) (int64, bool, error) {
-		if strings.Contains(path, "relocated-dolt-data") {
-			return 3 * 1024 * 1024 * 1024, true, nil
-		}
-		return 0, false, nil
-	}
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusWarning {
-		t.Fatalf("status = %d, want Warning for published relocated data dir; msg = %s", r.Status, r.Message)
-	}
-}
-
-func TestDoltNomsSizeCheck_IgnoresPublishedRuntimeDataDirWithUnreachablePort(t *testing.T) {
-	dir := setupManagedDoltCity(t)
-	dataDir := filepath.Join(t.TempDir(), "unreachable-port-dolt-data")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-	if err := ln.Close(); err != nil {
-		t.Fatalf("Close listener: %v", err)
-	}
-	statePath := filepath.Join(dir, ".gc", "runtime", "packs", "dolt", "dolt-state.json")
-	state := fmt.Sprintf(`{"running":true,"pid":%d,"port":%d,"data_dir":%q}`, os.Getpid(), port, dataDir)
-	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	c := NewDoltNomsSizeCheck(dir, false)
-	c.measureDir = func(path string) (int64, bool, error) {
-		if strings.Contains(path, "unreachable-port-dolt-data") {
-			t.Fatalf("measureDir used stale running data dir %s", path)
-		}
-		return 0, false, nil
-	}
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusOK {
-		t.Fatalf("status = %d, want OK after ignoring unreachable published state; msg = %s", r.Status, r.Message)
-	}
-}
-
-func TestDoltNomsSizeCheck_UsesStoppedPublishedRuntimeDataDir(t *testing.T) {
-	dir := setupManagedDoltCity(t)
-	if err := os.Remove(filepath.Join(dir, ".beads", "dolt")); err != nil {
-		t.Fatal(err)
-	}
-	dataDir := filepath.Join(t.TempDir(), "relocated-stopped-dolt-data")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	statePath := filepath.Join(dir, ".gc", "runtime", "packs", "dolt", "dolt-state.json")
-	state := fmt.Sprintf(`{"running":false,"pid":0,"port":0,"data_dir":%q}`, dataDir)
-	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	c := NewDoltNomsSizeCheck(dir, false)
-	c.measureDir = func(path string) (int64, bool, error) {
-		if strings.Contains(path, "relocated-stopped-dolt-data") {
-			return 3 * 1024 * 1024 * 1024, true, nil
-		}
-		return 0, false, nil
-	}
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusWarning {
-		t.Fatalf("status = %d, want Warning for stopped published data dir; msg = %s", r.Status, r.Message)
-	}
-}
-
-func TestDoltNomsSizeCheck_IgnoresStaleStoppedPublishedRuntimeDataDir(t *testing.T) {
-	dir := setupManagedDoltCity(t)
-	dataDir := filepath.Join(t.TempDir(), "stale-stopped-dolt-data")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	statePath := filepath.Join(dir, ".gc", "runtime", "packs", "dolt", "dolt-state.json")
-	state := fmt.Sprintf(`{"running":false,"pid":0,"port":0,"data_dir":%q}`, dataDir)
-	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	c := NewDoltNomsSizeCheck(dir, false)
-	c.measureDir = func(path string) (int64, bool, error) {
-		if strings.Contains(path, "stale-stopped-dolt-data") {
-			t.Fatalf("measureDir used stale stopped data dir %s", path)
-		}
-		return 0, false, nil
-	}
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusOK {
-		t.Fatalf("status = %d, want OK after ignoring stale stopped state; msg = %s", r.Status, r.Message)
-	}
-}
-
-func TestDoltNomsSizeCheck_IgnoresMissingPublishedRuntimeDataDir(t *testing.T) {
-	dir := setupManagedDoltCity(t)
-	dataDir := filepath.Join(t.TempDir(), "missing-relocated-dolt-data")
-	statePath := filepath.Join(dir, ".gc", "runtime", "packs", "dolt", "dolt-state.json")
-	state := fmt.Sprintf(`{"running":false,"pid":0,"port":0,"data_dir":%q}`, dataDir)
-	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	c := NewDoltNomsSizeCheck(dir, false)
-	c.measureDir = func(path string) (int64, bool, error) {
-		if strings.Contains(path, "missing-relocated-dolt-data") {
-			t.Fatalf("measureDir used missing published data dir %s", path)
-		}
-		return 0, false, nil
-	}
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusOK {
-		t.Fatalf("status = %d, want OK after falling back from missing data dir; msg = %s", r.Status, r.Message)
-	}
-}
-
-func TestDoltNomsSizeCheck_IgnoresStaleRunningPublishedRuntimeDataDir(t *testing.T) {
-	dir := setupManagedDoltCity(t)
-	dataDir := filepath.Join(t.TempDir(), "stale-running-dolt-data")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	statePath := filepath.Join(dir, ".gc", "runtime", "packs", "dolt", "dolt-state.json")
-	state := fmt.Sprintf(`{"running":true,"pid":99999999,"port":3307,"data_dir":%q}`, dataDir)
-	if err := os.WriteFile(statePath, []byte(state), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	c := NewDoltNomsSizeCheck(dir, false)
-	c.measureDir = func(path string) (int64, bool, error) {
-		if strings.Contains(path, "stale-running-dolt-data") {
-			t.Fatalf("measureDir used stale running data dir %s", path)
-		}
-		return 0, false, nil
-	}
-	r := c.Run(&CheckContext{})
-	if r.Status != StatusOK {
-		t.Fatalf("status = %d, want OK after ignoring stale running state; msg = %s", r.Status, r.Message)
 	}
 }
 
@@ -3325,7 +2489,7 @@ func TestDoltConfigCheck_OK(t *testing.T) {
 }
 
 func TestDoltConfigCheck_AcceptsConfiguredWaitTimeout(t *testing.T) {
-	t.Setenv("GC_DOLT_WAIT_TIMEOUT", "60")
+	t.Setenv("GC_BEADS_WAIT_TIMEOUT", "60")
 	dir := setupManagedDoltCity(t)
 	writeDoctorManagedDoltConfig(t, dir, map[string]any{
 		"system_variables.wait_timeout": "60",
@@ -3338,7 +2502,7 @@ func TestDoltConfigCheck_AcceptsConfiguredWaitTimeout(t *testing.T) {
 }
 
 func TestDoltConfigCheck_AcceptsDisabledWaitTimeout(t *testing.T) {
-	t.Setenv("GC_DOLT_WAIT_TIMEOUT", "-1")
+	t.Setenv("GC_BEADS_WAIT_TIMEOUT", "-1")
 	dir := setupManagedDoltCity(t)
 	writeDoctorManagedDoltConfig(t, dir, map[string]any{
 		"system_variables.wait_timeout": "__missing__",
@@ -3358,7 +2522,7 @@ name = "demo"
 [beads]
 provider = "bd"
 
-[dolt]
+[beads.server]
 read_timeout_millis = 300000
 write_timeout_millis = 600000
 max_connections = 1024
@@ -3443,7 +2607,7 @@ func TestDoltConfigCheck_AcceptsSymlinkEquivalentDataDir(t *testing.T) {
 func TestDoltConfigCheck_IgnoresAmbientConfigOverride(t *testing.T) {
 	dir := setupManagedDoltCity(t)
 	writeDoctorManagedDoltConfig(t, dir, nil)
-	t.Setenv("GC_DOLT_CONFIG_FILE", filepath.Join(t.TempDir(), "missing-dolt-config.yaml"))
+	t.Setenv("GC_BEADS_CONFIG_FILE", filepath.Join(t.TempDir(), "missing-dolt-config.yaml"))
 
 	c := NewDoltConfigCheck(dir, false)
 	r := c.Run(&CheckContext{})
@@ -3547,8 +2711,6 @@ func TestDoltConfigCheck_SkipsExternalTargets(t *testing.T) {
 		fs := fsys.OSFS{}
 		writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 			IssuePrefix:    "gc",
-			EndpointOrigin: contract.EndpointOriginCityCanonical,
-			EndpointStatus: contract.EndpointStatusVerified,
 			DoltHost:       "db.example.com",
 			DoltPort:       "4411",
 		})
@@ -3579,8 +2741,6 @@ path = "demo"
 		fs := fsys.OSFS{}
 		writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
 			IssuePrefix:    "de",
-			EndpointOrigin: contract.EndpointOriginExplicit,
-			EndpointStatus: contract.EndpointStatusVerified,
 			DoltHost:       "rig-db.example.com",
 			DoltPort:       "4406",
 		})
@@ -3808,8 +2968,6 @@ func TestDoltVersionCheck_SkipsExternalTargets(t *testing.T) {
 		fs := fsys.OSFS{}
 		writeDoctorCanonicalConfig(t, fs, dir, contract.ConfigState{
 			IssuePrefix:    "gc",
-			EndpointOrigin: contract.EndpointOriginCityCanonical,
-			EndpointStatus: contract.EndpointStatusVerified,
 			DoltHost:       "db.example.com",
 			DoltPort:       "4411",
 		})
@@ -3844,8 +3002,6 @@ path = "demo"
 		fs := fsys.OSFS{}
 		writeDoctorCanonicalConfig(t, fs, rigDir, contract.ConfigState{
 			IssuePrefix:    "de",
-			EndpointOrigin: contract.EndpointOriginExplicit,
-			EndpointStatus: contract.EndpointStatusVerified,
 			DoltHost:       "rig-db.example.com",
 			DoltPort:       "4406",
 		})

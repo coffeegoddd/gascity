@@ -17,13 +17,12 @@ func TestBuildDoctorChecks_SupervisorHTTPRegisteredAfterController(t *testing.T)
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
 		t.Fatalf("write city.toml: %v", err)
 	}
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	cfg := &config.City{Workspace: config.Workspace{Name: "demo"}}
 
 	checks := buildDoctorChecks(cityDir, cfg, nil, buildDoctorChecksOpts{
 		ControllerRunning:    false,
 		SupervisorRunning:    false,
-		SkipCityDoltCheck:    true,
 		SkipManagedDoltCheck: true,
 	})
 

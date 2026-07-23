@@ -8,8 +8,8 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// doltContainerFreeBytesFunc is the injectable disk-space reader used by
-// checkManagedDoltDiskPreflight. Tests replace this with a fake; production
+// doltContainerFreeBytesFunc is the injectable disk-space reader used by the
+// store-maintenance disk check. Tests replace this with a fake; production
 // uses containerFreeBytes.
 var doltContainerFreeBytesFunc = containerFreeBytes
 

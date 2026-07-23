@@ -812,7 +812,7 @@ func managedBdWaitTestTemplate(t *testing.T, bdPath, doltPath string) string {
 		}
 		env := waitTestEnv(map[string]string{
 			"GC_BEADS":       "bd",
-			"GC_DOLT":        "",
+			"GC_BEADS_SKIP":  "",
 			"GC_BIN":         currentGCBinaryForTests(t),
 			"GC_CITY":        cityPath,
 			"GC_CITY_PATH":   cityPath,
@@ -847,20 +847,10 @@ func managedBdWaitTestTemplate(t *testing.T, bdPath, doltPath string) string {
 			managedBdWaitTemplateErr = fmt.Errorf("stop template city: %w\n%s", err, out)
 			return
 		}
-		if err := clearManagedDoltRuntimeState(cityPath); err != nil {
-			managedBdWaitTemplateErr = fmt.Errorf("clear published dolt runtime state: %w", err)
-			return
-		}
-		if err := removeDoltRuntimeStateFile(providerManagedDoltStatePath(cityPath)); err != nil {
-			managedBdWaitTemplateErr = fmt.Errorf("remove provider dolt runtime state: %w", err)
-			return
-		}
 		if err := os.RemoveAll(filepath.Join(cityPath, ".gc", "runtime", "packs", "dolt")); err != nil {
 			managedBdWaitTemplateErr = fmt.Errorf("remove template runtime pack state: %w", err)
 			return
 		}
-		removeDoltPortFile(cityPath)
-		removeDoltPortFile(rigPath)
 		managedBdWaitTemplatePath = cityPath
 	})
 	if managedBdWaitTemplateErr != nil {
@@ -2682,7 +2672,7 @@ func setupFreshManagedBdWaitTestCity(t *testing.T) string {
 	}
 
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 
 	homeDir := filepath.Join(shortSocketTempDir(t, "gc-bd-home-"), "home")
 	if err := writeWaitTestDoltIdentity(homeDir); err != nil {
@@ -2721,9 +2711,6 @@ func setupFreshManagedBdWaitTestCity(t *testing.T) string {
 	if err := initAndHookDir(cityPath, cityPath, "gc"); err != nil {
 		t.Fatalf("initAndHookDir(city): %v", err)
 	}
-	if err := publishManagedDoltRuntimeState(cityPath); err != nil {
-		t.Fatalf("publishManagedDoltRuntimeState: %v", err)
-	}
 	return cityPath
 }
 
@@ -2740,7 +2727,7 @@ func setupManagedBdWaitTestCity(t *testing.T) (string, string) {
 	}
 
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 
 	homeDir := filepath.Join(shortSocketTempDir(t, "gc-bd-home-"), "home")
 	if err := writeWaitTestDoltIdentity(homeDir); err != nil {
@@ -2784,7 +2771,7 @@ func setupManagedBdWaitTestCity(t *testing.T) (string, string) {
 	poisonStateFile := filepath.Join(poisonPackStateDir, "dolt-provider-state.json")
 	t.Setenv("GC_CITY_RUNTIME_DIR", poisonRuntimeDir)
 	t.Setenv("GC_PACK_STATE_DIR", poisonPackStateDir)
-	t.Setenv("GC_DOLT_STATE_FILE", poisonStateFile)
+	t.Setenv("GC_BEADS_STATE_FILE", poisonStateFile)
 	scriptEnv := sanitizedBaseEnv(
 		"GC_CITY="+cityPath,
 		"GC_CITY_PATH="+cityPath,
@@ -2807,9 +2794,6 @@ func setupManagedBdWaitTestCity(t *testing.T) (string, string) {
 	runScript("start")
 	if _, err := os.Stat(poisonStateFile); !os.IsNotExist(err) {
 		t.Fatalf("start leaked ambient GC_* state to %q, stat err = %v", poisonStateFile, err)
-	}
-	if err := publishManagedDoltRuntimeState(cityPath); err != nil {
-		t.Fatalf("publishManagedDoltRuntimeState: %v", err)
 	}
 	return cityPath, rigPath
 }

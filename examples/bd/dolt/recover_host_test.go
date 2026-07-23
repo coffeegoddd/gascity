@@ -31,20 +31,20 @@ func runRecoverWithHost(t *testing.T, host string) ([]byte, error) {
 
 	cmd := exec.Command("sh", filepath.Join(root, recoverScript))
 	cmd.Env = append(filteredEnv(
-		"PATH", "GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER",
-		"GC_DOLT_PASSWORD", "GC_DOLT_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
-		"GC_CITY_RUNTIME_DIR", "GC_PACK_STATE_DIR", "GC_DOLT_LOG_FILE",
+		"PATH", "GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER",
+		"GC_BEADS_PASSWORD", "GC_BEADS_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
+		"GC_CITY_RUNTIME_DIR", "GC_PACK_STATE_DIR", "GC_BEADS_LOG_FILE",
 		"GC_BEADS_BD_SCRIPT",
 	),
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_PORT=3311",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_PORT=3311",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	if host != "" {
-		cmd.Env = append(cmd.Env, "GC_DOLT_HOST="+host)
+		cmd.Env = append(cmd.Env, "GC_BEADS_HOST="+host)
 	}
 	return cmd.CombinedOutput()
 }
@@ -63,7 +63,7 @@ func TestRecoverTreatsLocalHostsAsManaged(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			out, err := runRecoverWithHost(t, host)
 			if err != nil {
-				t.Fatalf("gc dolt recover refused GC_DOLT_HOST=%q as if remote: %v\n%s", host, err, out)
+				t.Fatalf("gc dolt recover refused GC_BEADS_HOST=%q as if remote: %v\n%s", host, err, out)
 			}
 			if strings.Contains(string(out), "not supported for remote dolt servers") {
 				t.Fatalf("recover misclassified local host %q as remote:\n%s", host, out)

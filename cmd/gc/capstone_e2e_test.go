@@ -89,7 +89,7 @@ type capstoneHarness struct {
 func newCapstoneHarness(t *testing.T) *capstoneHarness {
 	t.Helper()
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("GC_HOME", t.TempDir())
 

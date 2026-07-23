@@ -24,7 +24,7 @@
 // top-level var initialization, which keeps the direct-`go test` path safe.
 //
 // Scope: only the named LeakVectorVars below are scrubbed. Test-gate vars
-// (GC_FAST_UNIT, GC_REAL_PROCESS_SIGNAL_TESTS, GC_DOLT_REAL_BINARY,
+// (GC_FAST_UNIT, GC_REAL_PROCESS_SIGNAL_TESTS, GC_BEADS_REAL_BINARY,
 // GC_*_HELPER, ...) flow through untouched so opt-in test paths and
 // helper-subprocess trampolines keep working.
 //
@@ -46,7 +46,7 @@
 // Testscript owns the child env fully, so there is no leak risk.
 //
 // Production Dolt port guard: a Dolt port var (BEADS_DOLT_SERVER_PORT,
-// GC_DOLT_PORT, or BEADS_DOLT_PORT) carrying ProdDoltPort that would survive
+// GC_BEADS_PORT, or BEADS_DOLT_PORT) carrying ProdDoltPort that would survive
 // into the process — passthrough-preserved in go-test mode, or any value in
 // testscript subcommand mode — makes init() panic instead, unless the paired
 // Dolt host var survives with a non-local value (3307 is Dolt's default
@@ -100,7 +100,7 @@ const PassthroughVar = "GC_TESTENV_PASSTHROUGH"
 // survival via the passthrough list, which is only exact for vars this scrub
 // actually unsets. TestDoltPortVarsAreLeakVectors enforces that pairing.
 // Test-gate vars (GC_FAST_UNIT, GC_REAL_PROCESS_SIGNAL_TESTS,
-// GC_DOLT_REAL_BINARY, ...) do NOT belong here; they're how tests opt into
+// GC_BEADS_REAL_BINARY, ...) do NOT belong here; they're how tests opt into
 // expensive paths. Rollout-gate env overrides (internal/rollout registry
 // EnvOverride names) DO belong here: a developer's shell value must not leak in
 // and non-deterministically flip a gate's resolved mode during a test.
@@ -126,11 +126,11 @@ var LeakVectorVars = []string{
 	"GC_CITY_RUNTIME_DIR",
 	"GC_CONTROL_DISPATCHER_TRACE_DEFAULT",
 	"GC_DIR",
-	"GC_DOLT",
-	"GC_DOLT_HOST",
-	"GC_DOLT_PASSWORD",
-	"GC_DOLT_PORT",
-	"GC_DOLT_USER",
+	"GC_BEADS_SKIP",
+	"GC_BEADS_HOST",
+	"GC_BEADS_PASSWORD",
+	"GC_BEADS_PORT",
+	"GC_BEADS_USER",
 	"GC_HOME",
 	"GC_SESSION_ID",
 	"GC_SESSION_NAME",
@@ -160,7 +160,7 @@ const ProdDoltPortOptOutVar = "GC_ALLOW_PROD_DOLT_PORT_IN_TESTS"
 var doltPortVars = map[string]string{
 	"BEADS_DOLT_PORT":        "",
 	"BEADS_DOLT_SERVER_PORT": "BEADS_DOLT_SERVER_HOST",
-	"GC_DOLT_PORT":           "GC_DOLT_HOST",
+	"GC_BEADS_PORT":           "GC_BEADS_HOST",
 }
 
 // isLocalDoltHost reports whether a Dolt host value targets the local

@@ -328,9 +328,9 @@ func refuseOrDegrade(store Store, mode gate.Mode, reason string) (ConditionalWri
 	return nil, diag, nil
 }
 
-// conditionalStoreKind names the store type for diagnostics. Types that only
-// exist under build tags (DoltliteReadStore) and test doubles fall through to
-// the %T spelling, which is descriptive enough for a diagnostic surface.
+// conditionalStoreKind names the store type for diagnostics. Test doubles fall
+// through to the %T spelling, which is descriptive enough for a diagnostic
+// surface.
 func conditionalStoreKind(store Store) string {
 	switch store.(type) {
 	case *BdStore:
@@ -341,8 +341,6 @@ func conditionalStoreKind(store Store) string {
 		return "MemStore"
 	case *CachingStore:
 		return "CachingStore"
-	case *NativeDoltStore:
-		return storeNameNativeDoltStore
 	case nil:
 		return "<nil>"
 	default:

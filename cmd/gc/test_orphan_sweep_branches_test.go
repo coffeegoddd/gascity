@@ -350,7 +350,7 @@ func TestTestscriptCommandInvocationDoesNotLeakTempRoot(t *testing.T) {
 			t.Cleanup(func() { _ = os.Remove(commandPath) })
 
 			cmd := exec.Command(commandPath, tt.args...)
-			cmd.Env = append(os.Environ(), "GC_DOLT=skip")
+			cmd.Env = append(os.Environ(), "GC_BEADS_SKIP=1")
 			err := cmd.Run()
 			if tt.wantErr {
 				if err == nil {

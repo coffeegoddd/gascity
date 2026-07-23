@@ -3,7 +3,6 @@ package api
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"log"
@@ -842,19 +841,22 @@ func TestWorkflowSQLCandidatesForWorkflowIDUsesConfiguredHyphenatedPrefix(t *tes
 func TestWorkflowSQLDepFromRowDefaultsMissingTypeToBlocks(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
-		depType sql.NullString
+		depType string
 	}{
-		{name: "null", depType: sql.NullString{}},
-		{name: "empty", depType: sql.NullString{Valid: true}},
+		{name: "empty", depType: ""},
+		{name: "whitespace", depType: "   "},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			dep := workflowSQLDepFromRow(
-				sql.NullString{String: "child", Valid: true},
-				sql.NullString{String: "parent", Valid: true},
-				tc.depType,
-			)
+			dep := workflowSQLDepFromRow(workflowSQLDepRow{
+				IssueID:   "child",
+				DependsOn: "parent",
+				DepType:   tc.depType,
+			})
 			if dep.Type != "blocks" {
 				t.Fatalf("dep.Type = %q, want blocks", dep.Type)
+			}
+			if dep.IssueID != "child" || dep.DependsOnID != "parent" {
+				t.Fatalf("dep = %+v, want child->parent", dep)
 			}
 		})
 	}

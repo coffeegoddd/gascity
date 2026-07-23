@@ -14,11 +14,11 @@ func runLogs(t *testing.T, cityPath, host, port string) (string, error) {
 	t.Helper()
 	root := repoRoot(t)
 	cmd := exec.Command("sh", filepath.Join(root, logsScript))
-	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_DOLT_HOST", "GC_DOLT_PORT", "PATH"),
+	cmd.Env = append(filteredEnv("GC_CITY_PATH", "GC_PACK_DIR", "GC_BEADS_HOST", "GC_BEADS_PORT", "PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST="+host,
-		"GC_DOLT_PORT="+port,
+		"GC_BEADS_HOST="+host,
+		"GC_BEADS_PORT="+port,
 		"PATH="+os.Getenv("PATH"),
 	)
 	out, err := cmd.CombinedOutput()

@@ -19,10 +19,10 @@ import (
 // controller still selects the city template and provider, because a
 // non-interactive bd-backed `gc init` requires --template/--default-provider.
 const (
-	envDoltHost       = "GC_DOLT_HOST"
-	envDoltPort       = "GC_DOLT_PORT"
-	envDoltUser       = "GC_DOLT_USER"
-	envDoltDatabase   = "GC_DOLT_DATABASE"
+	envDoltHost       = "GC_BEADS_HOST"
+	envDoltPort       = "GC_BEADS_PORT"
+	envDoltUser       = "GC_BEADS_USER"
+	envDoltDatabase   = "GC_BEADS_DATABASE"
 	envBeadsProjectID = "GC_BEADS_PROJECT_ID"
 )
 
@@ -129,12 +129,9 @@ func (o hostedDoltInitOptions) validate() error {
 // makes the lifecycle ownership probe (resolveConfiguredCityDoltTarget) and
 // the runtime resolve the city as external rather than managed-local.
 func (o hostedDoltInitOptions) applyToCityConfig(cfg *config.City) error {
-	port, err := strconv.Atoi(strings.TrimSpace(o.Port))
-	if err != nil {
-		return fmt.Errorf("invalid --dolt-port %q: %w", o.Port, err)
-	}
-	cfg.Dolt.Host = strings.TrimSpace(o.Host)
-	cfg.Dolt.Port = port
+	// The external endpoint is recorded canonically in .beads/config.yaml
+	// (applyInitHostedDoltCanonicalConfig / bd init); city.toml no longer mirrors
+	// dolt host/port.
 	// A hosted city's controller runs out-of-session; the control dispatcher and
 	// gc CLI reach it only through the HTTP API, and every API consumer treats
 	// cfg.API.Port == 0 as "API disabled". Neither plain init nor the hosted
@@ -147,35 +144,6 @@ func (o hostedDoltInitOptions) applyToCityConfig(cfg *config.City) error {
 		cfg.API.Port = config.DefaultAPIPort
 	}
 	return nil
-}
-
-// configState builds the canonical .beads/config.yaml endpoint state for the
-// hosted endpoint: an external city-canonical endpoint recorded as
-// unverified. gc start performs the live verification once credentials are
-// wired.
-func (o hostedDoltInitOptions) configState(issuePrefix string) contract.ConfigState {
-	return contract.ConfigState{
-		IssuePrefix:    issuePrefix,
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusUnverified,
-		DoltHost:       strings.TrimSpace(o.Host),
-		DoltPort:       strings.TrimSpace(o.Port),
-		DoltUser:       strings.TrimSpace(o.User),
-	}
-}
-
-// cityExternalDoltEndpointUnverified reports whether the city's canonical
-// endpoint config pins an external (city_canonical) Dolt endpoint that has not
-// yet been verified. init-time bd init against such an endpoint must be
-// deferred to gc start, which carries the credential command — init itself
-// never requires a live connection (R5).
-func cityExternalDoltEndpointUnverified(cityPath string) bool {
-	state, ok, err := contract.ReadConfigState(fsys.OSFS{}, filepath.Join(cityPath, ".beads", "config.yaml"))
-	if err != nil || !ok {
-		return false
-	}
-	return state.EndpointOrigin == contract.EndpointOriginCityCanonical &&
-		state.EndpointStatus == contract.EndpointStatusUnverified
 }
 
 // hostedDoltBackendError reports why a city's effective beads backend cannot
@@ -225,11 +193,20 @@ func applyInitHostedDoltCanonicalConfig(fs fsys.FS, cityPath, issuePrefix string
 	if err := contract.WriteProjectIdentity(fs, cityPath, strings.TrimSpace(opts.ProjectID)); err != nil {
 		return fmt.Errorf("writing project identity: %w", err)
 	}
-	if err := ensureCanonicalScopeConfigState(fs, cityPath, opts.configState(issuePrefix)); err != nil {
-		return fmt.Errorf("writing canonical endpoint config: %w", err)
+	// Record the external endpoint canonically in .beads/config.yaml now, so the
+	// unconditional initDirIfReady that follows resolves the city as external
+	// (skipping the managed-local Dolt bootstrap) and isExternalDolt reports true
+	// before gc start. An external scope owns its endpoint coords; bd's
+	// proxied-server --external init still owns metadata.json and the credential.
+	state := contract.ConfigState{
+		IssuePrefix: strings.TrimSpace(issuePrefix),
+		DoltHost:    strings.TrimSpace(opts.Host),
+		DoltPort:    strings.TrimSpace(opts.Port),
+		DoltUser:    strings.TrimSpace(opts.User),
 	}
-	if err := enforceCanonicalScopeMetadataForInit(fs, cityPath, strings.TrimSpace(opts.Database)); err != nil {
-		return fmt.Errorf("writing canonical metadata: %w", err)
+	cfgPath := filepath.Join(cityPath, ".beads", "config.yaml")
+	if _, err := contract.EnsureCanonicalConfig(fs, cfgPath, state); err != nil {
+		return fmt.Errorf("writing canonical external config: %w", err)
 	}
 	return nil
 }

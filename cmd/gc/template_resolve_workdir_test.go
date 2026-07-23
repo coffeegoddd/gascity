@@ -1,12 +1,9 @@
 package main
 
 import (
-	"encoding/json"
 	"io"
-	"net"
 	"os"
 	"path/filepath"
-	"strconv"
 	"testing"
 	"time"
 
@@ -303,67 +300,6 @@ func TestResolveTemplateRigScopedEnvCarriesRigRoots(t *testing.T) {
 	}
 }
 
-func TestResolveTemplateUsesCityManagedDoltPort(t *testing.T) {
-	cityPath := t.TempDir()
-	writeTemplateResolveCityConfig(t, cityPath, "")
-	stateDir := filepath.Join(cityPath, ".gc", "runtime", "packs", "dolt")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen: %v", err)
-	}
-	defer ln.Close() //nolint:errcheck // test cleanup
-
-	port := ln.Addr().(*net.TCPAddr).Port
-	state := doltRuntimeState{
-		Running:   true,
-		PID:       os.Getpid(),
-		Port:      port,
-		DataDir:   filepath.Join(cityPath, ".beads", "dolt"),
-		StartedAt: time.Now().UTC().Format(time.RFC3339),
-	}
-	data, err := json.Marshal(state)
-	if err != nil {
-		t.Fatalf("marshal dolt state: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(stateDir, "dolt-state.json"), data, 0o644); err != nil {
-		t.Fatalf("write dolt state: %v", err)
-	}
-
-	t.Setenv("GC_DOLT_PORT", "9999")
-
-	params := &agentBuildParams{
-		cityName:   "city",
-		cityPath:   cityPath,
-		workspace:  &config.Workspace{Provider: "test"},
-		providers:  map[string]config.ProviderSpec{"test": {Command: "echo", PromptMode: "none"}},
-		lookPath:   func(string) (string, error) { return "/bin/echo", nil },
-		fs:         fsys.OSFS{},
-		beaconTime: time.Unix(0, 0),
-		beadNames:  make(map[string]string),
-		stderr:     io.Discard,
-	}
-
-	agent := &config.Agent{Name: "worker"}
-	tp, err := resolveTemplate(params, agent, agent.QualifiedName(), nil)
-	if err != nil {
-		t.Fatalf("resolveTemplate: %v", err)
-	}
-
-	if got := tp.Env["GC_DOLT_PORT"]; got != strconv.Itoa(port) {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", got, strconv.Itoa(port))
-	}
-	if got := tp.Env["GC_BIN"]; got == "" {
-		t.Fatalf("GC_BIN = %q, want non-empty", got)
-	}
-	if got := tp.Env["GC_BEADS"]; got != "bd" {
-		t.Fatalf("GC_BEADS = %q, want raw bd provider", got)
-	}
-}
-
 func TestResolveTemplatePreservesLogicalAgentNameWhenSessionBeadExists(t *testing.T) {
 	cityPath := t.TempDir()
 	store := beads.NewMemStore()
@@ -417,70 +353,5 @@ func TestResolveTemplatePreservesLogicalAgentNameWhenSessionBeadExists(t *testin
 	}
 	if got := tp.Env["GC_ALIAS"]; got != "worker" {
 		t.Fatalf("GC_ALIAS = %q, want worker", got)
-	}
-}
-
-func TestResolveTemplateUsesCanonicalRigTargetAndPinsHome(t *testing.T) {
-	cityPath := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cityPath, ".gc", "runtime", "packs", "dolt"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	rigRoot := filepath.Join(t.TempDir(), "repo")
-	if err := os.MkdirAll(filepath.Join(rigRoot, ".beads"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-
-	wantPort := strconv.Itoa(writeReachableManagedDoltState(t, cityPath))
-	if err := os.WriteFile(filepath.Join(rigRoot, ".beads", "config.yaml"), []byte(`issue_prefix: repo
-gc.endpoint_origin: inherited_city
-gc.endpoint_status: verified
-dolt.auto-start: false
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(rigRoot, ".beads", "dolt-server.port"), []byte("31364"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	gcHome := filepath.Join(t.TempDir(), "gc-home")
-	t.Setenv("GC_HOME", gcHome)
-	t.Setenv("GC_DOLT_PORT", "9999")
-
-	params := &agentBuildParams{
-		cityName:   "city",
-		cityPath:   cityPath,
-		workspace:  &config.Workspace{Provider: "test"},
-		providers:  map[string]config.ProviderSpec{"test": {Command: "echo", PromptMode: "none"}},
-		lookPath:   func(string) (string, error) { return "/bin/echo", nil },
-		fs:         fsys.OSFS{},
-		rigs:       []config.Rig{{Name: "repo", Path: rigRoot}},
-		beaconTime: time.Unix(0, 0),
-		beadNames:  make(map[string]string),
-		stderr:     io.Discard,
-	}
-
-	agent := &config.Agent{Name: "polecat", Dir: "repo"}
-	tp, err := resolveTemplate(params, agent, agent.QualifiedName(), nil)
-	if err != nil {
-		t.Fatalf("resolveTemplate: %v", err)
-	}
-
-	if got := tp.Env["GC_DOLT_PORT"]; got != wantPort {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", got, wantPort)
-	}
-	if got := tp.Env["BEADS_DOLT_SERVER_PORT"]; got != wantPort {
-		t.Fatalf("BEADS_DOLT_SERVER_PORT = %q, want %q", got, wantPort)
-	}
-	if got := tp.Env["GC_DOLT_HOST"]; got != "" {
-		t.Fatalf("GC_DOLT_HOST = %q, want empty for managed target", got)
-	}
-	// HOME is intentionally passed through to agents (PR #272:
-	// HOME/USER/XDG env passthrough for macOS Keychain and config access).
-	// Verify it's present and matches the parent process.
-	if got := tp.Env["HOME"]; got == "" {
-		t.Fatalf("HOME should be passed through to agent env")
 	}
 }

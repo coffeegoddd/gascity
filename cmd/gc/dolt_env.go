@@ -6,5 +6,6 @@ import (
 )
 
 func gcDoltSkip() bool {
-	return strings.TrimSpace(os.Getenv("GC_DOLT")) == "skip"
+	v := strings.TrimSpace(os.Getenv("GC_BEADS_SKIP"))
+	return v == "1" || v == "true" || v == "skip"
 }

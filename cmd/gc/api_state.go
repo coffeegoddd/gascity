@@ -6,13 +6,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -397,7 +395,6 @@ func (cs *controllerState) openRigStore(provider, rigName, rigPath, prefix strin
 		ScopeRoot:                   scopeRoot,
 		CityPath:                    cs.cityPath,
 		Provider:                    provider,
-		PreflightChecker:            newBeadsPreflightChecker(cs.cityPath, provider),
 		ConditionalWrites:           cs.rolloutFlags.BeadsConditionalWrites(),
 		OnConditionalWritesDegraded: conditionalWritesDegradedRecorder(cs.eventProv, cs.rolloutFlags, "rig/"+rigName),
 		OpenFileStore: func() (beads.Store, error) {
@@ -411,25 +408,6 @@ func (cs *controllerState) openRigStore(provider, rigName, rigPath, prefix strin
 			return bdStoreForRig(scopeRoot, cs.cityPath, cfg, prefix), nil
 		},
 		OpenExecStore: openExecStore,
-		OpenNativeStore: func() (beads.Store, error) {
-			env, err := nativeDoltOpenEnvForScope(cs.cityPath, cfg, scopeRoot)
-			if err != nil {
-				return nil, fmt.Errorf("project native rig store env %s: %w", scopeRoot, err)
-			}
-			// Reopen hook for the native read-path reconnect (see the matching
-			// comment in main.go openStoreResultAtForCity): re-resolve the CURRENT
-			// managed Dolt env on every reconnect so the controller's reconcile
-			// scan / Get recovers a managed-Dolt hard-kill/rebind instead of
-			// dialing the dead port for the whole retry budget.
-			reopen := func(ctx context.Context) (beads.NativeStorage, error) {
-				freshEnv, rerr := nativeDoltOpenEnvForScopeContext(ctx, cs.cityPath, cfg, scopeRoot)
-				if rerr != nil {
-					return nil, fmt.Errorf("re-resolve native rig store env %s: %w", scopeRoot, rerr)
-				}
-				return beads.OpenNativeStorage(ctx, scopeRoot, freshEnv)
-			}
-			return beads.OpenNativeDoltStoreAt(context.Background(), scopeRoot, env, beads.WithNativeReopen(reopen))
-		},
 	})
 	if err != nil {
 		return unavailableStore{err: fmt.Errorf("open rig store %s: %w", scopeRoot, err)}
@@ -1929,7 +1907,7 @@ var rigCloneGit = git.Clone
 
 // provisionedManagedDoltDatabase returns the managed Dolt database name a fresh
 // git_url add minted at rigPath, or "" when there is nothing this request may
-// drop: a file-store city, GC_DOLT=skip (the DB is deferred to the controller,
+// drop: a file-store city, GC_BEADS_SKIP=1 (the DB is deferred to the controller,
 // not created here), or a metadata.json without a dolt_database. It is the
 // ground truth for the manifest's DoltDB field (C4c §2.2).
 func (cs *controllerState) provisionedManagedDoltDatabase(rigPath string) string {
@@ -1986,33 +1964,14 @@ func (cs *controllerState) assertDroppableManagedDoltDatabase(rigName, dbName st
 // It is a package var so the G14 rollback tests can inject a recorder without a
 // live Dolt server; production resolves the city's Dolt endpoint and issues the
 // identifier-escaped DROP through the same client the cleanup engine uses.
-var controllerDropManagedDoltDatabase = func(cs *controllerState, ctx context.Context, dbName string) error {
-	cfg := cs.Config()
-	host := ""
-	cityPort := 0
-	if cfg != nil {
-		host = strings.TrimSpace(cfg.Dolt.Host)
-		cityPort = cfg.Dolt.Port
+var controllerDropManagedDoltDatabase = func(cs *controllerState, _ context.Context, dbName string) error {
+	// Drop through bd, the sole interface to the server (proxied-server owns the
+	// endpoint). No direct dial or gascity-side port resolution.
+	query := fmt.Sprintf("DROP DATABASE IF EXISTS `%s`", strings.ReplaceAll(dbName, "`", "``"))
+	if _, err := bdCommandRunnerForCity(cs.cityPath)(cs.cityPath, "bd", "sql", query); err != nil {
+		return fmt.Errorf("dropping managed dolt database %q via bd: %w", dbName, err)
 	}
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	resolution := ResolveDoltPort(PortResolverInput{
-		CityPort: cityPort,
-		Rigs:     loadResolverRigs(cs.cityPath, cfg),
-		FS:       fsys.OSFS{},
-	})
-	if err := fatalPortResolutionError(resolution); err != nil {
-		return fmt.Errorf("resolving dolt port: %w", err)
-	}
-	client, err := newSQLCleanupDoltClient(cs.cityPath, host, strconv.Itoa(resolution.Port))
-	if err != nil {
-		return fmt.Errorf("opening dolt connection: %w", err)
-	}
-	defer client.Close() //nolint:errcheck // best-effort cleanup
-	dropCtx, cancel := context.WithTimeout(ctx, cleanupDropTimeout)
-	defer cancel()
-	return client.DropDatabase(dropCtx, dbName)
+	return nil
 }
 
 // TeardownPartialRig is the physical half of the G14 atomic rollback (C4c §2.3),
@@ -2216,8 +2175,8 @@ func (cs *controllerState) provisionRigWrite(r config.Rig, depOnStep func(rig.Pr
 	// persistent boot-time registration (startBeadsLifecycle) that this per-request
 	// window must never delete. (The CLI wrapper registers unconditionally because
 	// it is a short-lived process that owns its map.)
-	if cityUsesBdStoreContract(cs.cityPath) && cityDoltConfigHasLifecycleFields(editCfg.Dolt) {
-		if registerCityDoltConfigIfAbsent(cs.cityPath, editCfg.Dolt) {
+	if cityUsesBdStoreContract(cs.cityPath) && cityDoltConfigHasLifecycleFields(editCfg.Beads.Server) {
+		if registerCityDoltConfigIfAbsent(cs.cityPath, editCfg.Beads.Server) {
 			defer clearCityDoltConfig(cs.cityPath)
 		}
 	}
@@ -2254,7 +2213,7 @@ func (cs *controllerState) rigProvisionDeps(editCfg *config.City, r config.Rig, 
 		},
 		ProbeBranch: func(p string) string { return git.New(p).ProbeDefaultBranch() },
 		NormalizeScopes: func(cp string, c *config.City) error {
-			return normalizeCanonicalBdScopeFiles(cp, c, io.Discard)
+			return nil // bd owns canonical scope files in proxied-server mode
 		},
 		PrepareAdopt:  prepareRigAdoptProviderState,
 		StoreContract: cityUsesBdStoreContract,

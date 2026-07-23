@@ -17,18 +17,18 @@ func TestBeadsScriptEnsureReadyDoesNotAutoInitSharedWorkspace(t *testing.T) {
 		Op: "ensure-ready",
 		Env: map[string]string{
 			"GC_K8S_IMAGE": "gc-beads:latest",
-			"GC_DOLT_HOST": "canonical-dolt.example.com",
-			"GC_DOLT_PORT": "4406",
+			"GC_BEADS_HOST": "canonical-dolt.example.com",
+			"GC_BEADS_PORT": "4406",
 		},
 	})
 	if result.err != nil {
 		t.Fatalf("gc-beads-k8s ensure-ready error = %v\noutput:\n%s", result.err, result.output)
 	}
-	if _, ok := result.manifestEnv["GC_DOLT_HOST"]; ok {
-		t.Fatalf("manifest unexpectedly projected GC_DOLT_HOST: %#v", result.manifestEnv)
+	if _, ok := result.manifestEnv["GC_BEADS_HOST"]; ok {
+		t.Fatalf("manifest unexpectedly projected GC_BEADS_HOST: %#v", result.manifestEnv)
 	}
-	if _, ok := result.manifestEnv["GC_DOLT_PORT"]; ok {
-		t.Fatalf("manifest unexpectedly projected GC_DOLT_PORT: %#v", result.manifestEnv)
+	if _, ok := result.manifestEnv["GC_BEADS_PORT"]; ok {
+		t.Fatalf("manifest unexpectedly projected GC_BEADS_PORT: %#v", result.manifestEnv)
 	}
 	assertCallNotContains(t, result.callLog, "bd init")
 	assertCallNotContains(t, result.callLog, "config set issue_prefix")
@@ -42,8 +42,8 @@ func TestBeadsScriptInitUsesScopeRootAndCanonicalDoltTarget(t *testing.T) {
 			"GC_CITY_PATH":     "/city",
 			"GC_STORE_ROOT":    "/city/frontend",
 			"GC_BEADS_PREFIX":  "fe",
-			"GC_DOLT_HOST":     "canonical-dolt.example.com",
-			"GC_DOLT_PORT":     "4406",
+			"GC_BEADS_HOST":     "canonical-dolt.example.com",
+			"GC_BEADS_PORT":     "4406",
 			"GC_K8S_DOLT_HOST": "legacy-dolt.example.com",
 			"GC_K8S_DOLT_PORT": "3308",
 		},
@@ -70,8 +70,8 @@ func TestBeadsScriptInitSetsBEADSDIR(t *testing.T) {
 			"GC_CITY_PATH":    "/city",
 			"GC_STORE_ROOT":   "/city/frontend",
 			"GC_BEADS_PREFIX": "fe",
-			"GC_DOLT_HOST":    "canonical-dolt.example.com",
-			"GC_DOLT_PORT":    "4406",
+			"GC_BEADS_HOST":    "canonical-dolt.example.com",
+			"GC_BEADS_PORT":    "4406",
 		},
 	})
 	if result.err != nil {
@@ -90,8 +90,8 @@ func TestBeadsScriptInitDoesNotPreseedIssuePrefixBeforeBdInit(t *testing.T) {
 			"GC_CITY_PATH":    "/city",
 			"GC_STORE_ROOT":   "/city/frontend",
 			"GC_BEADS_PREFIX": "fe",
-			"GC_DOLT_HOST":    "canonical-dolt.example.com",
-			"GC_DOLT_PORT":    "4406",
+			"GC_BEADS_HOST":    "canonical-dolt.example.com",
+			"GC_BEADS_PORT":    "4406",
 		},
 	})
 	if result.err != nil {
@@ -117,14 +117,14 @@ func TestBeadsScriptInitRejectsPartialCanonicalDoltTarget(t *testing.T) {
 		Env: map[string]string{
 			"GC_CITY_PATH":  "/city",
 			"GC_STORE_ROOT": "/city/frontend",
-			"GC_DOLT_HOST":  "canonical-dolt.example.com",
+			"GC_BEADS_HOST":  "canonical-dolt.example.com",
 		},
 	})
 	if result.err == nil {
-		t.Fatalf("gc-beads-k8s init error = nil, want partial GC_DOLT_* rejection\noutput:\n%s", result.output)
+		t.Fatalf("gc-beads-k8s init error = nil, want partial GC_BEADS_* rejection\noutput:\n%s", result.output)
 	}
-	if !strings.Contains(result.output, "init: requires both GC_DOLT_HOST and GC_DOLT_PORT when GC_DOLT_HOST is set") {
-		t.Fatalf("partial GC_DOLT_* rejection output = %q", result.output)
+	if !strings.Contains(result.output, "init: requires both GC_BEADS_HOST and GC_BEADS_PORT when GC_BEADS_HOST is set") {
+		t.Fatalf("partial GC_BEADS_* rejection output = %q", result.output)
 	}
 }
 
@@ -140,8 +140,8 @@ func TestBeadsScriptInitFallsBackToDirWhenStoreRootUnset(t *testing.T) {
 		Env: map[string]string{
 			"GC_CITY_PATH":    "/city",
 			"GC_BEADS_PREFIX": "ap",
-			"GC_DOLT_HOST":    "canonical-dolt.example.com",
-			"GC_DOLT_PORT":    "4406",
+			"GC_BEADS_HOST":    "canonical-dolt.example.com",
+			"GC_BEADS_PORT":    "4406",
 		},
 	})
 	if result.err != nil {

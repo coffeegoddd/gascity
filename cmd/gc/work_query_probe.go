@@ -91,7 +91,7 @@ func controllerQueryPrefixEnv(source map[string]string) map[string]string {
 	// visible in process listings. Full canonical probe env is supplied via the
 	// subprocess environment by the controller probe runners.
 	for _, key := range []string{
-		"GC_DOLT_HOST", "GC_DOLT_PORT",
+		"GC_BEADS_HOST", "GC_BEADS_PORT",
 	} {
 		if value := strings.TrimSpace(source[key]); value != "" {
 			env[key] = value

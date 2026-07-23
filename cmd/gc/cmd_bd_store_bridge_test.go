@@ -36,10 +36,10 @@ func writeFakeBdBridgeScript(t *testing.T, binDir, envFile, argsFile string) {
 	script := `#!/bin/sh
 set -eu
 printf 'BEADS_DIR=%s
-GC_DOLT_HOST=%s
-GC_DOLT_PORT=%s
-GC_DOLT_USER=%s
-GC_DOLT_PASSWORD=%s
+GC_BEADS_HOST=%s
+GC_BEADS_PORT=%s
+GC_BEADS_USER=%s
+GC_BEADS_PASSWORD=%s
 BEADS_DOLT_SERVER_HOST=%s
 BEADS_DOLT_SERVER_PORT=%s
 BEADS_DOLT_SERVER_USER=%s
@@ -52,7 +52,7 @@ BEADS_BACKEND=%s
 GC_BEADS_PREFIX=%s
 BD_EXPORT_AUTO=%s
 ' \
-  "${BEADS_DIR:-}" "${GC_DOLT_HOST:-}" "${GC_DOLT_PORT:-}" "${GC_DOLT_USER:-}" "${GC_DOLT_PASSWORD:-}" \
+  "${BEADS_DIR:-}" "${GC_BEADS_HOST:-}" "${GC_BEADS_PORT:-}" "${GC_BEADS_USER:-}" "${GC_BEADS_PASSWORD:-}" \
   "${BEADS_DOLT_SERVER_HOST:-}" "${BEADS_DOLT_SERVER_PORT:-}" "${BEADS_DOLT_SERVER_USER:-}" "${BEADS_DOLT_PASSWORD:-}" \
   "${BEADS_DOLT_SERVER_DATABASE:-}" "${BEADS_CREDENTIALS_FILE:-}" "${GC_BEADS:-}" "${GC_BEADS_BACKEND:-}" "${BEADS_BACKEND:-}" "${GC_BEADS_PREFIX:-}" \
   "${BD_EXPORT_AUTO:-}" > "` + envFile + `"
@@ -114,7 +114,7 @@ func TestBdStoreBridgeCreateCmdProjectsCanonicalEnvAndClearsAmbientAuthority(t *
 	t.Setenv("BEADS_CREDENTIALS_FILE", "/tmp/stale-creds")
 	t.Setenv("GC_BEADS", "ambient-bd")
 	t.Setenv("GC_BEADS_PREFIX", "ambient-prefix")
-	t.Setenv("GC_DOLT_PASSWORD", "secret")
+	t.Setenv("GC_BEADS_PASSWORD", "secret")
 	var stdout, stderr bytes.Buffer
 
 	withTestStdin(t, `{"title":"captured","type":"task","labels":["triage"]}`+"\n", func() {
@@ -147,11 +147,11 @@ func TestBdStoreBridgeCreateCmdProjectsCanonicalEnvAndClearsAmbientAuthority(t *
 	if got := envMap["BEADS_DIR"]; got != filepath.Join(scopeDir, ".beads") {
 		t.Fatalf("BEADS_DIR = %q, want %q", got, filepath.Join(scopeDir, ".beads"))
 	}
-	if got := envMap["GC_DOLT_HOST"]; got != "db.example.internal" {
-		t.Fatalf("GC_DOLT_HOST = %q, want db.example.internal", got)
+	if got := envMap["GC_BEADS_HOST"]; got != "db.example.internal" {
+		t.Fatalf("GC_BEADS_HOST = %q, want db.example.internal", got)
 	}
-	if got := envMap["GC_DOLT_PORT"]; got != "3317" {
-		t.Fatalf("GC_DOLT_PORT = %q, want 3317", got)
+	if got := envMap["GC_BEADS_PORT"]; got != "3317" {
+		t.Fatalf("GC_BEADS_PORT = %q, want 3317", got)
 	}
 	if got := envMap["BEADS_DOLT_SERVER_DATABASE"]; got != "" {
 		t.Fatalf("BEADS_DOLT_SERVER_DATABASE = %q, want empty after sanitization\n%s", got, string(envText))
@@ -258,7 +258,7 @@ func TestBdStoreBridgeDoltliteClearsDoltServerEnv(t *testing.T) {
 	if got := envMap["BEADS_BACKEND"]; got != "doltlite" {
 		t.Fatalf("BEADS_BACKEND = %q, want doltlite", got)
 	}
-	for _, key := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT", "BEADS_DOLT_AUTO_START"} {
+	for _, key := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT", "BEADS_DOLT_AUTO_START"} {
 		if got := envMap[key]; got != "" {
 			t.Fatalf("%s = %q, want empty for doltlite bridge", key, got)
 		}

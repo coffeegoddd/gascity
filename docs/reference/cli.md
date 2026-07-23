@@ -41,7 +41,6 @@ gc [flags]
 | [gc costs](#gc-costs) | Show per-run usage and estimated cost for this city |
 | [gc dashboard](#gc-dashboard) | Open the web dashboard in your browser |
 | [gc doctor](#gc-doctor) | Check workspace health |
-| [gc dolt-cleanup](#gc-dolt-cleanup) | Find and remove orphaned Dolt databases (Go-side core) |
 | [gc event](#gc-event) | Event operations |
 | [gc events](#gc-events) | Show events from the GC API |
 | [gc extmsg](#gc-extmsg) | Manage external-conversation bindings |
@@ -320,8 +319,9 @@ gc beads
 
 Manage the canonical city endpoint topology for bd-backed beads stores.
 
-Use use-managed to make the city GC-managed again. Use use-external to pin the
-city to an external Dolt endpoint and rewrite inherited rig mirrors.
+Use use-external to pin the city to an external Dolt endpoint and rewrite
+inherited rig mirrors. A city with no external endpoint is local by default —
+bd owns the proxied-server, so no command is needed for the common case.
 
 ```
 gc beads city
@@ -330,7 +330,6 @@ gc beads city
 | Subcommand | Description |
 |------------|-------------|
 | [gc beads city use-external](#gc-beads-city-use-external) | Set the city endpoint to an external Dolt server |
-| [gc beads city use-managed](#gc-beads-city-use-managed) | Set the city endpoint to GC-managed |
 
 ## gc beads city use-external
 
@@ -347,18 +346,6 @@ gc beads city use-external [flags]
 | `--host` | string |  | external Dolt host |
 | `--port` | string |  | external Dolt port |
 | `--user` | string |  | external Dolt user |
-
-## gc beads city use-managed
-
-Set the city endpoint to GC-managed
-
-```
-gc beads city use-managed [flags]
-```
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--dry-run` | bool |  | show the canonical changes without writing files |
 
 ## gc beads health
 
@@ -1327,63 +1314,6 @@ gc doctor --explain-postgres-auth
 | `--json` | bool |  | emit structured JSON instead of human-readable output |
 | `-v`, `--verbose` | bool |  | show extra diagnostic details |
 
-## gc dolt-cleanup
-
-gc dolt-cleanup is the Go-side implementation of the operational Dolt
-cleanup tool. It resolves the Dolt server port via the AD-04 chain
-(--port &gt; city dolt.port &gt; &lt;rigRoot&gt;/.beads/dolt-server.port &gt; 3307),
-drops stale test/agent databases, calls DOLT_PURGE_DROPPED_DATABASES
-to reclaim disk, and reaps orphaned dolt sql-server processes left
-over from leaked test harnesses. Invalid explicit ports and unreadable
-or invalid city/rig port settings fail closed before cleanup stages run;
-only absent rig port files can reach the legacy default. The legacy
-default is a connection fallback only; it does not protect port 3307
-from orphan-process reaping.
-
-Dry-run by default. Pass --force to actually drop, purge, and kill.
-Pass --max-orphan-dbs with --force to refuse all destructive cleanup
-stages if the live apply-time stale database count exceeds the
-scan-time threshold. The default 0 disables this guard; negative values
-are rejected before any city lookup or cleanup stage runs.
-Protection is conservative and checked first: active rig dolt servers (matched
-by listening port), registered rig databases, and active test temp roots are
-always protected, and any process whose state cannot be determined degrades to
-protected. A dolt sql-server is reaped only when its scope is provably gone —
-its working directory is an unlinked inode (the kernel "(deleted)" cwd marker),
-or its --config path is on the test-config-path allowlist (/tmp/Test*,
-os.TempDir()/Test*, known Gas City test prefixes, ~/.gotmp/Test*). A server
-whose --config has merely vanished while its working directory is still live is
-protected, not reaped, until an operator confirms; a lone missing-config
-observation is not proof of scope deletion. See the PROTECTED section of the
-report. Destructive drops are limited to known stale test database name
-shapes and conservative SQL identifier characters; skipped stale matches
-are reported in dropped.skipped. Rig dolt_database names used for purge
-must use the same identifier shape: ASCII letters, digits, underscores,
-and non-leading hyphens. Missing or silent rig metadata disables forced
-drop/purge because the live database name cannot be proven safe.
-
-JSON envelope schema is stable: gc.dolt.cleanup.v1. Automation that
-uses --json must inspect summary.errors_total and errors, and must also
-refuse to invoke --force when dry-run force_blockers is non-empty.
-force_blockers reports conditions that would block forced cleanup without
-incrementing errors_total. The rig-protection blocker is intentionally
-global: missing or silent rig metadata prevents forced drop/purge because
-the command cannot prove all registered rig databases are protected.
-Cleanup stage errors are reported in the envelope even when the command
-can still return successfully after emitting the report.
-
-```
-gc dolt-cleanup [flags]
-```
-
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--force` | bool |  | actually drop, purge, and kill orphaned resources (default: dry-run) |
-| `--json` | bool |  | emit JSON envelope (gc.dolt.cleanup.v1) |
-| `--max-orphan-dbs` | int |  | with --force, refuse cleanup when live stale database count exceeds this limit |
-| `--port` | string |  | override the resolved Dolt port |
-| `--probe` | bool |  | TCP-probe the resolved port; fail if unreachable |
-
 ## gc event
 
 Event operations
@@ -2117,11 +2047,11 @@ gc init --template gascity --default-provider claude \
 |------|------|---------|-------------|
 | `--bootstrap-profile` | string |  | bootstrap profile to apply for hosted/container defaults |
 | `--default-provider` | string |  | default readiness-aware provider to select from --providers |
-| `--dolt-database` | string |  | hosted beads project database, e.g. bd_prj_… (or GC_DOLT_DATABASE); required with --dolt-host |
-| `--dolt-host` | string |  | external/hosted Dolt host for the city beads ledger (or GC_DOLT_HOST); pins the city to an external endpoint instead of bootstrapping a managed-local Dolt |
-| `--dolt-port` | string |  | external/hosted Dolt port (or GC_DOLT_PORT); required with --dolt-host |
+| `--dolt-database` | string |  | hosted beads project database, e.g. bd_prj_… (or GC_BEADS_DATABASE); required with --dolt-host |
+| `--dolt-host` | string |  | external/hosted Dolt host for the city beads ledger (or GC_BEADS_HOST); pins the city to an external endpoint instead of bootstrapping a managed-local Dolt |
+| `--dolt-port` | string |  | external/hosted Dolt port (or GC_BEADS_PORT); required with --dolt-host |
 | `--dolt-project-id` | string |  | authoritative beads project_id for the identity handshake (or GC_BEADS_PROJECT_ID); derived from a bd_&lt;id&gt; --dolt-database when omitted |
-| `--dolt-user` | string |  | external/hosted Dolt user (or GC_DOLT_USER); optional |
+| `--dolt-user` | string |  | external/hosted Dolt user (or GC_BEADS_USER); optional |
 | `--file` | string |  | path to a TOML file to use as city.toml |
 | `--from` | string |  | path to an example city directory to copy |
 | `--json` | bool |  | emit JSON summary |
@@ -3278,7 +3208,7 @@ gc rig
 | [gc rig remove](#gc-rig-remove) | Remove a rig from the city |
 | [gc rig restart](#gc-rig-restart) | Restart all agents in a rig |
 | [gc rig resume](#gc-rig-resume) | Resume a suspended rig |
-| [gc rig set-endpoint](#gc-rig-set-endpoint) | Set the canonical endpoint ownership for a rig |
+| [gc rig set-endpoint](#gc-rig-set-endpoint) | Pin a rig to an external Dolt endpoint |
 | [gc rig status](#gc-rig-status) | Show rig status and agent running state |
 | [gc rig suspend](#gc-rig-suspend) | Suspend a rig (reconciler will skip its agents) |
 
@@ -3403,14 +3333,12 @@ gc rig resume [name] [flags]
 
 ## gc rig set-endpoint
 
-Set the canonical endpoint ownership for a rig.
+Pin a rig to its own external Dolt endpoint.
 
-Use --inherit to make a rig derive its endpoint from the current city
-topology. Use --external to pin the rig to its own external Dolt endpoint.
-Use --self to mark the rig as running its own local Dolt server on
-127.0.0.1 at the given --port; while the city is in managed_city mode the
-command requires --force because the rig's .beads/dolt-server.port mirror
-will no longer track the managed city Dolt.
+Use --external with --host/--port to point the rig at an operator-managed Dolt
+server; bd fronts it via proxied-server-external. A rig with no external
+endpoint inherits the city's endpoint by default (bd owns the local server), so
+no command is needed for the common case.
 
 This command owns the rig's canonical .beads/config.yaml topology state.
 
@@ -3421,24 +3349,19 @@ gc rig set-endpoint <rig> [flags]
 **Example:**
 
 ```
-gc rig set-endpoint frontend --inherit
 gc rig set-endpoint frontend --external --host db.example.com --port 3307
-gc rig set-endpoint frontend --external --host db.example.com --port 3307 --user agent --adopt-unverified
-gc rig set-endpoint frontend --self --port 28232 --force
-gc rig set-endpoint frontend --inherit --dry-run
+gc rig set-endpoint frontend --external --host db.example.com --port 3307 --user agent
+gc rig set-endpoint frontend --external --host db.example.com --port 3307 --dry-run
 ```
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--adopt-unverified` | bool |  | record the endpoint without live validation |
 | `--dry-run` | bool |  | show the canonical changes without writing files |
-| `--external` | bool |  | set an explicit external endpoint for the rig |
-| `--force` | bool |  | acknowledge conflicting managed-city state when using --self |
+| `--external` | bool |  | pin the rig to its own external Dolt endpoint |
 | `--host` | string |  | external Dolt host |
-| `--inherit` | bool |  | inherit the city endpoint |
 | `--json` | bool |  | Output in JSONL format |
-| `--port` | string |  | external Dolt port (required with --external or --self) |
-| `--self` | bool |  | mark the rig as running its own local Dolt on 127.0.0.1 |
+| `--port` | string |  | external Dolt port (required with --external) |
 | `--user` | string |  | external Dolt user |
 
 ## gc rig status

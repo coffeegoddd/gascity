@@ -472,6 +472,22 @@ func doStartWithNameOverrideRaw(args []string, controllerMode bool, stdout, stde
 	return doStartWithNameOverrideJSON(args, controllerMode, stdout, stderr, nameOverride, false)
 }
 
+// bdProxiedServerStartError returns a non-empty operator-facing message when the
+// city's store is a bd-managed dolt server (local or external) but the bd on
+// PATH cannot run proxied-server mode, which gascity requires. It returns "" for
+// non-bd/doltlite/skip scopes (nothing to gate) and when bd is absent (the
+// hard-dependency check already reports that). This is the gc start half of the
+// bd-capability guard; gc doctor reports the same condition via bd-proxied-server.
+func bdProxiedServerStartError(cityPath string) string {
+	if gcDoltSkip() || !cityUsesManagedDoltBeadsLifecycle(cityPath) {
+		return ""
+	}
+	if supported, present := bdProxiedServerCapability(); present && !supported {
+		return "the bd on PATH does not support --proxied-server; gascity requires a proxied-server-capable bd build (fix: install/upgrade bd to a build whose `bd init` accepts --proxied-server)"
+	}
+	return ""
+}
+
 func doStartWithNameOverrideJSON(args []string, controllerMode bool, stdout, stderr io.Writer, nameOverride string, jsonOut bool) int {
 	// --foreground / --controller bypass the supervisor entirely (legacy
 	// standalone reconciler). No drift to check.
@@ -532,6 +548,10 @@ func doStartWithNameOverrideJSON(args []string, controllerMode bool, stdout, std
 		}
 		fmt.Fprintln(stderr)                                                               //nolint:errcheck // best-effort stderr
 		fmt.Fprintln(stderr, "gc start: install the missing dependencies, then try again") //nolint:errcheck // best-effort stderr
+		return 1
+	}
+	if msg := bdProxiedServerStartError(cityPath); msg != "" {
+		fmt.Fprintf(stderr, "gc start: %s\n", msg) //nolint:errcheck // best-effort stderr
 		return 1
 	}
 	if status := checkDoltAuthorIdentity(cityPath); status.blocked() {
@@ -658,6 +678,10 @@ func doStartStandalone(args []string, controllerMode bool, stdout, stderr io.Wri
 		fmt.Fprintln(stderr, "gc start: install the missing dependencies, then try again") //nolint:errcheck // best-effort stderr
 		return 1
 	}
+	if msg := bdProxiedServerStartError(cityPath); msg != "" {
+		fmt.Fprintf(stderr, "gc start: %s\n", msg) //nolint:errcheck // best-effort stderr
+		return 1
+	}
 	if status := checkDoltAuthorIdentity(cityPath); status.blocked() {
 		printDoltAuthorIdentityBlock(stderr, "gc start", status)
 		return 1
@@ -742,7 +766,6 @@ func doStartStandalone(args []string, controllerMode bool, stdout, stderr io.Wri
 	warmupChecks := buildDoctorChecks(warmupCityPath, cfg, nil, buildDoctorChecksOpts{
 		Stderr:               io.Discard,
 		ControllerRunning:    doctor.IsControllerRunning(warmupCityPath),
-		SkipCityDoltCheck:    gcDoltSkip() || (!scopeUsesManagedBdStoreContract(warmupCityPath, warmupCityPath) && !workspaceNeedsCityDoltCheck(warmupCityPath, cfg)),
 		SkipManagedDoltCheck: managedDoltOpsCheckSkip(warmupCityPath, cfg, nil),
 	})
 	warmupOpts := warmup.WarmupOpts{
@@ -1382,7 +1405,7 @@ func providerProcessPassthroughEnv() map[string]string {
 // passthroughEnv returns environment variables from the parent process that
 // agent sessions should inherit. Agents need PATH to find tools (including gc),
 // GC_BEADS/GC_DOLT so they use the same bead store as the parent,
-// GC_DOLT_HOST/PORT/USER/PASSWORD so agents can connect to remote Dolt servers,
+// GC_BEADS_HOST/PORT/USER/PASSWORD so agents can connect to remote Dolt servers,
 // and Claude auth/home context so managed sessions can launch reliably under
 // shell and supervisor-driven flows.
 func passthroughEnv() map[string]string {

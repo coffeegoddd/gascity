@@ -21,9 +21,9 @@ import (
 // observable clear semantics hold on every real backend so the front-door
 // write methods (Phase 4) can rely on them.
 //
-// NOTE ON THE ACTUAL MECHANISM: the in-process stores (MemStore,
-// NativeDoltStore) store the empty string rather than physically deleting the
-// key. That is fine: the front-door read codecs (InfoFromPersistedBead,
+// NOTE ON THE ACTUAL MECHANISM: the in-process MemStore stores the empty string
+// rather than physically deleting the key. That is fine: the front-door read
+// codecs (InfoFromPersistedBead,
 // decodeNudgeItem, OrderRun decode) read metadata[key] and treat "" and absent
 // identically. The contract this test enforces is the OBSERVABLE one — read
 // back yields "" — which is exactly what the front doors consume. It does NOT
@@ -39,17 +39,12 @@ func TestMetadataEmptyStringClearContract(t *testing.T) {
 			newStore: func(_ *testing.T) beads.Store { return beads.NewMemStore() },
 		},
 		{
-			name:     "NativeDoltStore",
-			newStore: func(_ *testing.T) beads.Store { return beads.NewNativeDoltStoreForConformance() },
-		},
-		{
 			name: "Postgres",
 			newStore: func(t *testing.T) beads.Store {
 				// No in-package postgres Store constructor exists; postgres is
-				// reached through the bd/native DSN path. When a test DSN is
-				// provided we would construct one here. Until then this backend
-				// is skipped (the NativeDoltStore arm exercises the same
-				// metadata codec the postgres path uses).
+				// reached through the bd DSN path. When a test DSN is provided we
+				// would construct one here. Until then this backend is skipped
+				// (the MemStore arm exercises the same metadata codec).
 				dsn := os.Getenv("GC_BEADS_TEST_PG_DSN")
 				if dsn == "" {
 					t.Skip("GC_BEADS_TEST_PG_DSN not set; skipping postgres empty-clear conformance")

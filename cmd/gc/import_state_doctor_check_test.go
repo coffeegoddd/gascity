@@ -547,7 +547,6 @@ func TestBuildDoctorChecksSkipsImportStateCheckWhenCityConfigInvalid(t *testing.
 	names := doctorCheckNames(buildDoctorChecks(cityDir, nil, os.ErrInvalid, buildDoctorChecksOpts{
 		ControllerRunning:    false,
 		SupervisorRunning:    false,
-		SkipCityDoltCheck:    true,
 		SkipManagedDoltCheck: true,
 	}))
 	if got := doctorCheckIndex(names, "packv2-import-state"); got >= 0 {

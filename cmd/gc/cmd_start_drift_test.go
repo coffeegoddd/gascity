@@ -239,7 +239,7 @@ func driftCheckEnv(t *testing.T, supervisorBuildID string) (cityPath string, res
 	// Isolated GC_HOME so recordDriftRestartAttempt writes into a temp
 	// dir instead of the user's real ~/.gc.
 	t.Setenv("GC_HOME", t.TempDir())
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -466,7 +466,7 @@ func TestDoStartJSONAlreadyRunningSupervisorKeepsStdoutJSONOnly(t *testing.T) {
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			t.Setenv("GC_DOLT", "skip")
+			t.Setenv("GC_BEADS_SKIP", "skip")
 			t.Setenv("GC_BEADS", "file")
 			cityPath, setCommit := driftCheckEnv(t, tc.supervisorBuildID)
 			setCommit(tc.localBuildID)

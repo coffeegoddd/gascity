@@ -135,11 +135,11 @@ func (ce ConditionEnv) Environ() []string {
 		"BEADS_DOLT_SERVER_PORT",
 		"BEADS_DOLT_SERVER_USER",
 		"BEADS_DOLT_PASSWORD",
-		"GC_DOLT",
-		"GC_DOLT_HOST",
-		"GC_DOLT_PORT",
-		"GC_DOLT_USER",
-		"GC_DOLT_PASSWORD",
+		"GC_BEADS_SKIP",
+		"GC_BEADS_HOST",
+		"GC_BEADS_PORT",
+		"GC_BEADS_USER",
+		"GC_BEADS_PASSWORD",
 	} {
 		if value := os.Getenv(key); value != "" {
 			env = append(env, key+"="+value)

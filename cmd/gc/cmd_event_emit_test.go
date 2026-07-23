@@ -161,7 +161,7 @@ func TestDoEventEmitPayloadInvalidJSON(t *testing.T) {
 
 func TestEventPayloadForEmitFallsBackToStoreBead(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_SESSION", "fake")
 	configureIsolatedRuntimeEnv(t)
 
@@ -209,7 +209,7 @@ func TestEventPayloadForEmitFallsBackToStoreBead(t *testing.T) {
 
 func TestEventPayloadForEmitUsesInheritedBeadsDirOutsideRig(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_SESSION", "fake")
 	configureIsolatedRuntimeEnv(t)
 
@@ -286,7 +286,7 @@ prefix = "fe"
 // controller harness in the cmd/gc test tree.
 func TestEventEmitViaCLI(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_SESSION", "fake")
 	configureIsolatedRuntimeEnv(t)
 

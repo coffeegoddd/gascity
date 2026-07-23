@@ -28,7 +28,7 @@ func resolveDesiredRigEndpointState(cityPath string, rig config.Rig, cityState c
 	desired := desiredRigDoltConfigState(cityPath, rig, cityState)
 	resolved, err := contract.ResolveScopeConfigState(fsys.OSFS{}, cityPath, rig.Path, rig.EffectivePrefix())
 	if err != nil {
-		if cfg, ok, readErr := contract.ReadConfigState(fsys.OSFS{}, filepath.Join(rig.Path, ".beads", "config.yaml")); readErr == nil && ok && cfg.EndpointOrigin == contract.EndpointOriginInheritedCity {
+		if cfg, ok, readErr := contract.ReadConfigState(fsys.OSFS{}, filepath.Join(rig.Path, ".beads", "config.yaml")); readErr == nil && ok && !contract.ConfigHasEndpointAuthority(cfg) {
 			return desired, nil
 		}
 		return contract.ConfigState{}, wrapInvalidEndpointStateError("rig", err)

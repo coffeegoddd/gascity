@@ -206,13 +206,13 @@ func dirHasEntries(path string) (bool, error) {
 
 // doltBackupFixHint returns the multi-line DOLT_BACKUP add+sync
 // invocation as a copy-pasteable shell command. The command targets the
-// running managed Dolt server (port comes from $GC_DOLT_PORT, which
+// running managed Dolt server (port comes from $GC_BEADS_PORT, which
 // `gc dolt status` surfaces); it does not assume the operator has
 // stopped the server.
 func doltBackupFixHint(dbName, backupDir string) string {
 	return fmt.Sprintf(
-		"register the backup remote (requires GC_DOLT_PORT from `gc dolt status`):\n"+
-			"  DOLT_CLI_PASSWORD='' dolt --host 127.0.0.1 --port ${GC_DOLT_PORT:?set this via gc dolt status} --user root --no-tls sql -q \\\n"+
+		"register the backup remote (requires GC_BEADS_PORT from `gc dolt status`):\n"+
+			"  DOLT_CLI_PASSWORD='' dolt --host 127.0.0.1 --port ${GC_BEADS_PORT:?set this via gc dolt status} --user root --no-tls sql -q \\\n"+
 			"    \"USE \\`%s\\`; \\\n"+
 			"     CALL DOLT_BACKUP('add', '%s-backup', 'file://%s'); \\\n"+
 			"     CALL DOLT_BACKUP('sync', '%s-backup');\"",

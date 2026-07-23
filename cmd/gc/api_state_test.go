@@ -892,7 +892,7 @@ func TestControllerStateCreateRigPokesReconciler(t *testing.T) {
 // rather than skipped on a nil config.
 func TestControllerStateCreateRigRejectsDuplicateName(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 
 	cityDir := t.TempDir()
@@ -940,7 +940,7 @@ func TestControllerStateCreateRigRejectsDuplicateName(t *testing.T) {
 
 func TestControllerStateCreateRigDetectsDefaultBranch(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"city1\"\n"), 0o644); err != nil {
@@ -972,7 +972,7 @@ func TestControllerStateCreateRigDetectsDefaultBranch(t *testing.T) {
 // rig.Provision directly and is intentionally not constrained this way.
 func TestControllerStateCreateRigRejectsOutOfCityPath(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"city1\"\n"), 0o644); err != nil {
@@ -992,7 +992,7 @@ func TestControllerStateCreateRigRejectsOutOfCityPath(t *testing.T) {
 
 func TestControllerStateCreateRigDetectsDefaultBranchForRelativePath(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte("[workspace]\nname = \"city1\"\n"), 0o644); err != nil {

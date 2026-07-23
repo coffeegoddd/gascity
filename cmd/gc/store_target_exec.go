@@ -41,7 +41,7 @@ func setExecProjectedBackendEnvEmpty(env map[string]string) {
 // resolved backend env map onto an exec-provider / city process env. It extends
 // execProjectedBackendEnvKeys with BEADS_DOLT_CREDENTIAL_COMMAND, the hosted
 // beads-gateway credential helper mirrorBeadsDoltEnv derives from
-// GC_DOLT_CRED_CMD.
+// GC_BEADS_CRED_CMD.
 //
 // That key is intentionally NOT in projectedDoltEnvKeys: it is a
 // preserve-from-ambient passthrough key (hostedBeadsCredentialPassthroughKeys),
@@ -49,7 +49,7 @@ func setExecProjectedBackendEnvEmpty(env map[string]string) {
 // break the mergeRuntimeEnv strip symmetry TestProjectedKeysCoverage pins and
 // collide with preserveHostedBeadsCredentialEnv. But the whitelist COPY paths
 // must still carry the derived value, or a controller that exports only the
-// non-sensitive GC_DOLT_CRED_CMD loses the helper on projected exec/process
+// non-sensitive GC_BEADS_CRED_CMD loses the helper on projected exec/process
 // envs and bd falls back to the root user (gateway Error 1045). The empty-set
 // path (setExecProjectedBackendEnvEmpty) deliberately keeps the original key
 // set so it never blanks an ambient credential command for providers that skip

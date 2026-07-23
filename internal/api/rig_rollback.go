@@ -39,7 +39,7 @@ type RigProvisionManifest struct {
 	// .beads store.
 	CreatedDir string
 	// DoltDB is the managed Dolt database name THIS request minted. Empty when
-	// the city runs a file store, GC_DOLT=skip deferred the DB to the
+	// the city runs a file store, GC_BEADS_SKIP=1 deferred the DB to the
 	// controller, or the store was adopted/re-added — none of which this request
 	// may drop.
 	DoltDB string

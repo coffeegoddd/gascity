@@ -8,7 +8,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/doctor"
 )
 
@@ -408,20 +407,10 @@ schema = 1
 	t.Setenv("GC_JSONL_ARCHIVE_REPO", archiveDir)
 
 	prevCityFlag := cityFlag
-	prevCityDoltCheck := newDoctorDoltServerCheck
-	prevRigDoltCheck := newDoctorRigDoltServerCheck
 	t.Cleanup(func() {
 		cityFlag = prevCityFlag
-		newDoctorDoltServerCheck = prevCityDoltCheck
-		newDoctorRigDoltServerCheck = prevRigDoltCheck
 	})
 	cityFlag = cityDir
-	newDoctorDoltServerCheck = func(cityPath string, _ bool) *doctor.DoltServerCheck {
-		return doctor.NewDoltServerCheck(cityPath, true)
-	}
-	newDoctorRigDoltServerCheck = func(cityPath string, rig config.Rig, _ bool) *doctor.RigDoltServerCheck {
-		return doctor.NewRigDoltServerCheck(cityPath, rig, true)
-	}
 
 	var stdout, stderr strings.Builder
 	_ = doDoctor(false, true, false, false, 0, &stdout, &stderr)
@@ -455,20 +444,10 @@ schema = 1
 	t.Setenv("GC_JSONL_ARCHIVE_REPO", archiveDir)
 
 	prevCityFlag := cityFlag
-	prevCityDoltCheck := newDoctorDoltServerCheck
-	prevRigDoltCheck := newDoctorRigDoltServerCheck
 	t.Cleanup(func() {
 		cityFlag = prevCityFlag
-		newDoctorDoltServerCheck = prevCityDoltCheck
-		newDoctorRigDoltServerCheck = prevRigDoltCheck
 	})
 	cityFlag = cityDir
-	newDoctorDoltServerCheck = func(cityPath string, _ bool) *doctor.DoltServerCheck {
-		return doctor.NewDoltServerCheck(cityPath, true)
-	}
-	newDoctorRigDoltServerCheck = func(cityPath string, rig config.Rig, _ bool) *doctor.RigDoltServerCheck {
-		return doctor.NewRigDoltServerCheck(cityPath, rig, true)
-	}
 
 	var stdout, stderr strings.Builder
 	_ = doDoctor(false, false, true, false, 0, &stdout, &stderr)

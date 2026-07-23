@@ -767,7 +767,7 @@ func bdProviderMismatchHint(scopeRoot, resolvedProvider string) string {
 // pass through unchanged.
 //
 // Related env vars:
-//   - GC_DOLT=skip — the gc-beads-bd script checks this and exits 2 for all
+//   - GC_BEADS_SKIP=1 — the gc-beads-bd script checks this and exits 2 for all
 //     operations. Used by testscript and integration tests.
 func beadsProvider(cityPath string) string {
 	raw := rawBeadsProvider(cityPath)

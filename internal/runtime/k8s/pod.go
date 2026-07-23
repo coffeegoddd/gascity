@@ -142,11 +142,11 @@ func projectControllerRuntimePathToPod(path, ctrlCity, ctrlRuntimeDir, podRuntim
 }
 
 // projectedPodDoltEnv adapts the controller projection to a pod-visible Dolt
-// target. Managed-local controller projections intentionally omit GC_DOLT_HOST
+// target. Managed-local controller projections intentionally omit GC_BEADS_HOST
 // and use a host-local runtime port; pods translate that blank-host managed
 // shape to the provider-configured in-cluster alias at this adapter edge so
-// agents still consume one GC_DOLT_* connection contract. Explicit
-// GC_DOLT_HOST values are preserved as written.
+// agents still consume one GC_BEADS_* connection contract. Explicit
+// GC_BEADS_HOST values are preserved as written.
 // BEADS_DOLT_SERVER_HOST/PORT are compatibility mirrors derived from the GC
 // projection, not independent input authorities.
 func controllerLocalDoltHost(host string) bool {
@@ -160,8 +160,8 @@ func controllerLocalDoltHost(host string) bool {
 }
 
 func projectedPodDoltEnv(cfgEnv map[string]string, managedHost, managedPort string) (map[string]string, error) {
-	host := strings.TrimSpace(cfgEnv["GC_DOLT_HOST"])
-	port := strings.TrimSpace(cfgEnv["GC_DOLT_PORT"])
+	host := strings.TrimSpace(cfgEnv["GC_BEADS_HOST"])
+	port := strings.TrimSpace(cfgEnv["GC_BEADS_PORT"])
 	managedHost = strings.TrimSpace(managedHost)
 	managedPort = strings.TrimSpace(managedPort)
 	if managedHost == "" {
@@ -175,15 +175,15 @@ func projectedPodDoltEnv(cfgEnv map[string]string, managedHost, managedPort stri
 	case host == "" && port == "":
 		return map[string]string{}, nil
 	case host != "" && port == "":
-		return nil, fmt.Errorf("requires both GC_DOLT_HOST and GC_DOLT_PORT when GC_DOLT_HOST is set")
+		return nil, fmt.Errorf("requires both GC_BEADS_HOST and GC_BEADS_PORT when GC_BEADS_HOST is set")
 	case controllerLocalDoltHost(host):
 		host = managedHost
 		port = managedPort
 	}
 
 	projected := map[string]string{
-		"GC_DOLT_HOST":           host,
-		"GC_DOLT_PORT":           port,
+		"GC_BEADS_HOST":           host,
+		"GC_BEADS_PORT":           port,
 		"BEADS_DOLT_SERVER_HOST": host,
 		"BEADS_DOLT_SERVER_PORT": port,
 	}
@@ -412,15 +412,15 @@ func agentSecurityContext(linuxUsername string) *corev1.SecurityContext {
 // and remaps pod-visible ones.
 func buildPodEnv(cfgEnv map[string]string, podWorkDir, managedServiceHost, managedServicePort string) ([]corev1.EnvVar, error) {
 	// Start with cfg.Env, removing controller-only vars.
-	// Auth creds (GC_DOLT_USER, GC_DOLT_PASSWORD, BEADS_DOLT_*_USER/PASSWORD) intentionally pass through.
+	// Auth creds (GC_BEADS_USER, GC_BEADS_PASSWORD, BEADS_DOLT_*_USER/PASSWORD) intentionally pass through.
 	skip := map[string]bool{
 		"GC_BEADS":               true,
 		"GC_SESSION":             true,
 		"GC_EVENTS":              true,
 		"GC_K8S_DOLT_HOST":       true,
 		"GC_K8S_DOLT_PORT":       true,
-		"GC_DOLT_HOST":           true,
-		"GC_DOLT_PORT":           true,
+		"GC_BEADS_HOST":           true,
+		"GC_BEADS_PORT":           true,
 		"BEADS_DOLT_SERVER_HOST": true,
 		"BEADS_DOLT_SERVER_PORT": true,
 	}

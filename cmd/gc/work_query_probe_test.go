@@ -49,30 +49,6 @@ func TestPrefixedWorkQueryForProbeUsesBD105WorkQuery(t *testing.T) {
 	}
 }
 
-func TestControllerQueryRuntimeEnvInheritedRigUsesCityStorePassword(t *testing.T) {
-	cityPath, rigDir, cfg := newControllerProbeFixture(t)
-	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeScopePassword(t, rigDir, "rig-secret")
-
-	env, err := controllerQueryRuntimeEnv(cityPath, cfg, &cfg.Agents[0])
-	if err != nil {
-		t.Fatalf("controllerQueryRuntimeEnv() error = %v, want nil", err)
-	}
-	if got := env["GC_DOLT_PASSWORD"]; got != "city-secret" {
-		t.Fatalf("GC_DOLT_PASSWORD = %q, want %q", got, "city-secret")
-	}
-	if got := env["BEADS_DOLT_PASSWORD"]; got != "city-secret" {
-		t.Fatalf("BEADS_DOLT_PASSWORD = %q, want %q", got, "city-secret")
-	}
-	if got := env["BEADS_DIR"]; got != filepath.Join(rigDir, ".beads") {
-		t.Fatalf("BEADS_DIR = %q, want rig beads dir", got)
-	}
-}
-
 func TestControllerQueryRuntimeEnvSurfacesPostgresProjectionError(t *testing.T) {
 	clearAmbientPostgresEnv(t)
 	t.Setenv("GC_BEADS", "bd")
@@ -100,12 +76,10 @@ dolt.auto-start: false
 func TestControllerQueryRuntimeEnvExplicitRigUsesRigStorePassword(t *testing.T) {
 	cityPath, rigDir, cfg := newControllerProbeFixture(t)
 	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "4406",
-		DoltUser:       "rig-user",
+		IssuePrefix: "de",
+		DoltHost:    "rig-db.example.com",
+		DoltPort:    "4406",
+		DoltUser:    "rig-user",
 	})
 	if _, err := contract.EnsureCanonicalMetadata(fsys.OSFS{}, filepath.Join(rigDir, ".beads", "metadata.json"), contract.MetadataState{
 		Database:     "dolt",
@@ -121,17 +95,17 @@ func TestControllerQueryRuntimeEnvExplicitRigUsesRigStorePassword(t *testing.T) 
 	if err != nil {
 		t.Fatalf("controllerQueryRuntimeEnv() error = %v, want nil", err)
 	}
-	if got := env["GC_DOLT_HOST"]; got != "rig-db.example.com" {
-		t.Fatalf("GC_DOLT_HOST = %q, want %q", got, "rig-db.example.com")
+	if got := env["GC_BEADS_HOST"]; got != "rig-db.example.com" {
+		t.Fatalf("GC_BEADS_HOST = %q, want %q", got, "rig-db.example.com")
 	}
-	if got := env["GC_DOLT_PORT"]; got != "4406" {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", got, "4406")
+	if got := env["GC_BEADS_PORT"]; got != "4406" {
+		t.Fatalf("GC_BEADS_PORT = %q, want %q", got, "4406")
 	}
-	if got := env["GC_DOLT_USER"]; got != "rig-user" {
-		t.Fatalf("GC_DOLT_USER = %q, want %q", got, "rig-user")
+	if got := env["GC_BEADS_USER"]; got != "rig-user" {
+		t.Fatalf("GC_BEADS_USER = %q, want %q", got, "rig-user")
 	}
-	if got := env["GC_DOLT_PASSWORD"]; got != "rig-secret" {
-		t.Fatalf("GC_DOLT_PASSWORD = %q, want %q", got, "rig-secret")
+	if got := env["GC_BEADS_PASSWORD"]; got != "rig-secret" {
+		t.Fatalf("GC_BEADS_PASSWORD = %q, want %q", got, "rig-secret")
 	}
 	if got := env["BEADS_DOLT_PASSWORD"]; got != "rig-secret" {
 		t.Fatalf("BEADS_DOLT_PASSWORD = %q, want %q", got, "rig-secret")
@@ -142,12 +116,10 @@ func TestControllerQueryRuntimeEnvSupportsExecGcBeadsBd(t *testing.T) {
 	cityPath, rigDir, cfg := newControllerProbeFixture(t)
 	t.Setenv("GC_BEADS", "exec:"+gcBeadsBdScriptPath(cityPath))
 	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "4406",
-		DoltUser:       "rig-user",
+		IssuePrefix: "de",
+		DoltHost:    "rig-db.example.com",
+		DoltPort:    "4406",
+		DoltUser:    "rig-user",
 	})
 	writeScopePassword(t, rigDir, "rig-secret")
 
@@ -155,14 +127,14 @@ func TestControllerQueryRuntimeEnvSupportsExecGcBeadsBd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("controllerQueryRuntimeEnv() error = %v, want nil", err)
 	}
-	if got := env["GC_DOLT_HOST"]; got != "rig-db.example.com" {
-		t.Fatalf("GC_DOLT_HOST = %q, want %q", got, "rig-db.example.com")
+	if got := env["GC_BEADS_HOST"]; got != "rig-db.example.com" {
+		t.Fatalf("GC_BEADS_HOST = %q, want %q", got, "rig-db.example.com")
 	}
-	if got := env["GC_DOLT_PORT"]; got != "4406" {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", got, "4406")
+	if got := env["GC_BEADS_PORT"]; got != "4406" {
+		t.Fatalf("GC_BEADS_PORT = %q, want %q", got, "4406")
 	}
-	if got := env["GC_DOLT_PASSWORD"]; got != "rig-secret" {
-		t.Fatalf("GC_DOLT_PASSWORD = %q, want %q", got, "rig-secret")
+	if got := env["GC_BEADS_PASSWORD"]; got != "rig-secret" {
+		t.Fatalf("GC_BEADS_PASSWORD = %q, want %q", got, "rig-secret")
 	}
 	if got := env["BEADS_DIR"]; got != filepath.Join(rigDir, ".beads") {
 		t.Fatalf("BEADS_DIR = %q, want rig beads dir", got)
@@ -172,12 +144,10 @@ func TestControllerQueryRuntimeEnvSupportsExecGcBeadsBd(t *testing.T) {
 func TestControllerQueryEnvOmitsCredentialsFromPrefix(t *testing.T) {
 	cityPath, rigDir, cfg := newControllerProbeFixture(t)
 	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "4406",
-		DoltUser:       "rig-user",
+		IssuePrefix: "de",
+		DoltHost:    "rig-db.example.com",
+		DoltPort:    "4406",
+		DoltUser:    "rig-user",
 	})
 	writeScopePassword(t, rigDir, "rig-secret")
 
@@ -185,14 +155,14 @@ func TestControllerQueryEnvOmitsCredentialsFromPrefix(t *testing.T) {
 	if err != nil {
 		t.Fatalf("controllerQueryEnv() error = %v, want nil", err)
 	}
-	if got := env["GC_DOLT_PASSWORD"]; got != "" {
-		t.Fatalf("GC_DOLT_PASSWORD leaked into prefix env as %q", got)
+	if got := env["GC_BEADS_PASSWORD"]; got != "" {
+		t.Fatalf("GC_BEADS_PASSWORD leaked into prefix env as %q", got)
 	}
 	if got := env["BEADS_DOLT_PASSWORD"]; got != "" {
 		t.Fatalf("BEADS_DOLT_PASSWORD leaked into prefix env as %q", got)
 	}
-	if got := env["GC_DOLT_USER"]; got != "" {
-		t.Fatalf("GC_DOLT_USER leaked into prefix env as %q", got)
+	if got := env["GC_BEADS_USER"]; got != "" {
+		t.Fatalf("GC_BEADS_USER leaked into prefix env as %q", got)
 	}
 	if got := env["BEADS_DOLT_SERVER_HOST"]; got != "" {
 		t.Fatalf("BEADS_DOLT_SERVER_HOST leaked into prefix env as %q", got)
@@ -200,11 +170,11 @@ func TestControllerQueryEnvOmitsCredentialsFromPrefix(t *testing.T) {
 	if got := env["BEADS_DOLT_SERVER_PORT"]; got != "" {
 		t.Fatalf("BEADS_DOLT_SERVER_PORT leaked into prefix env as %q", got)
 	}
-	if got := env["GC_DOLT_HOST"]; got != "rig-db.example.com" {
-		t.Fatalf("GC_DOLT_HOST = %q, want %q", got, "rig-db.example.com")
+	if got := env["GC_BEADS_HOST"]; got != "rig-db.example.com" {
+		t.Fatalf("GC_BEADS_HOST = %q, want %q", got, "rig-db.example.com")
 	}
-	if got := env["GC_DOLT_PORT"]; got != "4406" {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", got, "4406")
+	if got := env["GC_BEADS_PORT"]; got != "4406" {
+		t.Fatalf("GC_BEADS_PORT = %q, want %q", got, "4406")
 	}
 	command := prefixedWorkQueryForProbeWithEnv(env, cfg, cityPath, cfg.Workspace.Name, nil, nil, &cfg.Agents[0], nil)
 	if strings.Contains(command, "rig-secret") || strings.Contains(command, "city-secret") {
@@ -233,8 +203,8 @@ func TestControllerQueryRuntimeEnvUsesRigBdScopeUnderFileBackedCity(t *testing.T
 	rigDir := filepath.Join(cityPath, "demo")
 	t.Setenv("GC_BEADS", "")
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
-	t.Setenv("GC_DOLT_PASSWORD", "")
-	_ = os.Unsetenv("GC_DOLT_PASSWORD")
+	t.Setenv("GC_BEADS_PASSWORD", "")
+	_ = os.Unsetenv("GC_BEADS_PASSWORD")
 	if err := os.MkdirAll(filepath.Join(rigDir, ".beads"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -247,12 +217,10 @@ provider = "file"
 		t.Fatal(err)
 	}
 	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "4406",
-		DoltUser:       "rig-user",
+		IssuePrefix: "de",
+		DoltHost:    "rig-db.example.com",
+		DoltPort:    "4406",
+		DoltUser:    "rig-user",
 	})
 	if _, err := contract.EnsureCanonicalMetadata(fsys.OSFS{}, filepath.Join(rigDir, ".beads", "metadata.json"), contract.MetadataState{
 		Database:     "dolt",
@@ -280,31 +248,29 @@ provider = "file"
 	if err != nil {
 		t.Fatalf("controllerQueryRuntimeEnv() error = %v, want nil", err)
 	}
-	if got := env["GC_DOLT_HOST"]; got != "rig-db.example.com" {
-		t.Fatalf("GC_DOLT_HOST = %q, want %q", got, "rig-db.example.com")
+	if got := env["GC_BEADS_HOST"]; got != "rig-db.example.com" {
+		t.Fatalf("GC_BEADS_HOST = %q, want %q", got, "rig-db.example.com")
 	}
-	if got := env["GC_DOLT_PORT"]; got != "4406" {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", got, "4406")
+	if got := env["GC_BEADS_PORT"]; got != "4406" {
+		t.Fatalf("GC_BEADS_PORT = %q, want %q", got, "4406")
 	}
-	if got := env["GC_DOLT_PASSWORD"]; got != "rig-secret" {
-		t.Fatalf("GC_DOLT_PASSWORD = %q, want %q", got, "rig-secret")
+	if got := env["GC_BEADS_PASSWORD"]; got != "rig-secret" {
+		t.Fatalf("GC_BEADS_PASSWORD = %q, want %q", got, "rig-secret")
 	}
 }
 
 func newControllerProbeFixture(t *testing.T) (string, string, *config.City) {
 	t.Helper()
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT_PASSWORD", "")
-	_ = os.Unsetenv("GC_DOLT_PASSWORD")
+	t.Setenv("GC_BEADS_PASSWORD", "")
+	_ = os.Unsetenv("GC_BEADS_PASSWORD")
 
 	cityPath := t.TempDir()
 	rigDir := filepath.Join(cityPath, "demo")
 	mustMkdirAll(t, filepath.Join(cityPath, ".beads"))
 	mustMkdirAll(t, filepath.Join(rigDir, ".beads"))
 	writeCanonicalScopeConfig(t, cityPath, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
+		IssuePrefix: "gc",
 	})
 	writeScopePassword(t, cityPath, "city-secret")
 	_ = writeReachableManagedDoltState(t, cityPath)

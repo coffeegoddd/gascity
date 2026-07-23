@@ -203,9 +203,9 @@ const (
 	// Dolt disk pre-flight events. Emitted by the supervisor's
 	// StoreMaintenanceLoop before CALL DOLT_GC when the container free
 	// space is below a configured threshold.
-	// StoreDiskWarn fires when free space is below GC_DOLT_WARN_FREE_BYTES
-	// but still above GC_DOLT_MIN_FREE_BYTES; the GC proceeds.
-	// StoreDiskCritical fires when free space is below GC_DOLT_MIN_FREE_BYTES;
+	// StoreDiskWarn fires when free space is below GC_BEADS_WARN_FREE_BYTES
+	// but still above GC_BEADS_MIN_FREE_BYTES; the GC proceeds.
+	// StoreDiskCritical fires when free space is below GC_BEADS_MIN_FREE_BYTES;
 	// the GC is skipped to avoid growing the store further.
 	StoreDiskWarn     = "gc.store.disk_warn"
 	StoreDiskCritical = "gc.store.disk_critical"

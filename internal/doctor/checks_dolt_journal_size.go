@@ -62,12 +62,12 @@ func (c *DoltJournalSizeCheck) Run(_ *CheckContext) *CheckResult {
 	r := &CheckResult{Name: c.Name()}
 	if c.skip || !c.managedApplicable() {
 		r.Status = StatusOK
-		r.Message = "skipped (file backend, external dolt endpoint, or GC_DOLT=skip)"
+		r.Message = "skipped (file backend, external dolt endpoint, or GC_BEADS_SKIP=1)"
 		return r
 	}
 
-	warnBytes := doltJournalThreshold("GC_DOLT_JOURNAL_WARN_BYTES", doltJournalWarnBytesDefault)
-	errorBytes := doltJournalThreshold("GC_DOLT_JOURNAL_ERROR_BYTES", doltJournalErrorBytesDefault)
+	warnBytes := doltJournalThreshold("GC_BEADS_JOURNAL_WARN_BYTES", doltJournalWarnBytesDefault)
+	errorBytes := doltJournalThreshold("GC_BEADS_JOURNAL_ERROR_BYTES", doltJournalErrorBytesDefault)
 
 	targets, unresolved := managedLocalDoltScanTargets(c.cityPath)
 	if c.applicableKnown {
@@ -80,7 +80,7 @@ func (c *DoltJournalSizeCheck) Run(_ *CheckContext) *CheckResult {
 			return r
 		}
 		r.Status = StatusOK
-		r.Message = "skipped (file backend, external dolt endpoint, or GC_DOLT=skip)"
+		r.Message = "skipped (file backend, external dolt endpoint, or GC_BEADS_SKIP=1)"
 		return r
 	}
 
@@ -127,8 +127,8 @@ func (c *DoltJournalSizeCheck) Run(_ *CheckContext) *CheckResult {
 		details = append(details, fmt.Sprintf("database %s: %s journal", name, formatGB(res.size)))
 	}
 	details = append(details,
-		fmt.Sprintf("warn threshold: GC_DOLT_JOURNAL_WARN_BYTES (default 4 GB, current %s)", formatGB(warnBytes)),
-		fmt.Sprintf("error threshold: GC_DOLT_JOURNAL_ERROR_BYTES (default 6 GB, current %s)", formatGB(errorBytes)),
+		fmt.Sprintf("warn threshold: GC_BEADS_JOURNAL_WARN_BYTES (default 4 GB, current %s)", formatGB(warnBytes)),
+		fmt.Sprintf("error threshold: GC_BEADS_JOURNAL_ERROR_BYTES (default 6 GB, current %s)", formatGB(errorBytes)),
 	)
 	r.Details = details
 

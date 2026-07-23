@@ -169,7 +169,7 @@ func TestInitRefusesProdDoltPort(t *testing.T) {
 	if os.Getenv("GC_TESTENV_CHILD") == "1" {
 		// Child: report the Dolt host/port vars as the parent's env shaped them.
 		var lines []string
-		for _, name := range []string{"BEADS_DOLT_PORT", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT", "GC_DOLT_HOST", "GC_DOLT_PORT"} {
+		for _, name := range []string{"BEADS_DOLT_PORT", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT", "GC_BEADS_HOST", "GC_BEADS_PORT"} {
 			lines = append(lines, name+"="+os.Getenv(name))
 		}
 		os.Stdout.WriteString(strings.Join(lines, "\n") + "\n") //nolint:errcheck
@@ -204,11 +204,11 @@ func TestInitRefusesProdDoltPort(t *testing.T) {
 			wantPanic: true,
 		},
 		{
-			name: "passthrough GC_DOLT_PORT prod port panics",
+			name: "passthrough GC_BEADS_PORT prod port panics",
 			bin:  exe,
 			env: []string{
-				"GC_TESTENV_PASSTHROUGH=GC_DOLT_PORT",
-				"GC_DOLT_PORT=3307",
+				"GC_TESTENV_PASSTHROUGH=GC_BEADS_PORT",
+				"GC_BEADS_PORT=3307",
 			},
 			wantPanic: true,
 		},
@@ -227,8 +227,8 @@ func TestInitRefusesProdDoltPort(t *testing.T) {
 			name: "passthrough plus-signed prod port panics",
 			bin:  exe,
 			env: []string{
-				"GC_TESTENV_PASSTHROUGH=GC_DOLT_PORT",
-				"GC_DOLT_PORT=+3307",
+				"GC_TESTENV_PASSTHROUGH=GC_BEADS_PORT",
+				"GC_BEADS_PORT=+3307",
 			},
 			wantPanic: true,
 		},
@@ -299,9 +299,9 @@ func TestInitRefusesProdDoltPort(t *testing.T) {
 			name: "passthrough GC bracketed IPv6 loopback host refuses prod port",
 			bin:  exe,
 			env: []string{
-				"GC_TESTENV_PASSTHROUGH=GC_DOLT_HOST,GC_DOLT_PORT",
-				"GC_DOLT_HOST=[::1]",
-				"GC_DOLT_PORT=3307",
+				"GC_TESTENV_PASSTHROUGH=GC_BEADS_HOST,GC_BEADS_PORT",
+				"GC_BEADS_HOST=[::1]",
+				"GC_BEADS_PORT=3307",
 			},
 			wantPanic: true,
 		},
@@ -309,9 +309,9 @@ func TestInitRefusesProdDoltPort(t *testing.T) {
 			name: "passthrough GC bracketed unspecified host refuses prod port",
 			bin:  exe,
 			env: []string{
-				"GC_TESTENV_PASSTHROUGH=GC_DOLT_HOST,GC_DOLT_PORT",
-				"GC_DOLT_HOST=[::]",
-				"GC_DOLT_PORT=3307",
+				"GC_TESTENV_PASSTHROUGH=GC_BEADS_HOST,GC_BEADS_PORT",
+				"GC_BEADS_HOST=[::]",
+				"GC_BEADS_PORT=3307",
 			},
 			wantPanic: true,
 		},
@@ -328,16 +328,16 @@ func TestInitRefusesProdDoltPort(t *testing.T) {
 			wantPanic: true,
 		},
 		{
-			name: "passthrough external GC_DOLT_HOST allows prod GC_DOLT_PORT",
+			name: "passthrough external GC_BEADS_HOST allows prod GC_BEADS_PORT",
 			bin:  exe,
 			env: []string{
-				"GC_TESTENV_PASSTHROUGH=GC_DOLT_HOST,GC_DOLT_PORT",
-				"GC_DOLT_HOST=city-db.example.com",
-				"GC_DOLT_PORT=3307",
+				"GC_TESTENV_PASSTHROUGH=GC_BEADS_HOST,GC_BEADS_PORT",
+				"GC_BEADS_HOST=city-db.example.com",
+				"GC_BEADS_PORT=3307",
 			},
 			wantOutput: []string{
-				"GC_DOLT_HOST=city-db.example.com\n",
-				"GC_DOLT_PORT=3307\n",
+				"GC_BEADS_HOST=city-db.example.com\n",
+				"GC_BEADS_PORT=3307\n",
 			},
 		},
 		{
@@ -387,9 +387,9 @@ func TestInitRefusesProdDoltPort(t *testing.T) {
 			bin:  exe,
 			env: []string{
 				"BEADS_DOLT_SERVER_PORT=3307",
-				"GC_DOLT_PORT=3307",
+				"GC_BEADS_PORT=3307",
 			},
-			wantOutput: []string{"BEADS_DOLT_SERVER_PORT=\n", "GC_DOLT_PORT=\n"},
+			wantOutput: []string{"BEADS_DOLT_SERVER_PORT=\n", "GC_BEADS_PORT=\n"},
 		},
 		{
 			name:      "subcommand mode refuses prod port",

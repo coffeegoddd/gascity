@@ -453,3 +453,21 @@ func valueOrNone(value string) string {
 	}
 	return value
 }
+
+func formatBytes(n int64) string {
+	const (
+		KiB int64 = 1 << 10
+		MiB int64 = 1 << 20
+		GiB int64 = 1 << 30
+	)
+	switch {
+	case n >= GiB:
+		return fmt.Sprintf("%.1f GiB", float64(n)/float64(GiB))
+	case n >= MiB:
+		return fmt.Sprintf("%.1f MiB", float64(n)/float64(MiB))
+	case n >= KiB:
+		return fmt.Sprintf("%.1f KiB", float64(n)/float64(KiB))
+	default:
+		return fmt.Sprintf("%d B", n)
+	}
+}

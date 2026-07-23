@@ -1409,9 +1409,9 @@ func buildThreadEnv(env map[string]string) map[string]string {
 	}
 	if strings.EqualFold(threadEnv["GC_BEADS_BACKEND"], "doltlite") || strings.EqualFold(env["BEADS_BACKEND"], "doltlite") {
 		for _, key := range []string{
-			"GC_DOLT_HOST",
-			"GC_DOLT_PORT",
-			"GC_DOLT_SERVER_PORT",
+			"GC_BEADS_HOST",
+			"GC_BEADS_PORT",
+			"GC_BEADS_SERVER_PORT",
 			"BEADS_DOLT_PORT",
 			"BEADS_DOLT_SERVER_HOST",
 			"BEADS_DOLT_SERVER_MODE",
@@ -1422,10 +1422,10 @@ func buildThreadEnv(env map[string]string) map[string]string {
 		}
 		return threadEnv
 	}
-	if host := strings.TrimSpace(threadEnv["GC_DOLT_HOST"]); host != "" {
+	if host := strings.TrimSpace(threadEnv["GC_BEADS_HOST"]); host != "" {
 		threadEnv["BEADS_DOLT_SERVER_HOST"] = host
 	}
-	if port := strings.TrimSpace(threadEnv["GC_DOLT_PORT"]); port != "" {
+	if port := strings.TrimSpace(threadEnv["GC_BEADS_PORT"]); port != "" {
 		threadEnv["BEADS_DOLT_PORT"] = port
 		threadEnv["BEADS_DOLT_SERVER_PORT"] = port
 		threadEnv["BEADS_DOLT_SERVER_MODE"] = "1"
@@ -1484,7 +1484,7 @@ func buildGCMetadata(envelope StartupEnvelope, runtimeProvider string, sessionEn
 		if encodedEnv, err := json.Marshal(sessionEnv); err == nil {
 			meta["gc.sessionEnv"] = string(encodedEnv)
 		}
-		if port := sessionEnv["GC_DOLT_PORT"]; port != "" && !strings.EqualFold(sessionEnv["GC_BEADS_BACKEND"], "doltlite") && !strings.EqualFold(sessionEnv["BEADS_BACKEND"], "doltlite") {
+		if port := sessionEnv["GC_BEADS_PORT"]; port != "" && !strings.EqualFold(sessionEnv["GC_BEADS_BACKEND"], "doltlite") && !strings.EqualFold(sessionEnv["BEADS_BACKEND"], "doltlite") {
 			meta["gc.doltPort"] = port
 		}
 	}

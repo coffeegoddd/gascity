@@ -149,7 +149,7 @@ func TestInstallBeadHooksPreservesUserOwnedLegacyNamedHook(t *testing.T) {
 // bd event-forwarding hooks; autoclose now runs in the controller.
 func TestInstallBeadHooksInitIntegration(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_SESSION", "fake")
 	configureIsolatedRuntimeEnv(t)
 
@@ -177,7 +177,7 @@ func TestInstallBeadHooksInitIntegration(t *testing.T) {
 // install bd event-forwarding hooks.
 func TestInstallBeadHooksRigAddIntegration(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_SESSION", "fake")
 
 	cityPath := t.TempDir()

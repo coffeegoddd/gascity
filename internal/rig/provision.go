@@ -531,7 +531,7 @@ func emitRigBannerAndWarnings(deps Deps, req ProvisionRequest, plan rigMutationP
 // matching progress. --adopt optionally prepares provider state and only inits
 // under the store contract; a fresh add inits directly, falling back to the
 // deferred "init deferred to controller" path when InitStore punts (and the
-// store is GC_DOLT=skip or the deeper InitAndHook fails). It returns whether
+// store is GC_BEADS_SKIP=1 or the deeper InitAndHook fails). It returns whether
 // init was deferred.
 func initRigBeadsStore(deps Deps, req ProvisionRequest, rigPath, prefix string, emit func(ProvisionStep)) (bool, error) {
 	cityPath := deps.CityPath

@@ -84,8 +84,8 @@ func init() {
 }
 
 // StoreDiskWarnPayload is the typed payload for gc.store.disk_warn events.
-// Emitted before CALL DOLT_GC when free space is below GC_DOLT_WARN_FREE_BYTES
-// but above GC_DOLT_MIN_FREE_BYTES; the GC proceeds.
+// Emitted before CALL DOLT_GC when free space is below GC_BEADS_WARN_FREE_BYTES
+// but above GC_BEADS_MIN_FREE_BYTES; the GC proceeds.
 type StoreDiskWarnPayload struct {
 	FreeBytes  int64  `json:"free_bytes"`
 	WarnBytes  int64  `json:"warn_bytes"`
@@ -98,7 +98,7 @@ func (StoreDiskWarnPayload) IsEventPayload() {}
 
 // StoreDiskCriticalPayload is the typed payload for gc.store.disk_critical
 // events. Emitted before CALL DOLT_GC when free space is below
-// GC_DOLT_MIN_FREE_BYTES; the GC is skipped to avoid growing the store.
+// GC_BEADS_MIN_FREE_BYTES; the GC is skipped to avoid growing the store.
 type StoreDiskCriticalPayload struct {
 	FreeBytes  int64  `json:"free_bytes"`
 	FloorBytes int64  `json:"floor_bytes"`

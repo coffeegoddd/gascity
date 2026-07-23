@@ -785,14 +785,14 @@ func workflowServeControlReadyQueryForBeads(agentCfg config.Agent, beadsCfg conf
 
 // ambientDoltConnectionQueryPrefix returns a shell-prefix env fragment
 // (leading space + "KEY=value" pairs, or "") carrying the CURRENT process's
-// Dolt connection coordinates under both the GC_DOLT_* and BEADS_DOLT_SERVER_*
+// Dolt connection coordinates under both the GC_BEADS_* and BEADS_DOLT_SERVER_*
 // names bd recognizes.
 //
 // Without this, the ready-query subprocess env is built by stripping the
 // parent's inherited Dolt vars and re-projecting them from a freshly resolved
 // scope lookup (mergeRuntimeEnv + controllerWorkQueryEnv). That resolution
 // runs its own managed-runtime-availability probe and can transiently come
-// back without a port, silently dropping GC_DOLT_PORT/BEADS_DOLT_SERVER_PORT
+// back without a port, silently dropping GC_BEADS_PORT/BEADS_DOLT_SERVER_PORT
 // from the subprocess env and causing `bd --sandbox` to resolve port 0
 // ("Dolt server unreachable at 127.0.0.1:0") — the recurring fleet-wide
 // graph.v2 wedge (gascity gc-74rxa). The running control-dispatcher process's
@@ -806,11 +806,11 @@ func ambientDoltConnectionQueryPrefix() string {
 	var pairs []string
 	if host != "" {
 		quotedHost := shellquote.Quote(host)
-		pairs = append(pairs, `GC_DOLT_HOST=`+quotedHost, `BEADS_DOLT_SERVER_HOST=`+quotedHost)
+		pairs = append(pairs, `GC_BEADS_HOST=`+quotedHost, `BEADS_DOLT_SERVER_HOST=`+quotedHost)
 	}
 	if port != "" {
 		quotedPort := shellquote.Quote(port)
-		pairs = append(pairs, `GC_DOLT_PORT=`+quotedPort, `BEADS_DOLT_SERVER_PORT=`+quotedPort)
+		pairs = append(pairs, `GC_BEADS_PORT=`+quotedPort, `BEADS_DOLT_SERVER_PORT=`+quotedPort)
 	}
 	if len(pairs) == 0 {
 		workflowTracef("ambient dolt env unset; ready-query passthrough disabled")
@@ -821,14 +821,14 @@ func ambientDoltConnectionQueryPrefix() string {
 
 // ambientDoltHostPort resolves the ambient Dolt host and port as a matched
 // pair from a single env-var namespace instead of choosing each field
-// independently. GC_DOLT_* is authoritative when present (even partially);
+// independently. GC_BEADS_* is authoritative when present (even partially);
 // BEADS_DOLT_SERVER_* is only consulted as a whole-pair fallback when
-// GC_DOLT_* carries neither value. Resolving fields independently risked
+// GC_BEADS_* carries neither value. Resolving fields independently risked
 // pairing a host from one namespace with a port from the other -- a
 // combination that may never have described the same server.
 func ambientDoltHostPort() (host, port string) {
-	host = strings.TrimSpace(os.Getenv("GC_DOLT_HOST"))
-	port = strings.TrimSpace(os.Getenv("GC_DOLT_PORT"))
+	host = strings.TrimSpace(os.Getenv("GC_BEADS_HOST"))
+	port = strings.TrimSpace(os.Getenv("GC_BEADS_PORT"))
 	if host != "" || port != "" {
 		return host, port
 	}

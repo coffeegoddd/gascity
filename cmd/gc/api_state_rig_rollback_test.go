@@ -68,7 +68,7 @@ func TestTeardownPartialRigRemovesDirAndDropsDB(t *testing.T) {
 // (before RemoveAll destroys it) and drop it, so the DB is not orphaned and
 // cannot collide with a later same-name add.
 func TestTeardownPartialRigRederivesDoltDBFromDisk(t *testing.T) {
-	t.Setenv("GC_DOLT", "") // the managed DB must not be skip-deferred
+	t.Setenv("GC_BEADS_SKIP", "") // the managed DB must not be skip-deferred
 	cs := &controllerState{cityPath: t.TempDir()}
 	rigDir := filepath.Join(cs.cityPath, "rigs", "web")
 	writeRigStore(t, rigDir) // .beads/metadata.json names dolt_database "web"
@@ -147,16 +147,16 @@ func TestRigCompleteProbe(t *testing.T) {
 }
 
 // TestProvisionedManagedDoltDatabaseSkipReturnsEmpty proves that under
-// GC_DOLT=skip (the store init is deferred to the controller, so THIS request
+// GC_BEADS_SKIP=1 (the store init is deferred to the controller, so THIS request
 // mints no database) the manifest claims no Dolt DB to drop — the rollback must
 // never drop a database this add did not create.
 func TestProvisionedManagedDoltDatabaseSkipReturnsEmpty(t *testing.T) {
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	cs := &controllerState{cityPath: t.TempDir()}
 	rigDir := filepath.Join(cs.cityPath, "rigs", "x")
 	writeRigStore(t, rigDir) // metadata.json carries dolt_database=web
 	if db := cs.provisionedManagedDoltDatabase(rigDir); db != "" {
-		t.Fatalf("provisionedManagedDoltDatabase under GC_DOLT=skip = %q, want empty", db)
+		t.Fatalf("provisionedManagedDoltDatabase under GC_BEADS_SKIP=1 = %q, want empty", db)
 	}
 }
 

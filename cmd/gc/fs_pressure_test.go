@@ -208,7 +208,6 @@ func TestCityRuntimeTickSkipsBeforeManagedDoltAndDemandUnderFSPressure(t *testin
 	t.Setenv(fsPressureThresholdEnv, "")
 
 	var buildCalls atomic.Int32
-	var managedDoltCalls atomic.Int32
 	var stderr bytes.Buffer
 	rec := events.NewFake()
 	sp := runtime.NewFake()
@@ -228,17 +227,6 @@ func TestCityRuntimeTickSkipsBeforeManagedDoltAndDemandUnderFSPressure(t *testin
 		logPrefix:     "gc test",
 		stdout:        io.Discard,
 		stderr:        &stderr,
-		managedDoltOwned: func(string) (bool, error) {
-			managedDoltCalls.Add(1)
-			return true, nil
-		},
-		managedDoltPort: func(string) string {
-			return ""
-		},
-		managedDoltHealth: func(string) error {
-			managedDoltCalls.Add(1)
-			return nil
-		},
 	}
 
 	dirty := &atomic.Bool{}
@@ -246,9 +234,6 @@ func TestCityRuntimeTickSkipsBeforeManagedDoltAndDemandUnderFSPressure(t *testin
 	prevPoolRunning := map[string]bool{}
 	cr.tick(context.Background(), dirty, &lastProviderName, cr.cityPath, &prevPoolRunning, "patrol")
 
-	if got := managedDoltCalls.Load(); got != 0 {
-		t.Fatalf("managed dolt calls = %d, want 0 before pressure-skip gate", got)
-	}
 	if got := buildCalls.Load(); got != 0 {
 		t.Fatalf("build desired calls = %d, want 0 before pressure-skip gate", got)
 	}
@@ -333,10 +318,6 @@ func TestCityRuntimeTickSkipsDueOrderDispatchUnderFSPressure(t *testing.T) {
 		logPrefix:     "gc test",
 		stdout:        io.Discard,
 		stderr:        &stderr,
-		managedDoltOwned: func(string) (bool, error) {
-			t.Fatal("managed dolt preflight should not run before pressure-skip gate")
-			return false, nil
-		},
 	}
 
 	dirty := &atomic.Bool{}
@@ -407,9 +388,6 @@ func TestCityRuntimeTickForcesRunAfterMaxConsecutiveFSPressureSkips(t *testing.T
 		logPrefix:     "gc test",
 		stdout:        io.Discard,
 		stderr:        &stderr,
-		managedDoltOwned: func(string) (bool, error) {
-			return false, nil
-		},
 	}
 
 	dirty := &atomic.Bool{}

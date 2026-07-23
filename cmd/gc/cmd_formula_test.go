@@ -595,7 +595,7 @@ start_command = "echo hello"
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	t.Setenv("GC_SESSION", "fake")
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	t.Run("text", func(t *testing.T) {
 		var stdout, stderr bytes.Buffer
@@ -655,7 +655,7 @@ func TestFormulaCookHonorsFormulaV2DisabledCityBeforeCreatingBeads(t *testing.T)
 	configureIsolatedRuntimeEnv(t)
 	t.Setenv("GC_SESSION", "fake")
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BOOTSTRAP", "skip")
 	t.Cleanup(func() {
 		applyFeatureFlags(&config.City{Daemon: config.DaemonConfig{FormulaV2: boolPtr(true)}})
@@ -743,7 +743,7 @@ func TestFormulaCookAttachGraphV2CreatesFreshRootForBareBeadTarget(t *testing.T)
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	t.Setenv("GC_SESSION", "fake")
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(withBuiltinProviderAliasesTOMLForTest(`
@@ -988,7 +988,7 @@ func TestFormulaCookAttachGraphV2AllowsDifferentLiveBareBeadRoots(t *testing.T) 
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	t.Setenv("GC_SESSION", "fake")
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(withBuiltinProviderAliasesTOMLForTest(`
@@ -1057,7 +1057,7 @@ func TestFormulaCookAttachGraphV2RejectsLiveLegacySourceWorkflow(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	t.Setenv("GC_SESSION", "fake")
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(withBuiltinProviderAliasesTOMLForTest(`

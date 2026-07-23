@@ -43,10 +43,10 @@ func runFFSync(t *testing.T, binDir string, args ...string) string {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, _ := cmd.CombinedOutput()
 	return string(out)
@@ -225,7 +225,7 @@ func TestSyncEmptyRemoteFirstPushPushes(t *testing.T) {
 	}
 }
 
-// TestSyncRejectsInvalidFetchTimeout covers the GC_DOLT_SYNC_FETCH_TIMEOUT_SECS
+// TestSyncRejectsInvalidFetchTimeout covers the GC_BEADS_SYNC_FETCH_TIMEOUT_SECS
 // validator (the twin of the push-timeout validator): the bound is checked at
 // startup before any database is touched, and an empty / non-numeric / all-zero
 // value aborts with exit 2 rather than running the fetch unbounded.
@@ -241,18 +241,18 @@ func TestSyncRejectsInvalidFetchTimeout(t *testing.T) {
 			"PATH="+binDir+":"+os.Getenv("PATH"),
 			"GC_CITY_PATH="+cityPath,
 			"GC_PACK_DIR="+root,
-			"GC_DOLT_DATA_DIR="+filepath.Join(cityPath, "data"),
-			"GC_DOLT_PORT=1",
-			"GC_DOLT_USER=root",
-			"GC_DOLT_PASSWORD=",
-			"GC_DOLT_SYNC_FETCH_TIMEOUT_SECS="+bad,
+			"GC_BEADS_DATA_DIR="+filepath.Join(cityPath, "data"),
+			"GC_BEADS_PORT=1",
+			"GC_BEADS_USER=root",
+			"GC_BEADS_PASSWORD=",
+			"GC_BEADS_SYNC_FETCH_TIMEOUT_SECS="+bad,
 		)
 		out, err := cmd.CombinedOutput()
 		var ee *exec.ExitError
 		if !errors.As(err, &ee) || ee.ExitCode() != 2 {
 			t.Errorf("fetch timeout %q: want exit 2, got err=%v\nout: %s", bad, err, out)
 		}
-		if !strings.Contains(string(out), "invalid GC_DOLT_SYNC_FETCH_TIMEOUT_SECS") {
+		if !strings.Contains(string(out), "invalid GC_BEADS_SYNC_FETCH_TIMEOUT_SECS") {
 			t.Errorf("fetch timeout %q: want validation message\nout: %s", bad, out)
 		}
 	}

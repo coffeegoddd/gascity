@@ -42,7 +42,7 @@ func configureTestscriptEnvDefaults() {
 	// GC_SESSION=fail or GC_SESSION=tmux.
 	setTestscriptEnvDefault("GC_SESSION", "fake")
 	setTestscriptEnvDefault("GC_BEADS", "file")
-	setTestscriptEnvDefault("GC_DOLT", "skip")
+	setTestscriptEnvDefault("GC_BEADS_SKIP", "skip")
 	setTestscriptEnvDefault("GC_BOOTSTRAP", "skip")
 }
 
@@ -56,8 +56,8 @@ func configureIsolatedRuntimeEnv(t *testing.T) {
 	if os.Getenv("GC_BEADS") == "" {
 		t.Setenv("GC_BEADS", "file")
 	}
-	if os.Getenv("GC_DOLT") == "" {
-		t.Setenv("GC_DOLT", "skip")
+	if os.Getenv("GC_BEADS_SKIP") == "" {
+		t.Setenv("GC_BEADS_SKIP", "skip")
 	}
 	if os.Getenv("GC_BOOTSTRAP") == "" {
 		t.Setenv("GC_BOOTSTRAP", "skip")
@@ -222,12 +222,6 @@ func TestMain(m *testing.M) {
 	}
 
 	clearProcessLiveEnvForTests()
-	if err := os.Setenv(managedDoltTestModeEnv, "1"); err != nil {
-		panic(err)
-	}
-	if err := os.Setenv(managedDoltTestParentPIDEnv, fmt.Sprintf("%d", os.Getpid())); err != nil {
-		panic(err)
-	}
 	// Sweep stale testTempRoot dirs under the inherited temp dir (honoring
 	// TMPDIR) before creating a new one there. Sharded cmd/gc runs use a
 	// separate prefix so concurrent worktrees with older test harnesses
@@ -286,7 +280,11 @@ func TestMain(m *testing.M) {
 	}
 	configureFSPressureForTests()
 	configureSupervisorHooksForTests()
-	var testRunner testscript.TestingM = newDoltLeakGuardedTestingM(m, testTempRoot, testTempRoot, gcHome, runtimeDir, providerStubDir, sharedTestFixtureRoot)
+	// gascity no longer spawns or manages dolt sql-server processes — bd owns
+	// the proxied server lifecycle behind the bd CLI — so the test harness no
+	// longer needs the dolt-process leak guard. It just removes the temp roots
+	// created above on exit.
+	var testRunner testscript.TestingM = cleanupTestingM{m: m, paths: []string{testTempRoot, gcHome, runtimeDir, providerStubDir, sharedTestFixtureRoot}}
 	if tmuxSocketCleanupRoot != "" {
 		testRunner = cleanupTestingM{m: testRunner, paths: []string{tmuxSocketCleanupRoot}}
 	}
@@ -387,7 +385,7 @@ func TestVersion(t *testing.T) {
 func TestConfigureTestscriptEnvDefaultsSetsMissingValues(t *testing.T) {
 	t.Setenv("GC_SESSION", "")
 	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 
 	configureTestscriptEnvDefaults()
 
@@ -397,15 +395,15 @@ func TestConfigureTestscriptEnvDefaultsSetsMissingValues(t *testing.T) {
 	if got := os.Getenv("GC_BEADS"); got != "file" {
 		t.Fatalf("GC_BEADS = %q, want file", got)
 	}
-	if got := os.Getenv("GC_DOLT"); got != "skip" {
-		t.Fatalf("GC_DOLT = %q, want skip", got)
+	if got := os.Getenv("GC_BEADS_SKIP"); got != "skip" {
+		t.Fatalf("GC_BEADS_SKIP = %q, want skip", got)
 	}
 }
 
 func TestConfigureTestscriptEnvDefaultsPreservesOverrides(t *testing.T) {
 	t.Setenv("GC_SESSION", "fail")
 	t.Setenv("GC_BEADS", "exec:/tmp/custom-beads")
-	t.Setenv("GC_DOLT", "run")
+	t.Setenv("GC_BEADS_SKIP", "run")
 
 	configureTestscriptEnvDefaults()
 
@@ -415,8 +413,8 @@ func TestConfigureTestscriptEnvDefaultsPreservesOverrides(t *testing.T) {
 	if got := os.Getenv("GC_BEADS"); got != "exec:/tmp/custom-beads" {
 		t.Fatalf("GC_BEADS = %q, want explicit override", got)
 	}
-	if got := os.Getenv("GC_DOLT"); got != "run" {
-		t.Fatalf("GC_DOLT = %q, want explicit override", got)
+	if got := os.Getenv("GC_BEADS_SKIP"); got != "run" {
+		t.Fatalf("GC_BEADS_SKIP = %q, want explicit override", got)
 	}
 }
 
@@ -975,7 +973,7 @@ func TestResolveCityRigSiblingWithLegacyGCDir(t *testing.T) {
 
 func TestDoRigAddCreatesDirIfMissing(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	cityPath := t.TempDir()
 	rigPath := filepath.Join(t.TempDir(), "newproject") // does not exist yet
 	if err := os.MkdirAll(filepath.Join(cityPath, ".gc"), 0o755); err != nil {
@@ -1032,7 +1030,7 @@ func TestDoRigAddNotADirectory(t *testing.T) {
 
 func TestDoRigAddWithGit(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	// Use real temp dirs so writeAllRoutes (which uses os.MkdirAll) works.
 	cityPath := t.TempDir()
 	rigPath := filepath.Join(t.TempDir(), "myapp")
@@ -1066,7 +1064,7 @@ func TestDoRigAddWithGit(t *testing.T) {
 
 func TestDoRigAddWithoutGit(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	cityPath := t.TempDir()
 	rigPath := filepath.Join(t.TempDir(), "myapp")
 	if err := os.MkdirAll(rigPath, 0o755); err != nil {
@@ -3738,7 +3736,7 @@ func TestInitWizardConfigRejectsUnknownProvider(t *testing.T) {
 
 func TestCmdInitProviderAcceptsAntigravity(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	cityPath := filepath.Join(t.TempDir(), "antigravity-city")
@@ -3777,7 +3775,7 @@ func TestInitWizardConfigFromFlagsRejectsUnknownTemplate(t *testing.T) {
 
 func TestCmdInitTemplateFlagSelectsGastown(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	cityPath := filepath.Join(t.TempDir(), "bright-lights")
@@ -3915,7 +3913,7 @@ func TestInitWizardConfigNormalizesBootstrapAliases(t *testing.T) {
 
 func TestCmdInitFromTOMLFileSuccess(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	// Use real temp dirs since cmdInitFromTOMLFile calls initBeads which
@@ -4032,7 +4030,7 @@ scale_check = "echo 3"
 
 func TestCmdInitFromTOMLFileMovesRigPathsToSiteBinding(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4445,7 +4443,7 @@ func TestRunInitFromFileAlreadyInitializedPropagatesExitCode(t *testing.T) {
 
 func TestDoInitFromDirSuccess(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4545,7 +4543,7 @@ func TestDoInitFromDirSuccess(t *testing.T) {
 // (deacon).
 func TestDoInitFromDirMaterializesPackOverlayClaudeSettings(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4637,7 +4635,7 @@ func TestResolveCityName(t *testing.T) {
 
 func TestInitNameFlagWithFrom(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4700,7 +4698,7 @@ func TestInitNameFlagWithFrom(t *testing.T) {
 
 func TestInitNameFlagWithFile(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4732,7 +4730,7 @@ func TestInitNameFlagWithFile(t *testing.T) {
 
 func TestInitNameFlagWithBareInit(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4767,7 +4765,7 @@ func TestInitNameFlagWithBareInit(t *testing.T) {
 
 func TestInitFromDefaultsToTargetDirBasename(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4833,7 +4831,7 @@ func TestInitFromDefaultsToTargetDirBasename(t *testing.T) {
 
 func TestInitFromCopiesDefaultRigImportsToCityToml(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4895,7 +4893,7 @@ schema = 2
 
 func TestInitFilePreservesDefaultRigImportsInCityToml(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -4942,7 +4940,7 @@ source = "./packs/alpha"
 
 func TestInitFileKeepsCityOnlyPatchesOutOfPackToml(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -5009,7 +5007,7 @@ command = "false"
 
 func TestInitFileRejectsLegacyFormulasDir(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -5039,7 +5037,7 @@ dir = "legacy-formulas"
 
 func TestInitFromCopiesLegacyAgentDefaultsAliasToCityToml(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -5090,7 +5088,7 @@ schema = 2
 
 func TestInitFromWithoutPackTomlPreservesLegacyWorkspaceIdentity(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -5191,7 +5189,7 @@ append_fragments = ["legacy-footer"]
 
 func TestDoInitFromDirSkipsGCDir(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -5232,7 +5230,7 @@ func TestDoInitFromDirSkipsGCDir(t *testing.T) {
 
 func TestDoInitFromDirSkipsTestFiles(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -5357,7 +5355,7 @@ func TestDoInitFromDirAlreadyInitializedByCityToml(t *testing.T) {
 
 func TestDoInitFromDirPreservesPermissionsForLegacyTopLevelScripts(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -5397,7 +5395,7 @@ func TestDoInitFromDirPreservesPermissionsForLegacyTopLevelScripts(t *testing.T)
 
 func TestDoInitFromDirPreservesRealTopLevelScriptsForPackV2Template(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()
@@ -5441,7 +5439,7 @@ func TestDoInitFromDirPreservesRealTopLevelScriptsForPackV2Template(t *testing.T
 
 func TestDoInitFromDirSkipsLegacyShimScriptsForPackV2Template(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	dir := t.TempDir()

@@ -46,7 +46,7 @@ func TestE2c2ProviderConstructionFailuresReturnThroughRun(t *testing.T) {
 		"GC_CITY="+cityPath,
 		"GC_CITY_PATH="+cityPath,
 		"GC_CEILING_DIRECTORIES="+filepath.Dir(cityPath),
-		"GC_DOLT=skip",
+		"GC_BEADS_SKIP=1",
 		"GC_HOME="+filepath.Join(filepath.Dir(cityPath), "gc-home"),
 		"GC_SESSION=broken",
 		"GC_SESSION_ID="+sessionID,
@@ -157,7 +157,7 @@ func runE2c2ProviderFailureHelper(t *testing.T, cityPath, sessionID, markerPath 
 	t.Setenv("GC_CITY", cityPath)
 	t.Setenv("GC_CITY_PATH", cityPath)
 	t.Setenv("GC_CEILING_DIRECTORIES", filepath.Dir(cityPath))
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_SESSION", "broken")
 	t.Setenv("GC_SESSION_ID", sessionID)
 	t.Setenv("GC_SESSION_NAME", "test-city--frontend--worker")

@@ -578,14 +578,14 @@ func TestDoSlingEnvPassthrough(t *testing.T) {
 }
 
 func TestShellSlingRunnerOverridesInheritedBDEnv(t *testing.T) {
-	t.Setenv("GC_DOLT_HOST", "stale-host")
-	t.Setenv("GC_DOLT_PORT", "9999")
+	t.Setenv("GC_BEADS_HOST", "stale-host")
+	t.Setenv("GC_BEADS_PORT", "9999")
 	t.Setenv("BEADS_DOLT_SERVER_HOST", "stale-host")
 	t.Setenv("BEADS_DOLT_SERVER_PORT", "9999")
 
-	out, err := shellSlingRunner("", `printf '%s|%s|%s|%s' "$GC_DOLT_HOST" "$GC_DOLT_PORT" "$BEADS_DOLT_SERVER_HOST" "$BEADS_DOLT_SERVER_PORT"`, map[string]string{
-		"GC_DOLT_HOST":           "rig-db.example.com",
-		"GC_DOLT_PORT":           "3307",
+	out, err := shellSlingRunner("", `printf '%s|%s|%s|%s' "$GC_BEADS_HOST" "$GC_BEADS_PORT" "$BEADS_DOLT_SERVER_HOST" "$BEADS_DOLT_SERVER_PORT"`, map[string]string{
+		"GC_BEADS_HOST":          "rig-db.example.com",
+		"GC_BEADS_PORT":          "3307",
 		"BEADS_DOLT_SERVER_HOST": "rig-db.example.com",
 		"BEADS_DOLT_SERVER_PORT": "3307",
 	})
@@ -3366,9 +3366,12 @@ provider = "file"
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(rigDir, ".beads", "config.yaml"), []byte(`issue_prefix: repo
-gc.endpoint_origin: inherited_city
+gc.endpoint_origin: explicit
 gc.endpoint_status: verified
 dolt.auto-start: false
+dolt.host: rig-db.example.com
+dolt.port: `+wantPort+`
+dolt.user: rig-user
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -3381,8 +3384,8 @@ dolt.auto-start: false
 	if err != nil {
 		t.Fatalf("slingStoreEnvWithError() error = %v", err)
 	}
-	if got := env["GC_DOLT_PORT"]; got != wantPort {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", got, wantPort)
+	if got := env["GC_BEADS_PORT"]; got != wantPort {
+		t.Fatalf("GC_BEADS_PORT = %q, want %q", got, wantPort)
 	}
 	if got := env["BEADS_DIR"]; got != filepath.Join(rigDir, ".beads") {
 		t.Fatalf("BEADS_DIR = %q, want %q", got, filepath.Join(rigDir, ".beads"))

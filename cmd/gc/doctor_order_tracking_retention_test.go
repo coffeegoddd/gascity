@@ -109,7 +109,6 @@ func TestOrderTrackingRetentionCheck_RegisteredInBuildDoctorChecks(t *testing.T)
 	cityPath := t.TempDir()
 	cfg := &config.City{}
 	checks := buildDoctorChecks(cityPath, cfg, nil, buildDoctorChecksOpts{
-		SkipCityDoltCheck:    true,
 		SkipManagedDoltCheck: true,
 	})
 	for _, c := range checks {

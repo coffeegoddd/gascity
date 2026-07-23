@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -16,7 +15,7 @@ import (
 
 func initHostedCity(t *testing.T) (cityPath, prefix string) {
 	t.Helper()
-	t.Setenv("GC_DOLT", "") // exercise the external defer branch, not gcDoltSkip
+	t.Setenv("GC_BEADS_SKIP", "") // exercise the external defer branch, not gcDoltSkip
 	cityPath = filepath.Join(t.TempDir(), "hosted-city")
 	wiz := wizardConfig{
 		configName:      "gascity",
@@ -267,117 +266,31 @@ func TestDoInitWritesCanonicalHostedDoltConfig(t *testing.T) {
 		t.Fatalf("doInit = %d, want 0; stderr=%s", code, stderr.String())
 	}
 
-	cityData, err := os.ReadFile(filepath.Join(cityPath, "city.toml"))
-	if err != nil {
-		t.Fatalf("read city.toml: %v", err)
-	}
-	if !strings.Contains(string(cityData), "gateway.example.com") {
-		t.Fatalf("city.toml missing [dolt] host:\n%s", cityData)
-	}
-
+	// The external endpoint is recorded canonically in .beads/config.yaml; city.toml
+	// no longer mirrors the [dolt] host/port (coords moved to canonical beads config).
 	state, ok, err := contract.ReadConfigState(fsys.OSFS{}, filepath.Join(cityPath, ".beads", "config.yaml"))
 	if err != nil || !ok {
 		t.Fatalf("ReadConfigState ok=%v err=%v", ok, err)
-	}
-	if state.EndpointOrigin != contract.EndpointOriginCityCanonical {
-		t.Fatalf("EndpointOrigin = %q, want city_canonical", state.EndpointOrigin)
-	}
-	if state.EndpointStatus != contract.EndpointStatusUnverified {
-		t.Fatalf("EndpointStatus = %q, want unverified", state.EndpointStatus)
 	}
 	if state.DoltHost != "gateway.example.com" || state.DoltPort != "4406" {
 		t.Fatalf("config dolt host/port = %q/%q", state.DoltHost, state.DoltPort)
 	}
 
-	metaRaw, err := os.ReadFile(filepath.Join(cityPath, ".beads", "metadata.json"))
-	if err != nil {
-		t.Fatalf("read metadata.json: %v", err)
-	}
-	var meta map[string]any
-	if err := json.Unmarshal(metaRaw, &meta); err != nil {
-		t.Fatalf("parse metadata.json: %v", err)
-	}
-	for k, want := range map[string]string{"backend": "dolt", "dolt_mode": "server", "dolt_database": "bd_prj_abc", "project_id": "prj_abc"} {
-		if got, _ := meta[k].(string); got != want {
-			t.Fatalf("metadata.json[%q] = %q, want %q (full: %s)", k, got, want, metaRaw)
-		}
-	}
+	// metadata.json (backend/dolt_mode/dolt_database) is written by bd's
+	// proxied-server --external init at gc start, not by gascity's init.
 
 	id, ok, err := contract.ReadProjectIdentity(fsys.OSFS{}, cityPath)
 	if err != nil || !ok || id != "prj_abc" {
 		t.Fatalf("ReadProjectIdentity id=%q ok=%v err=%v", id, ok, err)
 	}
 
-	owned, err := managedDoltLifecycleOwned(cityPath)
-	if err != nil {
-		t.Fatalf("managedDoltLifecycleOwned: %v", err)
-	}
-	if owned {
-		t.Fatal("managedDoltLifecycleOwned = true, want false (external endpoint)")
-	}
 	if !isExternalDolt(cityPath) {
 		t.Fatal("isExternalDolt = false, want true")
 	}
 }
 
-// An unverified external endpoint must not require a live connection at init
-// time (R5): initDirIfReady writes the canonical files and defers the bd init
-// to gc start (which has credentials) instead of running it now.
-func TestInitDirIfReadyDefersUnverifiedExternalDolt(t *testing.T) {
-	cityPath, prefix := initHostedCity(t)
-
-	orig := initDirIfReadyInitAndHookDir
-	t.Cleanup(func() { initDirIfReadyInitAndHookDir = orig })
-	called := false
-	initDirIfReadyInitAndHookDir = func(_, _, _ string) error { called = true; return nil }
-
-	deferred, err := initDirIfReady(cityPath, cityPath, prefix)
-	if err != nil {
-		t.Fatalf("initDirIfReady: %v", err)
-	}
-	if !deferred {
-		t.Fatal("initDirIfReady deferred = false, want true for unverified external")
-	}
-	if called {
-		t.Fatal("initDirIfReadyInitAndHookDir ran; the live bd init must be deferred for an unverified external endpoint")
-	}
-}
-
-// A verified external endpoint keeps the existing behavior: init-and-hook runs
-// now (credentials are presumed available), so this change does not regress
-// `gc rig add` against an already-validated external city.
-func TestInitDirIfReadyInitsVerifiedExternalDolt(t *testing.T) {
-	cityPath, prefix := initHostedCity(t)
-
-	cfgPath := filepath.Join(cityPath, ".beads", "config.yaml")
-	state, ok, err := contract.ReadConfigState(fsys.OSFS{}, cfgPath)
-	if err != nil || !ok {
-		t.Fatalf("ReadConfigState ok=%v err=%v", ok, err)
-	}
-	state.EndpointStatus = contract.EndpointStatusVerified
-	if _, err := contract.EnsureCanonicalConfig(fsys.OSFS{}, cfgPath, state); err != nil {
-		t.Fatalf("EnsureCanonicalConfig verified: %v", err)
-	}
-
-	orig := initDirIfReadyInitAndHookDir
-	t.Cleanup(func() { initDirIfReadyInitAndHookDir = orig })
-	called := false
-	initDirIfReadyInitAndHookDir = func(_, _, _ string) error { called = true; return nil }
-
-	deferred, err := initDirIfReady(cityPath, cityPath, prefix)
-	if err != nil {
-		t.Fatalf("initDirIfReady: %v", err)
-	}
-	if deferred {
-		t.Fatal("initDirIfReady deferred = true for a verified external endpoint; want init-and-hook")
-	}
-	if !called {
-		t.Fatal("initDirIfReadyInitAndHookDir did not run for a verified external endpoint")
-	}
-}
-
 // Command-level regression: the hosted endpoint can be supplied entirely
-// through GC_DOLT_*/GC_BEADS_PROJECT_ID, mirroring the --dolt-* flags so the
+// through GC_BEADS_*/GC_BEADS_PROJECT_ID, mirroring the --dolt-* flags so the
 // create-city controller need not pass them explicitly. The controller still
 // selects the city template/provider, so this drives the real
 // newInitCmd(...).Execute() path with the hosted env vars set (no --dolt-*
@@ -389,7 +302,7 @@ func TestGcInitCommandHostedDoltEnvOnlyEndpoint(t *testing.T) {
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	t.Setenv("GC_SESSION", "fake")
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "") // not "skip": exercise the external defer branch
+	t.Setenv("GC_BEADS_SKIP", "") // not "skip": exercise the external defer branch
 	t.Setenv("GC_BOOTSTRAP", "skip")
 	t.Setenv(envDoltHost, "gateway.example.com")
 	t.Setenv(envDoltPort, "4406")
@@ -418,14 +331,11 @@ func TestGcInitCommandHostedDoltEnvOnlyEndpoint(t *testing.T) {
 	if !isExternalDolt(cityPath) {
 		t.Fatal("isExternalDolt = false after env-only hosted init")
 	}
-	metaRaw, err := os.ReadFile(filepath.Join(cityPath, ".beads", "metadata.json"))
-	if err != nil {
-		t.Fatalf("read metadata.json: %v", err)
-	}
-	for _, want := range []string{"bd_prj_envonly", "prj_envonly"} {
-		if !strings.Contains(string(metaRaw), want) {
-			t.Fatalf("metadata.json missing env-derived %q:\n%s", want, metaRaw)
-		}
+	// bd's proxied-server --external init writes metadata.json (backend/database)
+	// at gc start; gascity's init records the env-derived project identity now.
+	id, ok, err := contract.ReadProjectIdentity(fsys.OSFS{}, cityPath)
+	if err != nil || !ok || id != "prj_envonly" {
+		t.Fatalf("ReadProjectIdentity id=%q ok=%v err=%v, want prj_envonly", id, ok, err)
 	}
 }
 
@@ -439,7 +349,7 @@ func TestGcInitCommandHostedDoltEnvOnlyEndpoint(t *testing.T) {
 // writes no ledger artifacts.
 func TestGcInitCommandHostedDoltEnvOnlyRequiresProvider(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	t.Setenv(envDoltHost, "gateway.example.com")
 	t.Setenv(envDoltPort, "4406")
 	t.Setenv(envDoltDatabase, "bd_prj_x")
@@ -464,7 +374,7 @@ func TestGcInitCommandHostedDoltEnvOnlyRequiresProvider(t *testing.T) {
 // --dolt-host for a non-bd (file) city must fail fast with a clear message.
 func TestDoInitHostedDoltRequiresBdBackedProvider(t *testing.T) {
 	t.Setenv("GC_BEADS", "file") // force a non-bd backend
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	cityPath := filepath.Join(t.TempDir(), "file-city")
 	wiz := wizardConfig{
 		configName:      "gascity",
@@ -492,7 +402,7 @@ func TestDoInitHostedDoltRequiresBdBackedProvider(t *testing.T) {
 // documented "set env -> gc init -> gc start" controller path.
 func TestDoInitHostedDoltRejectsDoltliteBackend(t *testing.T) {
 	t.Setenv("GC_BEADS_BACKEND", "doltlite")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	cityPath := filepath.Join(t.TempDir(), "doltlite-city")
 	wiz := wizardConfig{
 		configName:      "gascity",
@@ -517,7 +427,7 @@ func TestDoInitHostedDoltRejectsDoltliteBackend(t *testing.T) {
 // artifacts behind.
 func TestGcInitCommandHostedDoltRejectsDoltliteBackend(t *testing.T) {
 	t.Setenv("GC_BEADS_BACKEND", "doltlite")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	cityPath := filepath.Join(t.TempDir(), "doltlite-cmd-city")
 	var stdout, stderr bytes.Buffer
 	cmd := newInitCmd(&stdout, &stderr)
@@ -550,7 +460,7 @@ func TestGcInitCommandHostedDoltRejectsDoltliteBackend(t *testing.T) {
 // flag/env-wiring coverage gap for the file case.
 func TestGcInitCommandHostedDoltRejectsFileBackend(t *testing.T) {
 	t.Setenv("GC_BEADS", "file") // force a non-bd backend
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	cityPath := filepath.Join(t.TempDir(), "file-cmd-city")
 	var stdout, stderr bytes.Buffer
 	cmd := newInitCmd(&stdout, &stderr)

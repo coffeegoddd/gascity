@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -28,7 +27,6 @@ import (
 	"github.com/gastownhall/gascity/internal/doltversion"
 	"github.com/gastownhall/gascity/internal/fsys"
 	"github.com/gastownhall/gascity/internal/pathutil"
-	"github.com/gastownhall/gascity/internal/pidutil"
 	"github.com/gastownhall/gascity/internal/runtime"
 	"github.com/gastownhall/gascity/internal/workspacesvc"
 )
@@ -679,26 +677,10 @@ func (c *BeadsStoreCheck) Name() string { return "beads-store" }
 // native-store city.
 func (c *BeadsStoreCheck) Run(_ *CheckContext) *CheckResult {
 	r := &CheckResult{Name: c.Name()}
-	target, fixHint, active, err := validateBDStoreTarget(c.cityPath, c.cityPath)
-	if err != nil {
-		r.Status = StatusError
-		r.Message = fmt.Sprintf("resolve dolt target: %v", err)
-		if active {
-			r.FixHint = fixHint
-		}
-		return r
-	}
-	if active {
-		addr := net.JoinHostPort(target.Host, target.Port)
-		conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-		if err != nil {
-			r.Status = StatusError
-			r.Message = fmt.Sprintf("dolt server not reachable at %s", addr)
-			r.FixHint = doltServerFixHint(target)
-			return r
-		}
-		conn.Close() //nolint:errcheck // best-effort close
-	}
+	// bd is the sole interface to the server: opening the store and Ping()ing it
+	// exercises the proxied-server path end-to-end, so a successful ping is the
+	// authoritative reachability signal. gascity no longer opens its own TCP
+	// connection to a resolved endpoint (bd owns the endpoint).
 	result, err := c.newStore(c.cityPath)
 	if err != nil {
 		r.Status = StatusError
@@ -708,14 +690,6 @@ func (c *BeadsStoreCheck) Run(_ *CheckContext) *CheckResult {
 	if err := result.Store.Ping(); err != nil {
 		r.Status = StatusError
 		r.Message = fmt.Sprintf("store ping failed: %v", err)
-		return r
-	}
-	if result.Diagnostic.Store == beads.BeadsStoreNameBdStore {
-		r.Status = StatusWarning
-		r.Message = fmt.Sprintf(
-			"beads store running on BdStore fallback (fork-per-op; gate=%s): %s",
-			result.Diagnostic.PreflightGate, result.Diagnostic.PreflightReason)
-		r.FixHint = "native store unavailable; repair the named preflight gate, then restart the process to pick up native store eligibility"
 		return r
 	}
 	r.Status = StatusOK
@@ -843,17 +817,11 @@ func (c *BDSplitStoreCheck) activeBDStore(beadsDir string) (string, string) {
 		}
 		return activeSource, activeStore
 	}
-	switch resolved.State.EndpointOrigin {
-	case contract.EndpointOriginManagedCity:
-		if sameDoctorScope(c.cityPath, c.scopePath) {
-			return "canonical endpoint_origin=" + string(resolved.State.EndpointOrigin), "dolt"
-		}
-		return "canonical endpoint_origin=" + string(resolved.State.EndpointOrigin), ""
-	case contract.EndpointOriginCityCanonical, contract.EndpointOriginExplicit, contract.EndpointOriginInheritedCity:
-		return "canonical endpoint_origin=" + string(resolved.State.EndpointOrigin), ""
-	default:
-		return activeSource, activeStore
+	if contract.ConfigHasEndpointAuthority(resolved.State) {
+		return "canonical external dolt endpoint " + resolved.State.DoltHost + ":" + resolved.State.DoltPort, ""
 	}
+	// Every local (bd-owned) scope has its own proxied-server dolt store.
+	return "canonical local dolt (bd proxied-server)", "dolt"
 }
 
 func (c *BDSplitStoreCheck) rawNonLocalEndpointSource() (string, bool) {
@@ -872,12 +840,10 @@ func rawNonLocalEndpointSource(scopePath string) (string, bool) {
 	if err != nil || !ok {
 		return "", false
 	}
-	switch cfg.EndpointOrigin {
-	case contract.EndpointOriginCityCanonical, contract.EndpointOriginExplicit, contract.EndpointOriginInheritedCity:
-		return "canonical endpoint_origin=" + string(cfg.EndpointOrigin), true
-	default:
-		return "", false
+	if contract.ConfigHasEndpointAuthority(cfg) {
+		return "canonical external dolt endpoint " + cfg.DoltHost + ":" + cfg.DoltPort, true
 	}
+	return "", false
 }
 
 func activeBDStoreFromMetadata(path string) (string, string) {
@@ -1004,13 +970,9 @@ func validateBDStoreTarget(cityPath, scopeRoot string) (contract.DoltConnectionT
 
 func fixHintForBDScopeResolution(cityPath string, resolved contract.ScopeConfigResolution) string {
 	if resolved.Kind == contract.ScopeConfigAuthoritative {
-		origin := resolved.State.EndpointOrigin
-		if origin == contract.EndpointOriginInheritedCity {
-			if cityState, ok, err := contract.ResolveAuthoritativeConfigState(fsys.OSFS{}, cityPath, cityPath, ""); err == nil && ok {
-				origin = cityState.EndpointOrigin
-			}
-		}
-		return doltServerFixHint(contract.DoltConnectionTarget{EndpointOrigin: origin})
+		// ResolveAuthoritativeConfigState materializes an inherited rig's city
+		// coords, so ConfigHasEndpointAuthority reflects the effective endpoint.
+		return doltServerFixHint(contract.ConfigHasEndpointAuthority(resolved.State))
 	}
 	return resolveDoltServerFixHint(fsys.OSFS{}, cityPath)
 }
@@ -1123,161 +1085,19 @@ func doctorScopeHasFileStoreMarker(scopePath string) bool {
 	return err == nil && !info.IsDir()
 }
 
-// DoltServerCheck verifies the dolt server is running and reachable.
-type DoltServerCheck struct {
-	cityPath string
-	skip     bool
-}
-
-// NewDoltServerCheck creates a check for the dolt server.
-// If skip is true, the check returns OK (dolt not needed).
-func NewDoltServerCheck(cityPath string, skip bool) *DoltServerCheck {
-	return &DoltServerCheck{cityPath: cityPath, skip: skip}
-}
-
-// Name returns the check identifier.
-func (c *DoltServerCheck) Name() string { return "dolt-server" }
-
-// Run checks if the dolt server is running and reachable via TCP.
-func (c *DoltServerCheck) Run(_ *CheckContext) *CheckResult {
-	r := &CheckResult{Name: c.Name()}
-	if c.skip {
-		r.Status = StatusOK
-		r.Message = "skipped (file backend or GC_DOLT=skip)"
-		return r
-	}
-	if scopeUsesBDDoltliteStore(c.cityPath, c.cityPath) {
-		r.Status = StatusOK
-		r.Message = "not required (bd backend=doltlite)"
-		return r
-	}
-
-	target, err := contract.ResolveDoltConnectionTarget(fsys.OSFS{}, c.cityPath, c.cityPath)
-	if err != nil {
-		r.Status = StatusError
-		r.Message = fmt.Sprintf("resolve dolt target: %v", err)
-		r.FixHint = resolveDoltServerFixHint(fsys.OSFS{}, c.cityPath)
-		return r
-	}
-	addr := net.JoinHostPort(target.Host, target.Port)
-
-	// Check TCP reachability.
-	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-	if err != nil {
-		r.Status = StatusError
-		r.Message = fmt.Sprintf("dolt server not reachable at %s", addr)
-		r.FixHint = doltServerFixHint(target)
-		return r
-	}
-	conn.Close() //nolint:errcheck // best-effort close
-
-	r.Status = StatusOK
-	r.Message = fmt.Sprintf("reachable on %s", addr)
-	return r
-}
-
-// CanFix returns false.
-func (c *DoltServerCheck) CanFix() bool { return false }
-
-// Fix is a no-op.
-func (c *DoltServerCheck) Fix(_ *CheckContext) error { return nil }
-
-// RigDoltServerCheck verifies a rig-local explicit Dolt endpoint is reachable.
-type RigDoltServerCheck struct {
-	cityPath string
-	rig      config.Rig
-	skip     bool
-}
-
-// NewRigDoltServerCheck creates a check for an explicit rig Dolt endpoint.
-func NewRigDoltServerCheck(cityPath string, rig config.Rig, skip bool) *RigDoltServerCheck {
-	return &RigDoltServerCheck{cityPath: cityPath, rig: rig, skip: skip}
-}
-
-// Name returns the check identifier.
-func (c *RigDoltServerCheck) Name() string { return "rig:" + c.rig.Name + ":dolt-server" }
-
-// Run checks if an explicit rig Dolt endpoint is reachable. Inherited rigs are
-// handled by the city-level DoltServerCheck and therefore skip here.
-func (c *RigDoltServerCheck) Run(_ *CheckContext) *CheckResult {
-	r := &CheckResult{Name: c.Name()}
-	if c.skip {
-		r.Status = StatusOK
-		r.Message = "skipped (file backend or GC_DOLT=skip)"
-		return r
-	}
-	rigPath := c.rig.Path
-	if !filepath.IsAbs(rigPath) {
-		rigPath = filepath.Join(c.cityPath, rigPath)
-	}
-	if scopeUsesBDDoltliteStore(c.cityPath, rigPath) {
-		r.Status = StatusOK
-		r.Message = "not required (bd backend=doltlite)"
-		return r
-	}
-	if err := contract.ValidateInheritedCityEndpointMirror(fsys.OSFS{}, c.cityPath, rigPath); err != nil {
-		r.Status = StatusError
-		r.Message = fmt.Sprintf("inherited city endpoint drift: %v", err)
-		r.FixHint = "reconcile the inherited city endpoint mirror"
-		return r
-	}
-	explicit, err := contract.ScopeUsesExplicitEndpoint(fsys.OSFS{}, c.cityPath, rigPath)
-	if err != nil {
-		r.Status = StatusError
-		r.Message = fmt.Sprintf("resolve dolt target: %v", err)
-		r.FixHint = "reconcile the canonical external Dolt endpoint"
-		return r
-	}
-	if !explicit {
-		r.Status = StatusOK
-		r.Message = "inherits city dolt endpoint"
-		return r
-	}
-	target, err := contract.ResolveDoltConnectionTarget(fsys.OSFS{}, c.cityPath, rigPath)
-	if err != nil {
-		r.Status = StatusError
-		r.Message = fmt.Sprintf("resolve dolt target: %v", err)
-		r.FixHint = "reconcile the canonical external Dolt endpoint"
-		return r
-	}
-	addr := net.JoinHostPort(target.Host, target.Port)
-	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-	if err != nil {
-		r.Status = StatusError
-		r.Message = fmt.Sprintf("dolt server not reachable at %s", addr)
-		r.FixHint = doltServerFixHint(target)
-		return r
-	}
-	conn.Close() //nolint:errcheck // best-effort close
-
-	r.Status = StatusOK
-	r.Message = fmt.Sprintf("reachable on %s", addr)
-	return r
-}
-
-// CanFix returns false.
-func (c *RigDoltServerCheck) CanFix() bool { return false }
-
-// Fix is a no-op.
-func (c *RigDoltServerCheck) Fix(_ *CheckContext) error { return nil }
-
 func resolveDoltServerFixHint(fs fsys.FS, cityPath string) string {
 	state, ok, err := contract.ResolveAuthoritativeConfigState(fs, cityPath, cityPath, "")
 	if err != nil || !ok {
 		return "reconcile the canonical Dolt endpoint"
 	}
-	return doltServerFixHint(contract.DoltConnectionTarget{EndpointOrigin: state.EndpointOrigin})
+	return doltServerFixHint(contract.ConfigHasEndpointAuthority(state))
 }
 
-func doltServerFixHint(target contract.DoltConnectionTarget) string {
-	switch target.EndpointOrigin {
-	case contract.EndpointOriginManagedCity:
-		return "run gc start to start the dolt server"
-	case contract.EndpointOriginCityCanonical, contract.EndpointOriginExplicit, contract.EndpointOriginInheritedCity:
+func doltServerFixHint(external bool) string {
+	if external {
 		return "reconcile the canonical external Dolt endpoint"
-	default:
-		return "reconcile the canonical Dolt endpoint"
 	}
+	return "run gc start to start the dolt server"
 }
 
 // EventsLogCheck verifies .gc/events.jsonl exists and is writable.
@@ -1443,26 +1263,9 @@ func (c *RigBeadsCheck) Run(_ *CheckContext) *CheckResult {
 	if !filepath.IsAbs(rigPath) {
 		rigPath = filepath.Join(c.cityPath, rigPath)
 	}
-	target, fixHint, active, err := validateBDStoreTarget(c.cityPath, rigPath)
-	if err != nil {
-		r.Status = StatusError
-		r.Message = fmt.Sprintf("resolve dolt target: %v", err)
-		if active {
-			r.FixHint = fixHint
-		}
-		return r
-	}
-	if active {
-		addr := net.JoinHostPort(target.Host, target.Port)
-		conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
-		if err != nil {
-			r.Status = StatusError
-			r.Message = fmt.Sprintf("dolt server not reachable at %s", addr)
-			r.FixHint = doltServerFixHint(target)
-			return r
-		}
-		conn.Close() //nolint:errcheck // best-effort close
-	}
+	// bd is the sole interface to the server: opening the store and Ping()ing it
+	// is the authoritative reachability signal (gascity no longer dials a
+	// resolved endpoint — bd owns the endpoint).
 	store, err := c.newStore(rigPath)
 	if err != nil {
 		r.Status = StatusError
@@ -1645,11 +1448,10 @@ const doltDirMeasureTimeout = 60 * time.Second
 
 // resolveManagedDoltDataDir returns the effective Dolt data directory for the
 // managed provider. Doctor resolves the inspected city from disk, not ambient
-// GC_DOLT_* shell overrides that may point at a different city.
+// GC_BEADS_* shell overrides that may point at a different city.
 func resolveManagedDoltDataDir(cityPath string) string {
-	if dataDir := publishedManagedDoltDataDir(cityPath); dataDir != "" {
-		return dataDir
-	}
+	// bd owns the proxied-server data directory and publishes no runtime state
+	// file for gascity to read; the data lives at the canonical .beads/dolt path.
 	beadsDataDir := filepath.Join(cityPath, ".beads", "dolt")
 	if info, err := os.Stat(beadsDataDir); err == nil && info.IsDir() {
 		return beadsDataDir
@@ -1666,44 +1468,10 @@ func resolveManagedDoltDataDir(cityPath string) string {
 	return packDataDir
 }
 
-// resolveManagedDoltConfigPath returns the effective path to the managed
-// dolt-config.yaml for the inspected city, ignoring ambient GC_DOLT_* shell
-// overrides that may point at a different city.
+// resolveManagedDoltConfigPath returns the effective path to the dolt-config.yaml
+// gascity writes for bd's proxied-server child (its operational tuning knobs).
 func resolveManagedDoltConfigPath(cityPath string) string {
 	return filepath.Join(doctorDoltPackStateDir(cityPath), "dolt-config.yaml")
-}
-
-type managedDoltDoctorRuntimeState struct {
-	Running bool   `json:"running"`
-	PID     int    `json:"pid"`
-	Port    int    `json:"port"`
-	DataDir string `json:"data_dir"`
-}
-
-func publishedManagedDoltDataDir(cityPath string) string {
-	stateFile := filepath.Join(doctorDoltPackStateDir(cityPath), "dolt-state.json")
-	data, err := os.ReadFile(stateFile) //nolint:gosec // path is derived from managed city layout
-	if err != nil {
-		return ""
-	}
-	var state managedDoltDoctorRuntimeState
-	if json.Unmarshal(data, &state) != nil {
-		return ""
-	}
-	dataDir := strings.TrimSpace(state.DataDir)
-	if dataDir == "" {
-		return ""
-	}
-	if info, err := os.Stat(dataDir); err != nil || !info.IsDir() {
-		return ""
-	}
-	if state.Running && !validPublishedManagedDoltDoctorState(cityPath, state, dataDir) {
-		return ""
-	}
-	if !state.Running && managedDoltDoctorDefaultDataDirExists(cityPath, dataDir) {
-		return ""
-	}
-	return dataDir
 }
 
 func doctorDoltPackStateDir(cityPath string) string {
@@ -1720,156 +1488,6 @@ func doctorCityRuntimeDir(cityPath string) string {
 		}
 	}
 	return citylayout.RuntimeDataDir(cityPath)
-}
-
-func validPublishedManagedDoltDoctorState(cityPath string, state managedDoltDoctorRuntimeState, dataDir string) bool {
-	if state.PID <= 0 || state.Port <= 0 {
-		return false
-	}
-	if !pidutil.Alive(state.PID) {
-		return false
-	}
-	conn, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(state.Port)), 250*time.Millisecond)
-	if err != nil {
-		return false
-	}
-	_ = conn.Close()
-	holderPID := managedDoltDoctorPortHolderPID(state.Port)
-	if holderPID > 0 {
-		return holderPID == state.PID
-	}
-	return managedDoltDoctorProcessOwnsRuntime(state.PID, dataDir, resolveManagedDoltConfigPath(cityPath))
-}
-
-func managedDoltDoctorProcessOwnsRuntime(pid int, dataDir, configPath string) bool {
-	cmdline := managedDoltDoctorProcCmdline(pid)
-	if cmdline != "" {
-		if strings.Contains(cmdline, dataDir) || strings.Contains(cmdline, configPath) {
-			return true
-		}
-	}
-	cwd, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(pid), "cwd"))
-	if err == nil && sameDoctorScope(cwd, dataDir) {
-		return true
-	}
-	return false
-}
-
-func managedDoltDoctorProcCmdline(pid int) string {
-	data, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "cmdline"))
-	if err == nil {
-		return strings.ReplaceAll(string(data), "\x00", " ")
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "ps", "-p", strconv.Itoa(pid), "-o", "args=").Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(out))
-}
-
-func managedDoltDoctorPortHolderPID(port int) int {
-	if port <= 0 {
-		return 0
-	}
-	if pid, checked := managedDoltDoctorPortHolderFromProc(uint16(port)); checked {
-		return pid
-	}
-	return managedDoltDoctorPortHolderFromLsof(port)
-}
-
-func managedDoltDoctorPortHolderFromProc(port uint16) (int, bool) {
-	inodes := map[string]struct{}{}
-	checked := false
-	for _, path := range []string{"/proc/net/tcp", "/proc/net/tcp6"} {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		checked = true
-		for _, line := range strings.Split(string(data), "\n") {
-			fields := strings.Fields(line)
-			if len(fields) < 10 || fields[3] != "0A" {
-				continue
-			}
-			_, portHex, ok := strings.Cut(fields[1], ":")
-			if !ok {
-				continue
-			}
-			gotPort, err := strconv.ParseUint(portHex, 16, 16)
-			if err != nil || uint16(gotPort) != port {
-				continue
-			}
-			inodes[fields[9]] = struct{}{}
-		}
-	}
-	if !checked {
-		return 0, false
-	}
-	if len(inodes) == 0 {
-		return 0, true
-	}
-	entries, err := os.ReadDir("/proc")
-	if err != nil {
-		return 0, true
-	}
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
-		}
-		pid, err := strconv.Atoi(entry.Name())
-		if err != nil || !pidutil.Alive(pid) {
-			continue
-		}
-		fdDir := filepath.Join("/proc", entry.Name(), "fd")
-		fds, err := os.ReadDir(fdDir)
-		if err != nil {
-			continue
-		}
-		for _, fd := range fds {
-			target, err := os.Readlink(filepath.Join(fdDir, fd.Name()))
-			if err != nil || !strings.HasPrefix(target, "socket:[") || !strings.HasSuffix(target, "]") {
-				continue
-			}
-			inode := strings.TrimSuffix(strings.TrimPrefix(target, "socket:["), "]")
-			if _, ok := inodes[inode]; ok {
-				return pid, true
-			}
-		}
-	}
-	return 0, true
-}
-
-func managedDoltDoctorPortHolderFromLsof(port int) int {
-	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
-	defer cancel()
-	out, err := exec.CommandContext(ctx, "lsof", "-nP", "-iTCP:"+strconv.Itoa(port), "-sTCP:LISTEN", "-t").Output()
-	if err != nil {
-		return 0
-	}
-	for _, field := range strings.Fields(string(out)) {
-		pid, err := strconv.Atoi(field)
-		if err == nil && pidutil.Alive(pid) {
-			return pid
-		}
-	}
-	return 0
-}
-
-func managedDoltDoctorDefaultDataDirExists(cityPath, dataDir string) bool {
-	for _, candidate := range []string{
-		filepath.Join(cityPath, ".beads", "dolt"),
-		filepath.Join(cityPath, ".gc", "dolt-data"),
-	} {
-		if sameDoctorScope(candidate, dataDir) {
-			continue
-		}
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return true
-		}
-	}
-	return false
 }
 
 type doltDataScanTarget struct {
@@ -2020,9 +1638,9 @@ func managedLocalDoltScanTargetsForScopeRoots(cityPath string, scopeRoots []stri
 			unresolved = true
 			continue
 		}
-		switch resolved.State.EndpointOrigin {
-		case contract.EndpointOriginManagedCity, contract.EndpointOriginInheritedCity:
-		default:
+		if contract.ConfigHasEndpointAuthority(resolved.State) {
+			// External endpoint — its dolt data lives on the remote server, not
+			// under this scope's local .beads/dolt, so skip the local scan.
 			continue
 		}
 		db, ok, dbErr := contract.ReadDoltDatabase(fsys.OSFS{}, filepath.Join(scopeRoot, ".beads", "metadata.json"))
@@ -2145,16 +1763,16 @@ func managedLocalDoltChecksApplicableForScopeRoots(cityPath string, scopeRoots [
 			continue
 		}
 		switch resolved.Kind {
-		case contract.ScopeConfigMissing:
+		case contract.ScopeConfigMissing, contract.ScopeConfigLegacyMinimal:
+			// Missing or bare (no-coords) config on a bd-dolt scope is a local
+			// bd-managed endpoint — proxied-server config is written by bd with no
+			// gc.endpoint_origin, so it reads as legacy-minimal.
 			return true
 		case contract.ScopeConfigAuthoritative:
-			switch resolved.State.EndpointOrigin {
-			case contract.EndpointOriginManagedCity:
+			// A local (no-coords) authoritative scope is bd-managed; only an
+			// external endpoint (coords present) is out of scope for local checks.
+			if !contract.ConfigHasEndpointAuthority(resolved.State) {
 				return true
-			case contract.EndpointOriginInheritedCity:
-				if inheritedDoctorScopeUsesManagedCity(cityPath) {
-					return true
-				}
 			}
 		}
 	}
@@ -2166,7 +1784,7 @@ func inheritedDoctorScopeUsesManagedCity(cityPath string) bool {
 	if err != nil || cityResolved.Kind != contract.ScopeConfigAuthoritative {
 		return false
 	}
-	return cityResolved.State.EndpointOrigin == contract.EndpointOriginManagedCity
+	return !contract.ConfigHasEndpointAuthority(cityResolved.State)
 }
 
 func doctorRawScopeUsesManagedCity(cityPath, scopeRoot string) bool {
@@ -2174,14 +1792,13 @@ func doctorRawScopeUsesManagedCity(cityPath, scopeRoot string) bool {
 	if err != nil || !ok {
 		return false
 	}
-	switch state.EndpointOrigin {
-	case contract.EndpointOriginManagedCity:
-		return true
-	case contract.EndpointOriginInheritedCity:
-		return inheritedDoctorScopeUsesManagedCity(cityPath)
-	default:
+	if contract.ConfigHasEndpointAuthority(state) {
 		return false
 	}
+	if sameDoctorScope(cityPath, scopeRoot) {
+		return true
+	}
+	return inheritedDoctorScopeUsesManagedCity(cityPath)
 }
 
 func managedDoltRuntimeMaterialized(cityPath string) bool {
@@ -2339,7 +1956,7 @@ func (c *DoltNomsSizeCheck) Run(_ *CheckContext) *CheckResult {
 	r := &CheckResult{Name: c.Name()}
 	if c.skip || !c.managedApplicable() {
 		r.Status = StatusOK
-		r.Message = "skipped (file backend, external dolt endpoint, or GC_DOLT=skip)"
+		r.Message = "skipped (file backend, external dolt endpoint, or GC_BEADS_SKIP=1)"
 		return r
 	}
 
@@ -2355,7 +1972,7 @@ func (c *DoltNomsSizeCheck) Run(_ *CheckContext) *CheckResult {
 			return r
 		}
 		r.Status = StatusOK
-		r.Message = "skipped (file backend, external dolt endpoint, or GC_DOLT=skip)"
+		r.Message = "skipped (file backend, external dolt endpoint, or GC_BEADS_SKIP=1)"
 		return r
 	}
 
@@ -2450,7 +2067,7 @@ type DoltConfigExpectedValue struct {
 // This is intentionally a contract subset, not a byte-for-byte mirror of
 // writeManagedDoltConfigFile in cmd/gc/cmd_dolt_config.go. It covers the keys
 // whose drift would change managed runtime behavior materially. wait_timeout
-// follows the same GC_DOLT_WAIT_TIMEOUT environment override as config
+// follows the same GC_BEADS_WAIT_TIMEOUT environment override as config
 // generation. Dynamic values such as data_dir are checked by DoltConfigCheck
 // because they depend on the inspected city path.
 func DoltConfigExpectedValues() []DoltConfigExpectedValue {
@@ -2485,7 +2102,7 @@ func DoltConfigExpectedValuesForConfig(doltConfig config.DoltConfig) []DoltConfi
 
 func managedDoltConfigExpectedWaitTimeout() int {
 	const defaultWaitTimeout = 30
-	raw := os.Getenv("GC_DOLT_WAIT_TIMEOUT")
+	raw := os.Getenv("GC_BEADS_WAIT_TIMEOUT")
 	if raw == "" {
 		return defaultWaitTimeout
 	}
@@ -2555,7 +2172,7 @@ func NewDoltConfigCheck(cityPath string, skip bool) *DoltConfigCheck {
 func NewDoltConfigCheckForConfig(cityPath string, skip bool, cfg *config.City, cfgErr error) *DoltConfigCheck {
 	var doltConfig config.DoltConfig
 	if cfg != nil {
-		doltConfig = cfg.Dolt
+		doltConfig = cfg.Beads.Server
 	}
 	return &DoltConfigCheck{
 		cityPath:        cityPath,
@@ -2581,7 +2198,7 @@ func (c *DoltConfigCheck) Run(_ *CheckContext) *CheckResult {
 	r := &CheckResult{Name: c.Name()}
 	if c.skip || !c.managedApplicable() {
 		r.Status = StatusOK
-		r.Message = "skipped (file backend, external dolt endpoint, or GC_DOLT=skip)"
+		r.Message = "skipped (file backend, external dolt endpoint, or GC_BEADS_SKIP=1)"
 		return r
 	}
 
@@ -2740,7 +2357,7 @@ func (c *DoltVersionCheck) Run(_ *CheckContext) *CheckResult {
 	r := &CheckResult{Name: c.Name()}
 	if c.skip || (c.cityPath != "" && !c.managedApplicable()) {
 		r.Status = StatusOK
-		r.Message = "skipped (file backend, external dolt endpoint, or GC_DOLT=skip)"
+		r.Message = "skipped (file backend, external dolt endpoint, or GC_BEADS_SKIP=1)"
 		return r
 	}
 

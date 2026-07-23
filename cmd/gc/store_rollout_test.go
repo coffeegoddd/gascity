@@ -164,18 +164,14 @@ func TestConditionalWritesDegradedRecorder(t *testing.T) {
 	})
 }
 
-// TestConditionalWritesEventStoreKind pins the internal→wire vocabulary map,
-// including the build-tagged DoltliteReadStore, which beads cannot name and
-// therefore reaches this layer as its %T spelling.
+// TestConditionalWritesEventStoreKind pins the internal→wire vocabulary map.
 func TestConditionalWritesEventStoreKind(t *testing.T) {
 	for in, want := range map[string]string{
-		beads.BeadsStoreNameBdStore:         "bd",
-		beads.BeadsStoreNameNativeDoltStore: "native",
-		beads.BeadsStoreNameFileStore:       "file",
-		"MemStore":                          "mem",
-		"CachingStore":                      "caching",
-		"*beads.DoltliteReadStore":          "bd",
-		"someFutureStore":                   "someFutureStore",
+		beads.BeadsStoreNameBdStore:   "bd",
+		beads.BeadsStoreNameFileStore: "file",
+		"MemStore":                    "mem",
+		"CachingStore":                "caching",
+		"someFutureStore":             "someFutureStore",
 	} {
 		if got := conditionalWritesEventStoreKind(in); got != want {
 			t.Errorf("conditionalWritesEventStoreKind(%q) = %q, want %q", in, got, want)

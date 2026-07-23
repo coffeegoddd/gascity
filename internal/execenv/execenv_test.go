@@ -192,17 +192,17 @@ func TestFilterInheritedStripsSensitiveEnv(t *testing.T) {
 func TestMergeMapPreservesExplicitSensitiveOverrides(t *testing.T) {
 	got := MergeMap([]string{
 		"PATH=/bin",
-		"GC_DOLT_PASSWORD=stale",
+		"GC_BEADS_PASSWORD=stale",
 		"GITHUB_TOKEN=ambient",
 	}, map[string]string{
-		"GC_DOLT_PASSWORD": "required",
+		"GC_BEADS_PASSWORD": "required",
 		"BEADS_DIR":        "/city/.beads",
 	})
 	joined := strings.Join(got, "\n")
 	if strings.Contains(joined, "GITHUB_TOKEN") || strings.Contains(joined, "ambient") || strings.Contains(joined, "stale") {
 		t.Fatalf("MergeMap leaked inherited secret: %q", joined)
 	}
-	if !strings.Contains(joined, "GC_DOLT_PASSWORD=required") {
+	if !strings.Contains(joined, "GC_BEADS_PASSWORD=required") {
 		t.Fatalf("MergeMap did not preserve explicit secret override: %q", joined)
 	}
 }

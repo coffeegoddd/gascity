@@ -148,7 +148,7 @@ func IsVersionMismatchedHash(stored string) bool {
 //	  GC_CITY / GC_CITY_PATH — city identity and location
 //	  GC_RIG*         — which rig the agent operates on
 //	  GC_TEMPLATE     — agent template identity
-//	  GC_DOLT_PORT    — how to reach dolt (ephemeral port)
+//	  GC_BEADS_PORT    — how to reach dolt (ephemeral port)
 //	  GC_SKILLS_DIR   — skill discovery path
 //	  GC_BLESSED_BIN_DIR — trusted binary path
 //	  GC_PUBLICATION_* — service publication config
@@ -177,7 +177,7 @@ var envFingerprintAllow = map[string]bool{
 	// Agent identity
 	"GC_TEMPLATE": true,
 
-	// Service connectivity — GC_DOLT_PORT intentionally excluded.
+	// Service connectivity — GC_BEADS_PORT intentionally excluded.
 	// The dolt port is ephemeral (changes on every supervisor restart)
 	// and including it causes spurious config-drift drains on every
 	// restart. The agent reconnects to the new port automatically.

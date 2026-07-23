@@ -284,8 +284,8 @@ func doRigAddWithResult(fs fsys.FS, cityPath, rigPath string, includes []string,
 	// beads-init path can read the process-global lifecycle fields. The
 	// register/clear pair must stay in one lexical scope wrapping the whole
 	// Provision call.
-	if cityUsesBdStoreContract(cityPath) && cityDoltConfigHasLifecycleFields(cfg.Dolt) {
-		registerCityDoltConfig(cityPath, cfg.Dolt)
+	if cityUsesBdStoreContract(cityPath) && cityDoltConfigHasLifecycleFields(cfg.Beads.Server) {
+		registerCityDoltConfig(cityPath, cfg.Beads.Server)
 		defer clearCityDoltConfig(cityPath)
 	}
 	name := nameOverride
@@ -305,7 +305,7 @@ func doRigAddWithResult(fs fsys.FS, cityPath, rigPath string, includes []string,
 		},
 		ProbeBranch: func(p string) string { return git.New(p).ProbeDefaultBranch() },
 		NormalizeScopes: func(cp string, c *config.City) error {
-			return normalizeCanonicalBdScopeFiles(cp, c, io.Discard)
+			return nil // bd owns canonical scope files in proxied-server mode
 		},
 		PrepareAdopt:  prepareRigAdoptProviderState,
 		StoreContract: cityUsesBdStoreContract,

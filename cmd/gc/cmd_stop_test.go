@@ -706,9 +706,6 @@ func TestStopCityManagedBeadsProviderUsesProviderStateWhenPublishedStateIsMissin
 	if shutdowns != 1 {
 		t.Fatalf("shutdown calls = %d, want 1", shutdowns)
 	}
-	if _, err := os.Stat(managedDoltStatePath(cityDir)); !os.IsNotExist(err) {
-		t.Fatalf("stop detection should not publish runtime state, stat err = %v", err)
-	}
 }
 
 func setupInvalidConfigManagedRuntime(t *testing.T) string {
@@ -717,7 +714,7 @@ func setupInvalidConfigManagedRuntime(t *testing.T) string {
 	t.Setenv("GC_HOME", shortSocketTempDir(t, "gc-home-"))
 	t.Setenv("GC_BEADS", "bd")
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 
 	cityDir := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt"), 0o755); err != nil {

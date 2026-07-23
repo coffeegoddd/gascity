@@ -121,7 +121,7 @@ func parseBdStoreBridgeCommandArgs(args []string) (op string, opArgs []string, d
 }
 
 func bdStoreBridgePassword() string {
-	password := strings.TrimSpace(os.Getenv("GC_DOLT_PASSWORD"))
+	password := strings.TrimSpace(os.Getenv("GC_BEADS_PASSWORD"))
 	if password == "" {
 		password = strings.TrimSpace(os.Getenv("BEADS_DOLT_PASSWORD"))
 	}
@@ -316,11 +316,11 @@ func bdStoreBridgeEnv(dir, host, port, user, password string) map[string]string 
 		"GC_BEADS",
 		"GC_BEADS_BACKEND",
 		"GC_BEADS_PREFIX",
-		"GC_DOLT_DATABASE",
-		"GC_DOLT_HOST",
-		"GC_DOLT_PASSWORD",
-		"GC_DOLT_PORT",
-		"GC_DOLT_USER",
+		"GC_BEADS_DATABASE",
+		"GC_BEADS_HOST",
+		"GC_BEADS_PASSWORD",
+		"GC_BEADS_PORT",
+		"GC_BEADS_USER",
 	} {
 		env[key] = ""
 	}
@@ -329,13 +329,13 @@ func bdStoreBridgeEnv(dir, host, port, user, password string) map[string]string 
 		env["GC_BEADS_BACKEND"] = "doltlite"
 		env["BEADS_BACKEND"] = "doltlite"
 	} else {
-		env["GC_DOLT_HOST"] = host
+		env["GC_BEADS_HOST"] = host
 		env["BEADS_DOLT_SERVER_HOST"] = host
-		env["GC_DOLT_PORT"] = port
+		env["GC_BEADS_PORT"] = port
 		env["BEADS_DOLT_SERVER_PORT"] = port
-		env["GC_DOLT_USER"] = user
+		env["GC_BEADS_USER"] = user
 		env["BEADS_DOLT_SERVER_USER"] = user
-		env["GC_DOLT_PASSWORD"] = password
+		env["GC_BEADS_PASSWORD"] = password
 		env["BEADS_DOLT_PASSWORD"] = password
 		env["BEADS_DOLT_AUTO_START"] = "0"
 	}

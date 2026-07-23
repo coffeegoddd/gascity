@@ -13,21 +13,21 @@ else
 fi
 
 # Data lives under .beads/dolt (gc-beads-bd canonical path). Honor
-# GC_DOLT_DATA_DIR first so shell pack commands target the same managed data
+# GC_BEADS_DATA_DIR first so shell pack commands target the same managed data
 # directory as the Go lifecycle and doctor code.
-DOLT_BEADS_DATA_DIR="${GC_DOLT_DATA_DIR:-$GC_CITY_PATH/.beads/dolt}"
-if [ -n "${GC_DOLT_DATA_DIR:-}" ]; then
-  DOLT_DATA_DIR="$GC_DOLT_DATA_DIR"
+DOLT_BEADS_DATA_DIR="${GC_BEADS_DATA_DIR:-$GC_CITY_PATH/.beads/dolt}"
+if [ -n "${GC_BEADS_DATA_DIR:-}" ]; then
+  DOLT_DATA_DIR="$GC_BEADS_DATA_DIR"
 elif [ -d "$DOLT_BEADS_DATA_DIR" ]; then
   DOLT_DATA_DIR="$DOLT_BEADS_DATA_DIR"
 else
   DOLT_DATA_DIR="$DOLT_STATE_DIR/dolt-data"
 fi
 
-DOLT_LOG_FILE="${GC_DOLT_LOG_FILE:-$DOLT_STATE_DIR/dolt.log}"
-DOLT_PID_FILE="${GC_DOLT_PID_FILE:-$DOLT_STATE_DIR/dolt.pid}"
-if [ -n "${GC_DOLT_STATE_FILE:-}" ]; then
-  DOLT_STATE_FILE="$GC_DOLT_STATE_FILE"
+DOLT_LOG_FILE="${GC_BEADS_LOG_FILE:-$DOLT_STATE_DIR/dolt.log}"
+DOLT_PID_FILE="${GC_BEADS_PID_FILE:-$DOLT_STATE_DIR/dolt.pid}"
+if [ -n "${GC_BEADS_STATE_FILE:-}" ]; then
+  DOLT_STATE_FILE="$GC_BEADS_STATE_FILE"
 else
   DOLT_STATE_FILE="$DOLT_STATE_DIR/dolt-state.json"
 fi
@@ -215,11 +215,11 @@ managed_runtime_port() (
   printf '%s\n' "$port"
 )
 
-# Resolve GC_DOLT_PORT. The shared helper prefers validated live managed
-# runtime state over stale inherited env, then falls back to GC_DOLT_PORT as an
+# Resolve GC_BEADS_PORT. The shared helper prefers validated live managed
+# runtime state over stale inherited env, then falls back to GC_BEADS_PORT as an
 # operator seed, and exits 78 if neither yields a port.
 . "${GC_PACK_DIR:-${PACK_DIR:-${GC_SYSTEM_PACKS_DIR:-$GC_CITY_PATH/.gc/system/packs}/dolt}}/assets/scripts/port_resolve.sh"
-GC_DOLT_PORT=$(resolve_dolt_port_or_die "$DOLT_STATE_FILE" "$DOLT_PROVIDER_STATE_FILE" "$DOLT_DATA_DIR" "$GC_CITY_PATH") || exit $?
+GC_BEADS_PORT=$(resolve_dolt_port_or_die "$DOLT_STATE_FILE" "$DOLT_PROVIDER_STATE_FILE" "$DOLT_DATA_DIR" "$GC_CITY_PATH") || exit $?
 
 # Resolve a bounded-execution helper. Prefer gtimeout (coreutils on
 # macOS), fall back to timeout (coreutils on Linux), then to running
@@ -238,11 +238,11 @@ _run_bounded_warned_no_timeout=""
 
 # Wall-clock bound (seconds) for `gc rig list --json` rig discovery, shared
 # by the compact and health commands and tunable via
-# GC_DOLT_RIG_LIST_TIMEOUT_SECS. The bound must absorb a slow-but-healthy gc
+# GC_BEADS_RIG_LIST_TIMEOUT_SECS. The bound must absorb a slow-but-healthy gc
 # on a busy host (~16s observed): discovery callers degrade to a city-only
 # filesystem scan on timeout, which silently drops external rig databases
 # (gascity#2740).
-GC_DOLT_RIG_LIST_TIMEOUT_SECS="${GC_DOLT_RIG_LIST_TIMEOUT_SECS:-30}"
+GC_BEADS_RIG_LIST_TIMEOUT_SECS="${GC_BEADS_RIG_LIST_TIMEOUT_SECS:-30}"
 
 # run_bounded SECS CMD...  — Run CMD with a wall-clock timeout. Exits
 # 124 on timeout (coreutils convention). Uses --kill-after=2 so an

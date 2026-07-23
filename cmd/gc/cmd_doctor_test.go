@@ -174,72 +174,6 @@ func TestManagedDoltOpsCheckDiscoversRigMetadataOnConfigError(t *testing.T) {
 	}
 }
 
-func TestDoDoctorRunsCityDoltCheckForInheritedBdRigUnderFileBackedCity(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "frontend")
-	if err := os.MkdirAll(filepath.Join(cityDir, ".gc"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(rigDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(`[workspace]
-name = "demo"
-
-[beads]
-provider = "file"
-
-[[rigs]]
-name = "frontend"
-path = "frontend"
-prefix = "fe"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := contract.EnsureCanonicalConfig(fsys.OSFS{}, filepath.Join(rigDir, ".beads", "config.yaml"), contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := contract.EnsureCanonicalMetadata(fsys.OSFS{}, filepath.Join(rigDir, ".beads", "metadata.json"), contract.MetadataState{
-		Database:     "dolt",
-		Backend:      "dolt",
-		DoltMode:     "server",
-		DoltDatabase: "fe",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GC_CITY_PATH", cityDir)
-
-	oldCityCheck := newDoctorDoltServerCheck
-	oldRigCheck := newDoctorRigDoltServerCheck
-	var citySkip, rigSkip *bool
-	newDoctorDoltServerCheck = func(cityPath string, skip bool) *doctor.DoltServerCheck {
-		citySkip = &skip
-		return doctor.NewDoltServerCheck(cityPath, true)
-	}
-	newDoctorRigDoltServerCheck = func(cityPath string, rig config.Rig, skip bool) *doctor.RigDoltServerCheck {
-		rigSkip = &skip
-		return doctor.NewRigDoltServerCheck(cityPath, rig, true)
-	}
-	t.Cleanup(func() {
-		newDoctorDoltServerCheck = oldCityCheck
-		newDoctorRigDoltServerCheck = oldRigCheck
-	})
-
-	var stdout, stderr bytes.Buffer
-	_ = doDoctor(false, false, false, false, 0, &stdout, &stderr)
-
-	if citySkip == nil || *citySkip {
-		t.Fatalf("city dolt check skip = %v, want false when a bd-backed rig inherits the city endpoint", citySkip)
-	}
-	if rigSkip == nil || *rigSkip {
-		t.Fatalf("rig dolt check skip = %v, want false for bd-backed rig", rigSkip)
-	}
-}
-
 func TestDoDoctorRegistersDoltBackupCheckOnlyForActiveManagedRigs(t *testing.T) {
 	clearInheritedBeadsEnv(t)
 
@@ -292,23 +226,15 @@ suspended = true
 	}
 	doltDataDir := filepath.Join(cityDir, "runtime-dolt")
 	t.Setenv("GC_CITY_PATH", cityDir)
-	t.Setenv("GC_DOLT_DATA_DIR", doltDataDir)
+	t.Setenv("GC_BEADS_DATA_DIR", doltDataDir)
 	oldCityFlag := cityFlag
 	cityFlag = cityDir
 	t.Cleanup(func() { cityFlag = oldCityFlag })
 
-	oldCityCheck := newDoctorDoltServerCheck
-	oldRigCheck := newDoctorRigDoltServerCheck
 	oldBackupCheck := newDoctorDoltBackupCheck
 	oldLocalOnlyCheck := newDoctorDoltLocalOnlyCheck
 	registeredBackup := map[string]string{}
 	registeredLocalOnly := map[string]string{}
-	newDoctorDoltServerCheck = func(cityPath string, _ bool) *doctor.DoltServerCheck {
-		return doctor.NewDoltServerCheck(cityPath, true)
-	}
-	newDoctorRigDoltServerCheck = func(cityPath string, rig config.Rig, _ bool) *doctor.RigDoltServerCheck {
-		return doctor.NewRigDoltServerCheck(cityPath, rig, true)
-	}
 	newDoctorDoltBackupCheck = func(cityPath string, rig config.Rig, dataDir string) *doctor.DoltBackupCheck {
 		registeredBackup[rig.Name] = dataDir
 		return doctor.NewDoltBackupCheck(cityPath, rig, dataDir)
@@ -318,8 +244,6 @@ suspended = true
 		return doctor.NewDoltLocalOnlyRemoteCheck(cityPath, rig, dataDir)
 	}
 	t.Cleanup(func() {
-		newDoctorDoltServerCheck = oldCityCheck
-		newDoctorRigDoltServerCheck = oldRigCheck
 		newDoctorDoltBackupCheck = oldBackupCheck
 		newDoctorDoltLocalOnlyCheck = oldLocalOnlyCheck
 	})
@@ -389,23 +313,15 @@ prefix = "ma"
 		t.Fatal(err)
 	}
 	t.Setenv("GC_CITY_PATH", cityDir)
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	oldCityFlag := cityFlag
 	cityFlag = cityDir
 	t.Cleanup(func() { cityFlag = oldCityFlag })
 
-	oldCityCheck := newDoctorDoltServerCheck
-	oldRigCheck := newDoctorRigDoltServerCheck
 	oldBackupCheck := newDoctorDoltBackupCheck
 	oldLocalOnlyCheck := newDoctorDoltLocalOnlyCheck
 	registeredBackup := 0
 	registeredLocalOnly := 0
-	newDoctorDoltServerCheck = func(cityPath string, _ bool) *doctor.DoltServerCheck {
-		return doctor.NewDoltServerCheck(cityPath, true)
-	}
-	newDoctorRigDoltServerCheck = func(cityPath string, rig config.Rig, _ bool) *doctor.RigDoltServerCheck {
-		return doctor.NewRigDoltServerCheck(cityPath, rig, true)
-	}
 	newDoctorDoltBackupCheck = func(cityPath string, rig config.Rig, dataDir string) *doctor.DoltBackupCheck {
 		registeredBackup++
 		return doctor.NewDoltBackupCheck(cityPath, rig, dataDir)
@@ -415,8 +331,6 @@ prefix = "ma"
 		return doctor.NewDoltLocalOnlyRemoteCheck(cityPath, rig, dataDir)
 	}
 	t.Cleanup(func() {
-		newDoctorDoltServerCheck = oldCityCheck
-		newDoctorRigDoltServerCheck = oldRigCheck
 		newDoctorDoltBackupCheck = oldBackupCheck
 		newDoctorDoltLocalOnlyCheck = oldLocalOnlyCheck
 	})
@@ -425,70 +339,10 @@ prefix = "ma"
 	_ = doDoctor(false, false, false, false, 0, &stdout, &stderr)
 
 	if registeredBackup != 0 {
-		t.Fatalf("registered %d dolt-backup checks, want 0 when GC_DOLT=skip", registeredBackup)
+		t.Fatalf("registered %d dolt-backup checks, want 0 when GC_BEADS_SKIP=1", registeredBackup)
 	}
 	if registeredLocalOnly != 0 {
-		t.Fatalf("registered %d dolt-local-only checks, want 0 when GC_DOLT=skip", registeredLocalOnly)
-	}
-}
-
-func TestDoDoctorRunsDoltTopologyForBdRigUnderFileBackedCity(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "frontend")
-	if err := os.MkdirAll(filepath.Join(cityDir, ".gc"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(rigDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(`[workspace]
-name = "demo"
-
-[beads]
-provider = "file"
-
-[[rigs]]
-name = "frontend"
-path = "frontend"
-prefix = "fe"
-dolt_host = "rig.example.com"
-dolt_port = "3308"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	if _, err := contract.EnsureCanonicalMetadata(fsys.OSFS{}, filepath.Join(rigDir, ".beads", "metadata.json"), contract.MetadataState{
-		Database:     "dolt",
-		Backend:      "dolt",
-		DoltMode:     "server",
-		DoltDatabase: "fe",
-	}); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("GC_CITY_PATH", cityDir)
-
-	oldCityCheck := newDoctorDoltServerCheck
-	oldRigCheck := newDoctorRigDoltServerCheck
-	newDoctorDoltServerCheck = func(cityPath string, _ bool) *doctor.DoltServerCheck {
-		return doctor.NewDoltServerCheck(cityPath, true)
-	}
-	newDoctorRigDoltServerCheck = func(cityPath string, rig config.Rig, _ bool) *doctor.RigDoltServerCheck {
-		return doctor.NewRigDoltServerCheck(cityPath, rig, true)
-	}
-	t.Cleanup(func() {
-		newDoctorDoltServerCheck = oldCityCheck
-		newDoctorRigDoltServerCheck = oldRigCheck
-	})
-
-	var stdout, stderr bytes.Buffer
-	_ = doDoctor(false, false, false, false, 0, &stdout, &stderr)
-
-	if !strings.Contains(stdout.String(), "canonical/compat Dolt drift") {
-		t.Fatalf("doctor output missing Dolt topology drift:\nstdout:\n%s\nstderr:\n%s", stdout.String(), stderr.String())
+		t.Fatalf("registered %d dolt-local-only checks, want 0 when GC_BEADS_SKIP=1", registeredLocalOnly)
 	}
 }
 
@@ -513,7 +367,7 @@ source = "https://github.com/gastownhall/gc-actual-packs"
 		t.Fatal(err)
 	}
 	t.Setenv("GC_CITY_PATH", cityDir)
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	cleanupManagedDoltTestCity(t, cityDir)
 
 	var stdout, stderr bytes.Buffer
@@ -702,7 +556,7 @@ func runDoctorForStaleLocalPackDirTest(t *testing.T, cityDir string) string {
 	t.Helper()
 
 	t.Setenv("GC_CITY_PATH", cityDir)
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	cleanupManagedDoltTestCity(t, cityDir)
 
 	var stdout, stderr bytes.Buffer
@@ -916,139 +770,6 @@ func TestDoctorSkipsSuspendedRigChecks(t *testing.T) {
 	}
 	if strings.Contains(out, "suspended-rig") {
 		t.Error("suspended-rig checks should not be registered")
-	}
-}
-
-func TestDoltTopologyCheckReportsCanonicalCompatCityDrift(t *testing.T) {
-	cityDir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(`[workspace]
-name = "demo"
-
-[beads]
-provider = "bd"
-
-[dolt]
-host = "city.example.com"
-port = 3307
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	writeCanonicalScopeConfig(t, cityDir, contract.ConfigState{
-		IssuePrefix:    "hq",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	cfg, err := loadCityConfig(cityDir)
-	if err != nil {
-		t.Fatalf("loadCityConfig: %v", err)
-	}
-
-	res := newDoltTopologyCheck(cityDir, cfg).Run(&doctor.CheckContext{CityPath: cityDir})
-	if res.Status != doctor.StatusError {
-		t.Fatalf("status = %v, want error", res.Status)
-	}
-	if !strings.Contains(res.Message, "deprecated city.toml [dolt] endpoint conflicts") {
-		t.Fatalf("message = %q, want city drift", res.Message)
-	}
-	if res.FixHint == "" {
-		t.Fatal("expected fix hint for topology drift")
-	}
-}
-
-func TestDoltTopologyCheckReportsInheritedRigCompatDrift(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "frontend")
-	if err := os.MkdirAll(rigDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(`[workspace]
-name = "demo"
-
-[beads]
-provider = "bd"
-
-[[rigs]]
-name = "frontend"
-path = "frontend"
-prefix = "fe"
-dolt_host = "rig.example.com"
-dolt_port = "3308"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	writeCanonicalScopeConfig(t, cityDir, contract.ConfigState{
-		IssuePrefix:    "hq",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	cfg, err := loadCityConfig(cityDir)
-	if err != nil {
-		t.Fatalf("loadCityConfig: %v", err)
-	}
-	resolveRigPaths(cityDir, cfg.Rigs)
-
-	res := newDoltTopologyCheck(cityDir, cfg).Run(&doctor.CheckContext{CityPath: cityDir})
-	if res.Status != doctor.StatusError {
-		t.Fatalf("status = %v, want error", res.Status)
-	}
-	if !strings.Contains(res.Message, `deprecated rig dolt_host/dolt_port conflict with inherited canonical endpoint for rig "frontend"`) {
-		t.Fatalf("message = %q, want inherited rig drift", res.Message)
-	}
-}
-
-func TestDoltTopologyCheckAllowsInheritedRigCompatMirrorForExternalCity(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := filepath.Join(cityDir, "frontend")
-	if err := os.MkdirAll(rigDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(`[workspace]
-name = "demo"
-
-[beads]
-provider = "bd"
-
-[dolt]
-host = "city.example.com"
-port = 3307
-
-[[rigs]]
-name = "frontend"
-path = "frontend"
-prefix = "fe"
-dolt_host = "city.example.com"
-dolt_port = "3307"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	writeCanonicalScopeConfig(t, cityDir, contract.ConfigState{
-		IssuePrefix:    "hq",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "city.example.com",
-		DoltPort:       "3307",
-	})
-	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "city.example.com",
-		DoltPort:       "3307",
-	})
-	cfg, err := loadCityConfig(cityDir)
-	if err != nil {
-		t.Fatalf("loadCityConfig: %v", err)
-	}
-	resolveRigPaths(cityDir, cfg.Rigs)
-
-	res := newDoltTopologyCheck(cityDir, cfg).Run(&doctor.CheckContext{CityPath: cityDir})
-	if res.Status != doctor.StatusOK {
-		t.Fatalf("status = %v, want ok; message = %q", res.Status, res.Message)
 	}
 }
 

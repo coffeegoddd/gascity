@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -30,20 +29,19 @@ type cityRigEndpointPlan struct {
 	Update  bool
 }
 
-var verifyCityExternalEndpoint = verifyExternalDoltEndpoint
-
 func newBeadsCityCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "city",
 		Short: "Manage canonical city endpoint topology",
 		Long: `Manage the canonical city endpoint topology for bd-backed beads stores.
 
-Use use-managed to make the city GC-managed again. Use use-external to pin the
-city to an external Dolt endpoint and rewrite inherited rig mirrors.`,
+Use use-external to pin the city to an external Dolt endpoint and rewrite
+inherited rig mirrors. A city with no external endpoint is local by default —
+bd owns the proxied-server, so no command is needed for the common case.`,
 		Args: cobra.ArbitraryArgs,
 		RunE: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 {
-				fmt.Fprintln(stderr, "gc beads city: missing subcommand (use-managed, use-external)") //nolint:errcheck
+				fmt.Fprintln(stderr, "gc beads city: missing subcommand (use-external)") //nolint:errcheck
 			} else {
 				fmt.Fprintf(stderr, "gc beads city: unknown subcommand %q\n", args[0]) //nolint:errcheck
 			}
@@ -51,26 +49,8 @@ city to an external Dolt endpoint and rewrite inherited rig mirrors.`,
 		},
 	}
 	cmd.AddCommand(
-		newBeadsCityUseManagedCmd(stdout, stderr),
 		newBeadsCityUseExternalCmd(stdout, stderr),
 	)
-	return cmd
-}
-
-func newBeadsCityUseManagedCmd(stdout, stderr io.Writer) *cobra.Command {
-	var opts cityEndpointOptions
-	cmd := &cobra.Command{
-		Use:   "use-managed",
-		Short: "Set the city endpoint to GC-managed",
-		Args:  cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			if cmdBeadsCityUseManaged(opts, stdout, stderr) != 0 {
-				return errExit
-			}
-			return nil
-		},
-	}
-	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "show the canonical changes without writing files")
 	return cmd
 }
 
@@ -94,15 +74,6 @@ func newBeadsCityUseExternalCmd(stdout, stderr io.Writer) *cobra.Command {
 	cmd.Flags().BoolVar(&opts.AdoptUnverified, "adopt-unverified", false, "record the endpoint without live validation")
 	cmd.Flags().BoolVar(&opts.DryRun, "dry-run", false, "show the canonical changes without writing files")
 	return cmd
-}
-
-func cmdBeadsCityUseManaged(opts cityEndpointOptions, stdout, stderr io.Writer) int {
-	cityPath, err := resolveCity()
-	if err != nil {
-		fmt.Fprintf(stderr, "gc beads city use-managed: %v\n", err) //nolint:errcheck
-		return 1
-	}
-	return doBeadsCityEndpoint(fsys.OSFS{}, cityPath, opts, stdout, stderr)
 }
 
 func cmdBeadsCityUseExternal(opts cityEndpointOptions, stdout, stderr io.Writer) int {
@@ -157,43 +128,11 @@ func doBeadsCityEndpoint(fs fsys.FS, cityPath string, opts cityEndpointOptions, 
 		return 0
 	}
 
-	if opts.External && !opts.AdoptUnverified {
-		if err := validateCityExternalEndpointChange(cityPath, targetState, plans); err != nil {
-			fmt.Fprintf(stderr, "%s: validate external endpoint: %v\n", name, err)                                      //nolint:errcheck
-			fmt.Fprintf(stderr, "%s: rerun with --adopt-unverified to record this endpoint without validation\n", name) //nolint:errcheck
-			return 1
-		}
-		targetState.EndpointStatus = contract.EndpointStatusVerified
-		for i := range plans {
-			if plans[i].Update {
-				plans[i].Target.EndpointStatus = contract.EndpointStatusVerified
-			}
-		}
-	}
-
-	managedStopScript := ""
-	var managedStopEnv []string
-	if currentState.EndpointOrigin == contract.EndpointOriginManagedCity && targetState.EndpointOrigin == contract.EndpointOriginCityCanonical {
-
-		provider := beadsProvider(cityPath)
-		if strings.HasPrefix(provider, "exec:") && providerUsesBdStoreContract(provider) {
-			managedStopScript = strings.TrimPrefix(provider, "exec:")
-			configuredProvider := configuredBeadsProviderValue(cityPath)
-			if (configuredProvider == "" || configuredProvider == "bd") && execProviderBase(provider) == "gc-beads-bd" {
-				if err := EnsureBuiltinRuntimeAssets(cityPath, os.Stderr); err != nil {
-					fmt.Fprintf(stderr, "%s: materialize managed provider: %v\n", name, err) //nolint:errcheck
-					return 1
-				}
-				managedStopScript = gcBeadsBdScriptPath(cityPath)
-			}
-			providerEnv, err := providerLifecycleProcessEnvWithError(cityPath, provider)
-			if err != nil {
-				fmt.Fprintf(stderr, "%s: building managed provider env: %v\n", name, err) //nolint:errcheck
-				return 1
-			}
-			managedStopEnv = append([]string(nil), providerEnv...)
-		}
-	}
+	// External endpoints are validated by bd when it initializes the
+	// proxied-server-external store; gascity no longer opens its own connection
+	// to pre-verify identity (bd owns the endpoint and the project_id is
+	// authoritative), and bd owns the server lifecycle across the transition.
+	// The endpoint is recorded as-is and bd verifies/reconfigures on init.
 
 	snapshots, err := snapshotCityTopologyFiles(fs, cityPath, plans)
 	if err != nil {
@@ -221,35 +160,13 @@ func doBeadsCityEndpoint(fs fsys.FS, cityPath string, opts cityEndpointOptions, 
 			return 1
 		}
 	}
-	if err := syncCityEndpointCompatConfig(fs, cityPath, filepath.Join(cityPath, "city.toml"), &tomlCfg, targetState, plans); err != nil {
-		writeCityEndpointRollbackError(fs, stderr, snapshots, name, "writing legacy city.toml endpoint config", err)
-		return 1
-	}
-	if err := syncCityManagedPortArtifacts(fs, cityPath, targetState, plans); err != nil {
-		writeCityEndpointRollbackError(fs, stderr, snapshots, name, "syncing managed port artifacts", err)
-		return 1
-	}
-
-	if managedStopScript != "" {
-		if err := runProviderOpWithEnv(managedStopScript, managedStopEnv, "stop"); err != nil {
-			writeCityEndpointRollbackError(fs, stderr, snapshots, name, "stopping managed local provider", err)
-			return 1
-		}
-		if err := clearManagedDoltRuntimeStateUnlessPostgres(cityPath); err != nil {
-			writeCityEndpointRollbackError(fs, stderr, snapshots, name, "clearing managed runtime state", err)
-			return 1
-		}
-	}
 
 	printCityEndpointResult(stdout, targetState, plans)
 	return 0
 }
 
-func cityEndpointCommandName(opts cityEndpointOptions) string {
-	if opts.External {
-		return "gc beads city use-external"
-	}
-	return "gc beads city use-managed"
+func cityEndpointCommandName(_ cityEndpointOptions) string {
+	return "gc beads city use-external"
 }
 
 func validateExplicitExternalHost(host string) error {
@@ -263,15 +180,6 @@ func validateExplicitExternalHost(host string) error {
 }
 
 func validateCityEndpointOptions(opts cityEndpointOptions) error {
-	if !opts.External {
-		if strings.TrimSpace(opts.Host) != "" || strings.TrimSpace(opts.Port) != "" || strings.TrimSpace(opts.User) != "" {
-			return fmt.Errorf("use-managed does not accept --host, --port, or --user")
-		}
-		if opts.AdoptUnverified {
-			return fmt.Errorf("--adopt-unverified is only valid with use-external")
-		}
-		return nil
-	}
 	host := strings.TrimSpace(opts.Host)
 	if host == "" {
 		return fmt.Errorf("use-external requires --host")
@@ -292,29 +200,16 @@ func validateCityEndpointOptions(opts cityEndpointOptions) error {
 
 func requestedCityEndpointState(cfg *config.City, currentState contract.ConfigState, opts cityEndpointOptions) contract.ConfigState {
 	prefix := config.EffectiveHQPrefix(cfg)
-	if !opts.External {
-		return contract.ConfigState{
-			IssuePrefix:    prefix,
-			EndpointOrigin: contract.EndpointOriginManagedCity,
-			EndpointStatus: contract.EndpointStatusVerified,
-		}
-	}
 	user := strings.TrimSpace(opts.User)
-	if user == "" && currentState.EndpointOrigin == contract.EndpointOriginCityCanonical {
+	if user == "" && contract.ConfigHasEndpointAuthority(currentState) {
 		user = strings.TrimSpace(currentState.DoltUser)
 	}
-	state := contract.ConfigState{
-		IssuePrefix:    prefix,
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       strings.TrimSpace(opts.Host),
-		DoltPort:       strings.TrimSpace(opts.Port),
-		DoltUser:       user,
+	return contract.ConfigState{
+		IssuePrefix: prefix,
+		DoltHost:    strings.TrimSpace(opts.Host),
+		DoltPort:    strings.TrimSpace(opts.Port),
+		DoltUser:    user,
 	}
-	if opts.AdoptUnverified {
-		state.EndpointStatus = contract.EndpointStatusUnverified
-	}
-	return state
 }
 
 func planCityRigEndpointUpdates(cityPath string, rigs []config.Rig, currentCityState, targetCityState contract.ConfigState) ([]cityRigEndpointPlan, error) {
@@ -325,7 +220,7 @@ func planCityRigEndpointUpdates(cityPath string, rigs []config.Rig, currentCityS
 			return nil, err
 		}
 		plan := cityRigEndpointPlan{Rig: rigs[i], Current: current, Target: current}
-		if current.EndpointOrigin == contract.EndpointOriginExplicit {
+		if contract.ConfigHasEndpointAuthority(current) {
 			plans = append(plans, plan)
 			continue
 		}
@@ -336,21 +231,6 @@ func planCityRigEndpointUpdates(cityPath string, rigs []config.Rig, currentCityS
 		plans = append(plans, plan)
 	}
 	return plans, nil
-}
-
-func validateCityExternalEndpointChange(cityPath string, targetState contract.ConfigState, plans []cityRigEndpointPlan) error {
-	if err := verifyCityExternalEndpoint(targetState, cityPath, cityPath); err != nil {
-		return fmt.Errorf("city scope: %w", err)
-	}
-	for _, plan := range plans {
-		if !plan.Update {
-			continue
-		}
-		if err := verifyCityExternalEndpoint(plan.Target, plan.Rig.Path, cityPath); err != nil {
-			return fmt.Errorf("rig %s: %w", plan.Rig.Name, err)
-		}
-	}
-	return nil
 }
 
 func snapshotCityTopologyFiles(fs fsys.FS, cityPath string, plans []cityRigEndpointPlan) ([]fileSnapshot, error) {
@@ -409,97 +289,6 @@ func snapshotCityManagedPortFiles(fs fsys.FS, cityPath string, plans []cityRigEn
 	return snapshots, nil
 }
 
-func syncCityEndpointCompatConfig(fs fsys.FS, cityPath, tomlPath string, cfg *config.City, targetState contract.ConfigState, plans []cityRigEndpointPlan) error {
-	changed := false
-	if targetState.EndpointOrigin == contract.EndpointOriginCityCanonical {
-		host := strings.TrimSpace(targetState.DoltHost)
-		port, err := strconv.Atoi(strings.TrimSpace(targetState.DoltPort))
-		if err != nil {
-			return fmt.Errorf("invalid canonical city endpoint port %q: %w", targetState.DoltPort, err)
-		}
-		if cfg.Dolt.Host != host {
-			cfg.Dolt.Host = host
-			changed = true
-		}
-		if cfg.Dolt.Port != port {
-			cfg.Dolt.Port = port
-			changed = true
-		}
-	} else if cfg.Dolt.Host != "" || cfg.Dolt.Port != 0 {
-		cfg.Dolt = config.DoltConfig{}
-		changed = true
-	}
-
-	for i := range cfg.Rigs {
-		rigPath := cfg.Rigs[i].Path
-		if !filepath.IsAbs(rigPath) {
-			rigPath = filepath.Join(cityPath, rigPath)
-		}
-		for _, plan := range plans {
-			if !plan.Update || !samePath(rigPath, plan.Rig.Path) {
-				continue
-			}
-			host := strings.TrimSpace(plan.Target.DoltHost)
-			port := strings.TrimSpace(plan.Target.DoltPort)
-			if cfg.Rigs[i].DoltHost != host {
-				cfg.Rigs[i].DoltHost = host
-				changed = true
-			}
-			if cfg.Rigs[i].DoltPort != port {
-				cfg.Rigs[i].DoltPort = port
-				changed = true
-			}
-			break
-		}
-	}
-	if !changed {
-		return nil
-	}
-	return writeCityConfigForEditFS(fs, tomlPath, cfg)
-}
-
-func syncCityManagedPortArtifacts(fs fsys.FS, cityPath string, cityState contract.ConfigState, plans []cityRigEndpointPlan) error {
-	managedPort := ""
-	if cityState.EndpointOrigin == contract.EndpointOriginManagedCity {
-		owned, err := managedDoltLifecycleOwned(cityPath)
-		if err != nil {
-			return fmt.Errorf("determining managed dolt ownership for port artifact sync: %w", err)
-		}
-		if !owned {
-			return nil
-		}
-		port, err := readManagedRuntimePublishedPort(cityPath)
-		if err != nil {
-			if os.IsNotExist(err) {
-				managedPort = ""
-			} else {
-				return fmt.Errorf("reading managed runtime published port: %w", err)
-			}
-		} else {
-			managedPort = port
-		}
-	}
-	if managedPort != "" {
-		if err := writeDoltPortFileStrict(fs, cityPath, managedPort); err != nil {
-			return err
-		}
-	} else if err := removeDoltPortFileStrict(cityPath); err != nil {
-		return err
-	}
-	for _, plan := range plans {
-		if managedPort != "" && plan.Update && plan.Target.EndpointOrigin == contract.EndpointOriginInheritedCity {
-			if err := writeDoltPortFileStrict(fs, plan.Rig.Path, managedPort); err != nil {
-				return err
-			}
-			continue
-		}
-		if err := removeDoltPortFileStrict(plan.Rig.Path); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func printCityEndpointDryRun(stdout io.Writer, current, target contract.ConfigState, plans []cityRigEndpointPlan) {
 	fmt.Fprintln(stdout, "WOULD UPDATE: city endpoint")                                                            //nolint:errcheck
 	fmt.Fprintf(stdout, "  city: %s -> %s\n", describeRigEndpointState(current), describeRigEndpointState(target)) //nolint:errcheck
@@ -530,15 +319,10 @@ func printCityEndpointResult(stdout io.Writer, state contract.ConfigState, plans
 	}
 }
 
-func cityEndpointFollowupCommand(state contract.ConfigState) string {
-	if state.EndpointOrigin != contract.EndpointOriginCityCanonical || state.EndpointStatus != contract.EndpointStatusUnverified {
-		return ""
-	}
-	parts := []string{"gc beads city use-external", "--host", state.DoltHost, "--port", state.DoltPort}
-	if user := strings.TrimSpace(state.DoltUser); user != "" {
-		parts = append(parts, "--user", user)
-	}
-	return strings.Join(parts, " ")
+func cityEndpointFollowupCommand(_ contract.ConfigState) string {
+	// bd verifies external endpoints at init; there is no gascity-side
+	// "verify later" follow-up to suggest.
+	return ""
 }
 
 func writeCityEndpointRollbackError(fs fsys.FS, stderr io.Writer, snapshots []fileSnapshot, name, action string, cause error) {

@@ -84,7 +84,7 @@ This redesign is explicitly grounded in the current GitHub failure
 history:
 
 - [#245](https://github.com/gastownhall/gascity/issues/245):
-  `GC_DOLT_PORT` versus `BEADS_DOLT_PORT` mismatch
+  `GC_BEADS_PORT` versus `BEADS_DOLT_PORT` mismatch
 - [#506](https://github.com/gastownhall/gascity/issues/506):
   `gc doctor` fails to propagate Dolt port to `bd` subprocesses
 - [#525](https://github.com/gastownhall/gascity/issues/525):
@@ -164,7 +164,7 @@ authorities:
 
 | Concern | Current competing authorities |
 |---|---|
-| Managed runtime endpoint | `.gc/runtime/.../dolt-state.json`, `.beads/dolt-server.port`, `GC_DOLT_PORT`, `BEADS_DOLT_SERVER_PORT`, reachability heuristics |
+| Managed runtime endpoint | `.gc/runtime/.../dolt-state.json`, `.beads/dolt-server.port`, `GC_BEADS_PORT`, `BEADS_DOLT_SERVER_PORT`, reachability heuristics |
 | Database identity | `.beads/metadata.json`, derived prefix defaults, historical metadata preservation logic |
 | Endpoint ownership | city config, rig config, env overrides, K8s-specific file mutation |
 | Raw `bd` compatibility | `.beads/config.yaml`, env projection, process-global mutation |
@@ -421,8 +421,8 @@ These remain observable but are not authoritative:
 The only supported temporary overrides are auth-only execution-context
 overrides:
 
-- `GC_DOLT_USER`
-- `GC_DOLT_PASSWORD`
+- `GC_BEADS_USER`
+- `GC_BEADS_PASSWORD`
 - mirrored `BEADS_DOLT_SERVER_USER`
 - mirrored `BEADS_DOLT_PASSWORD`
 - `BEADS_CREDENTIALS_FILE`
@@ -445,7 +445,7 @@ Auth scope rules:
 
 Effective username precedence is fixed:
 
-1. temporary auth-only process override: `GC_DOLT_USER` or mirrored
+1. temporary auth-only process override: `GC_BEADS_USER` or mirrored
    `BEADS_DOLT_SERVER_USER`
 2. canonical `dolt.user` in the endpoint authority scope's
    `.beads/config.yaml`
@@ -453,7 +453,7 @@ Effective username precedence is fixed:
 
 Effective password precedence is fixed:
 
-1. temporary auth-only process override: `GC_DOLT_PASSWORD` or mirrored
+1. temporary auth-only process override: `GC_BEADS_PASSWORD` or mirrored
    `BEADS_DOLT_PASSWORD`
 2. `.beads/.env` in the endpoint authority scope
 3. beads credentials file selected by `BEADS_CREDENTIALS_FILE` or its
@@ -856,10 +856,10 @@ provider-neutral contract above is the only guaranteed GC interface.
 
 GC-native `bd` consumers use:
 
-- `GC_DOLT_HOST`
-- `GC_DOLT_PORT`
-- `GC_DOLT_USER`
-- `GC_DOLT_PASSWORD`
+- `GC_BEADS_HOST`
+- `GC_BEADS_PORT`
+- `GC_BEADS_USER`
+- `GC_BEADS_PASSWORD`
 
 Non-`bd` providers receive only the universal store-target contract.
 
@@ -876,7 +876,7 @@ Guaranteed inputs:
 Forbidden legacy inputs:
 
 - `BEADS_*`
-- `GC_DOLT_*`
+- `GC_BEADS_*`
 - deprecated `city.toml` Dolt fields by env projection
 
 Conformance rules:
@@ -1513,7 +1513,7 @@ Minimum concrete fixtures:
 
 | Fixture | Operation | Assertions |
 |---|---|---|
-| city `managed_city` | resolve + project | managed runtime publication is the only live endpoint source; `.beads/dolt-server.port` ignored for resolution; `GC_DOLT_*` and `BEADS_*` agree |
+| city `managed_city` | resolve + project | managed runtime publication is the only live endpoint source; `.beads/dolt-server.port` ignored for resolution; `GC_BEADS_*` and `BEADS_*` agree |
 | city `city_canonical` verified | resolve + project | canonical external host, port, user emitted; no managed lifecycle owner |
 | city `city_canonical` unverified | resolve + startup validation | canonical endpoint retained; startup reports typed unverified failure or promotes to verified after success |
 | rig `inherited_city` under managed city | resolve + project | no tracked external endpoint defaults; database identity stays rig-local |
@@ -1528,7 +1528,7 @@ For every valid resolver fixture, assert:
 - resolved database identity
 - projected GC-native env when provider is `bd`
 - projected `bd` compatibility env when relevant
-- absence of `GC_DOLT_*` and `BEADS_*` for non-`bd` providers
+- absence of `GC_BEADS_*` and `BEADS_*` for non-`bd` providers
 
 ### Invalid-state matrix
 
@@ -1599,7 +1599,7 @@ Cover:
   `GC_STORE_ROOT`, `GC_STORE_SCOPE`, `GC_BEADS_PREFIX`
 - `bd` adapter deriving `BEADS_DIR` from the GC-native contract
 - `ScopePrefix` treated as opaque routing metadata by non-`bd` providers
-- no `GC_DOLT_*` or `BEADS_*` projected to non-`bd` providers
+- no `GC_BEADS_*` or `BEADS_*` projected to non-`bd` providers
 
 ### Startup and doctor tests
 
@@ -1640,7 +1640,7 @@ Cover:
 
 | Historical record | Caller classes | Required contract tests | Required assertion |
 |---|---|---|---|
-| [#245](https://github.com/gastownhall/gascity/issues/245) | `gc bd`, projected shells, K8s adapter | `TestProjectedEnvClearsAmbientDoltVars`, `TestGcBdUsesProjectionNotAmbientEnv`, `TestK8sProjectionUsesResolvedEnv` | one projection owner emits matching `GC_DOLT_*` and `BEADS_*`; stale parent env is cleared everywhere |
+| [#245](https://github.com/gastownhall/gascity/issues/245) | `gc bd`, projected shells, K8s adapter | `TestProjectedEnvClearsAmbientDoltVars`, `TestGcBdUsesProjectionNotAmbientEnv`, `TestK8sProjectionUsesResolvedEnv` | one projection owner emits matching `GC_BEADS_*` and `BEADS_*`; stale parent env is cleared everywhere |
 | [#506](https://github.com/gastownhall/gascity/issues/506) | `gc doctor`, doctor subprocess env | `TestDoctorUsesResolvedManagedPort`, `TestDoctorSubprocessEnvUsesProjection` | doctor reports runtime-publication port only and never shells out with stale port-file authority |
 | [#525](https://github.com/gastownhall/gascity/issues/525) | resolver, startup validation, repair | `TestResolverRejectsStaleManagedPublication`, `TestManagedPortFileIgnoredForResolution`, `TestManagedUnavailablePointsToGCRepair` | resolver returns managed endpoint unavailable; no fallback to port file; repair path points to GC-owned recovery |
 | [#541](https://github.com/gastownhall/gascity/issues/541) | session env projection, startup helpers, controller and runtime helpers | `TestSanitizeAndPopulateProjection`, `TestStartupHelpersDoNotLeakAmbientBeadsEnv`, `TestControllerRuntimeHelpersUseProjection` | sanitize-and-populate removes unsupported keys and emits only resolved target values across all caller classes |
@@ -1741,7 +1741,7 @@ Verification:
   - GC-native store-target env
   - GC-native Dolt env
   - `bd` compatibility env
-- Sanitize ambient `GC_DOLT_*` and `BEADS_*` before projection.
+- Sanitize ambient `GC_BEADS_*` and `BEADS_*` before projection.
 
 Likely files:
 

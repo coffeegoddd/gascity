@@ -56,12 +56,7 @@ func currentGCBinaryForTests(t *testing.T) string {
 			testGCBinaryErr = fmt.Errorf("go build -o %s .: %w\n%s", realBinPath, err, string(out))
 			return
 		}
-		wrapper := fmt.Sprintf("#!/bin/sh\nexport %s=1\nif [ -z \"${%s:-}\" ]; then\n  export %s=$PPID\nfi\nexec %q \"$@\"\n",
-			managedDoltTestModeEnv,
-			managedDoltTestParentPIDEnv,
-			managedDoltTestParentPIDEnv,
-			realBinPath,
-		)
+		wrapper := fmt.Sprintf("#!/bin/sh\nexec %q \"$@\"\n", realBinPath)
 		if err := os.WriteFile(binPath, []byte(wrapper), 0o755); err != nil {
 			testGCBinaryErr = fmt.Errorf("write gc test wrapper: %w", err)
 			return

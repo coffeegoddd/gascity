@@ -2,7 +2,7 @@
 
 > **Status:** decomposing — 2026-05-11
 > **Parent architecture:** `ga-lsois` (closed) — *Dog/maintenance
-> scripts default `GC_DOLT_PORT=3307` → CRITICAL alarm fatigue.*
+> scripts default `GC_BEADS_PORT=3307` → CRITICAL alarm fatigue.*
 > **Designer spec:** `ga-u0lx9p` — full design body (684 lines, 3
 > graphviz visuals); pins function body, stderr template, exit
 > code, source-line edits, lint test, and the 8 builder tests.
@@ -17,7 +17,7 @@ Slice 1 of architect ga-lsois deleted the silent `:=3307` /
 `dolt-target.sh` (now a Core maintenance script) and replaced it with a shared
 `resolve_dolt_port_or_die` helper that emits a structured stderr
 error and exits **78** (`EX_CONFIG`). Operator overrides via
-`GC_DOLT_PORT` still take precedence.
+`GC_BEADS_PORT` still take precedence.
 
 The designer (ga-u0lx9p) pinned every byte the builder needs:
 
@@ -27,7 +27,7 @@ The designer (ga-u0lx9p) pinned every byte the builder needs:
 - Source-line edits at `runtime.sh:200-205` (-6/+5) and
   `dolt-target.sh:145-150` (-6/+3).
 - CI lint at `test/packlint/no_dolt_3307_fallback_test.go` with
-  the verbatim test body and regex `GC_DOLT_PORT.*3307`.
+  the verbatim test body and regex `GC_BEADS_PORT.*3307`.
 - Builder-test cases (env override, discovery success, missing
   state, present-but-not-running, runtime sources helper,
   dolt-target sources helper, exit 78 on empty state, lint
@@ -61,7 +61,7 @@ mirror the designer's §8 acceptance checklist):
 - [ ] `dolt-target.sh:145-150` replaced per ga-u0lx9p §5.2 (-6/+3 lines).
 - [ ] `test/packlint/no_dolt_3307_fallback_test.go::TestNoDolt3307FallbackInScripts`
       passes, walks `.gc/system/packs/`, matches regex
-      `GC_DOLT_PORT.*3307`.
+      `GC_BEADS_PORT.*3307`.
 - [ ] All 8 tests from ga-u0lx9p §10 implemented and passing.
 - [ ] `go test ./...` green; `go vet ./...` clean.
 - [ ] No new env vars introduced. POSIX `/bin/sh` only in the
@@ -87,7 +87,7 @@ mirror the designer's §8 acceptance checklist):
   command-substitution failure leaves `$?` non-zero but the
   caller continues with an empty port. This is the standard
   POSIX guard.
-- **Lint regex is intentionally broad.** `GC_DOLT_PORT.*3307`
+- **Lint regex is intentionally broad.** `GC_BEADS_PORT.*3307`
   catches every variant the operator might re-introduce. False
   positives are easier to allowlist than false negatives are to
   catch.
@@ -103,7 +103,7 @@ this slice:
   and `dolt-target.sh:114` → P3 follow-on bead (designer noted
   the skeleton in ga-u0lx9p §11).
 - Supervisor-side env injection (`gc start` exports
-  `GC_DOLT_PORT` into agent envs) → architect explicit deferral.
+  `GC_BEADS_PORT` into agent envs) → architect explicit deferral.
 - Migrating runtime state to a one-int-per-line format → architect
   explicit deferral.
 - Localizing the stderr message → project-wide concern.

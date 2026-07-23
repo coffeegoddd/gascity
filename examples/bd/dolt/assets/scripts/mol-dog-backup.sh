@@ -11,18 +11,18 @@ PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." 
 . "$PACK_DIR/assets/scripts/runtime.sh"
 . "$PACK_DIR/assets/scripts/_notify.sh"
 
-PORT="$GC_DOLT_PORT"
-HOST="${GC_DOLT_HOST:-127.0.0.1}"
-USER="${GC_DOLT_USER:-root}"
+PORT="$GC_BEADS_PORT"
+HOST="${GC_BEADS_HOST:-127.0.0.1}"
+USER="${GC_BEADS_USER:-root}"
 OFFSITE_PATH="${GC_BACKUP_OFFSITE_PATH:-}"
 BACKUP_ARTIFACT_DIR="${GC_BACKUP_ARTIFACT_DIR:-$GC_CITY_PATH/.dolt-backup}"
 SYSTEM_DBS="^(information_schema|mysql|dolt_cluster|__gc_probe|performance_schema|sys)$"
 MIN_DOLT_BACKUP_VERSION="2.1.0"
-BACKUP_LOCK_FILE="${GC_DOLT_BACKUP_LOCK_FILE:-$GC_CITY_PATH/.gc/runtime/packs/dolt/backup-sync.lock}"
-BACKUP_LOCK_WAIT_SECONDS="${GC_DOLT_BACKUP_LOCK_WAIT_SECONDS:-5}"
+BACKUP_LOCK_FILE="${GC_BEADS_BACKUP_LOCK_FILE:-$GC_CITY_PATH/.gc/runtime/packs/dolt/backup-sync.lock}"
+BACKUP_LOCK_WAIT_SECONDS="${GC_BEADS_BACKUP_LOCK_WAIT_SECONDS:-5}"
 
 dolt_sql() {
-    DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}" \
+    DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}" \
         run_bounded 30 \
         dolt --host "$HOST" --port "$PORT" --user "$USER" --no-tls sql "$@"
 }

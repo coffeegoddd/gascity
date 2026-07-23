@@ -1,357 +1,155 @@
 package api
 
 import (
-	"encoding/json"
-	"net"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
+	"time"
 
-	mysql "github.com/go-sql-driver/mysql"
-
-	"github.com/gastownhall/gascity/internal/beads/contract"
-	"github.com/gastownhall/gascity/internal/fsys"
+	"github.com/gastownhall/gascity/internal/beads"
 )
 
-func TestResolveDoltConnectionUsesCanonicalExternalEndpoint(t *testing.T) {
-	clearDoltAuthEnv(t)
-	fs := fsys.OSFS{}
-	city := t.TempDir()
-	rig := filepath.Join(t.TempDir(), "frontend")
+// fakeSQLQuerier is a beads.SQLQuerier that answers the fixed set of bulk reads
+// workflowSQLSnapshot issues, routing by SQL substring. It pins the exact
+// `bd sql --json` row shape the parser depends on (a JSON array of row objects
+// keyed by the aliased column names), so a bd output-format change can't
+// silently break workflow rendering.
+type fakeSQLQuerier struct {
+	responses map[string]string
+	queries   []string
+}
 
-	mustWriteCanonicalConfig(t, fs, city, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusUnverified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, city, "hq")
+func (f *fakeSQLQuerier) QueryJSON(query string) ([]byte, error) {
+	f.queries = append(f.queries, query)
+	q := strings.Join(strings.Fields(query), " ") // normalize whitespace
+	switch {
+	case strings.Contains(q, "information_schema.tables") && strings.Contains(q, "'issues'"):
+		return []byte(`[{"n":1}]`), nil
+	case strings.Contains(q, "information_schema.tables") && strings.Contains(q, "'wisps'"):
+		return []byte(`[{"n":0}]`), nil
+	case strings.Contains(q, "information_schema.tables") && strings.Contains(q, "'dependencies'"):
+		return []byte(`[{"n":1}]`), nil
+	case strings.Contains(q, "information_schema.tables") && strings.Contains(q, "'labels'"):
+		return []byte(`[{"n":1}]`), nil
+	case strings.Contains(q, "information_schema.columns"):
+		return []byte(`[{"column_name":"depends_on_id"}]`), nil
+	// deps/labels reads embed a `FROM issues i` id subquery, so match them
+	// before the plain bead read.
+	case strings.Contains(q, "FROM dependencies d"):
+		return []byte(f.responses["deps"]), nil
+	case strings.Contains(q, "FROM labels l"):
+		return []byte(f.responses["labels"]), nil
+	case strings.Contains(q, "FROM issues i"):
+		return []byte(f.responses["beads"]), nil
+	}
+	return []byte(`[]`), nil
+}
 
-	targetHost, targetPort, database, user, password, err := resolveDoltConnection(city, city)
+// TestWorkflowSQLSnapshotParsesBdSQLJSON is the golden row-shape test: it drives
+// the whole snapshot off canned `bd sql --json` payloads and asserts the parsed
+// beads, metadata, timestamps, deps, and labels. The metadata column is
+// deliberately exercised in both forms dolt emits — an embedded object and a
+// JSON-encoded string — plus a null assignee, to lock the decoder's contract.
+func TestWorkflowSQLSnapshotParsesBdSQLJSON(t *testing.T) {
+	q := &fakeSQLQuerier{responses: map[string]string{
+		"beads": `[
+			{"id":"bd-1","title":"Root","status":"open","issue_type":"molecule","assignee":null,"description":"root","created_at":"2026-01-01 00:00:00","updated_at":"2026-01-02 03:04:05","metadata":"{\"gc.root_bead_id\":\"bd-1\",\"gc.kind\":\"workflow\"}"},
+			{"id":"bd-2","title":"Step","status":"closed","issue_type":"step","assignee":"agent-a","description":"child","created_at":"2026-01-01T01:00:00Z","updated_at":"2026-01-01T02:00:00Z","metadata":{"gc.root_bead_id":"bd-1"}}
+		]`,
+		"deps":   `[{"issue_id":"bd-2","depends_on":"bd-1","dep_type":"blocks"}]`,
+		"labels": `[{"issue_id":"bd-1","label":"priority"},{"issue_id":"bd-1","label":"root"}]`,
+	}}
+
+	workflowBeads, index, depMap, err := workflowSQLSnapshot(q, "bd-1")
 	if err != nil {
-		t.Fatalf("resolveDoltConnection(city) error = %v", err)
+		t.Fatalf("workflowSQLSnapshot() error = %v", err)
 	}
-	if targetHost != "db.example.com" || targetPort != 3307 || database != "hq" || user != "agent" || password != "" {
-		t.Fatalf("city target = (%q, %d, %q, %q, %q)", targetHost, targetPort, database, user, password)
+	if len(workflowBeads) != 2 {
+		t.Fatalf("got %d beads, want 2", len(workflowBeads))
 	}
 
-	mustWriteCanonicalConfig(t, fs, rig, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusUnverified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "4406",
-		DoltUser:       "rig-agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, rig, "fe")
-
-	targetHost, targetPort, database, user, password, err = resolveDoltConnection(city, rig)
-	if err != nil {
-		t.Fatalf("resolveDoltConnection(rig) error = %v", err)
+	root, ok := index["bd-1"]
+	if !ok {
+		t.Fatal("root bd-1 missing from index")
 	}
-	if targetHost != "rig-db.example.com" || targetPort != 4406 || database != "fe" || user != "rig-agent" || password != "" {
-		t.Fatalf("rig target = (%q, %d, %q, %q, %q)", targetHost, targetPort, database, user, password)
+	if root.Title != "Root" || root.Status != "open" || root.Type != "molecule" {
+		t.Errorf("root fields = %+v", root)
+	}
+	if root.Assignee != "" {
+		t.Errorf("root assignee = %q, want empty (null)", root.Assignee)
+	}
+	// metadata supplied as a JSON-encoded string must decode to the map.
+	if root.Metadata["gc.root_bead_id"] != "bd-1" || root.Metadata["gc.kind"] != "workflow" {
+		t.Errorf("root metadata = %v, want decoded gc.root_bead_id/gc.kind", root.Metadata)
+	}
+	wantCreated := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if !root.CreatedAt.Equal(wantCreated) {
+		t.Errorf("root created_at = %v, want %v", root.CreatedAt, wantCreated)
+	}
+	if got := root.Labels; len(got) != 2 || got[0] != "priority" || got[1] != "root" {
+		t.Errorf("root labels = %v, want [priority root]", got)
+	}
+
+	child := index["bd-2"]
+	// metadata supplied as an embedded object must decode identically.
+	if child.Metadata["gc.root_bead_id"] != "bd-1" {
+		t.Errorf("child metadata = %v, want gc.root_bead_id=bd-1", child.Metadata)
+	}
+	if child.Assignee != "agent-a" {
+		t.Errorf("child assignee = %q, want agent-a", child.Assignee)
+	}
+
+	deps := depMap["bd-2"]
+	if len(deps) != 1 || deps[0].DependsOnID != "bd-1" || deps[0].Type != "blocks" {
+		t.Errorf("deps[bd-2] = %+v, want one blocks->bd-1", deps)
 	}
 }
 
-func TestResolveDoltConnectionUsesInheritedCityEndpoint(t *testing.T) {
-	clearDoltAuthEnv(t)
-	fs := fsys.OSFS{}
-	city := t.TempDir()
-	rig := filepath.Join(t.TempDir(), "frontend")
-
-	mustWriteCanonicalConfig(t, fs, city, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, city, "hq")
-	mustWriteCanonicalConfig(t, fs, rig, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusUnverified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, rig, "fe")
-
-	targetHost, targetPort, database, user, password, err := resolveDoltConnection(city, rig)
-	if err != nil {
-		t.Fatalf("resolveDoltConnection(rig) error = %v", err)
+func TestSQLQuoteEscapesSingleQuotes(t *testing.T) {
+	cases := map[string]string{
+		"bd-1":      "'bd-1'",
+		"a'b":       "'a''b'",
+		"'; DROP--": "'''; DROP--'",
 	}
-	if targetHost != "db.example.com" || targetPort != 3307 || database != "fe" || user != "agent" || password != "" {
-		t.Fatalf("inherited rig target = (%q, %d, %q, %q, %q)", targetHost, targetPort, database, user, password)
+	for in, want := range cases {
+		if got := sqlQuote(in); got != want {
+			t.Errorf("sqlQuote(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 
-func TestResolveDoltConnectionInheritedRigUsesCityStorePassword(t *testing.T) {
-	clearDoltAuthEnv(t)
-	fs := fsys.OSFS{}
-	city := t.TempDir()
-	rig := filepath.Join(t.TempDir(), "frontend")
-
-	mustWriteCanonicalConfig(t, fs, city, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, city, "hq")
-	mustWriteStorePassword(t, city, "city-secret")
-
-	mustWriteCanonicalConfig(t, fs, rig, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, rig, "fe")
-	mustWriteStorePassword(t, rig, "rig-secret")
-
-	host, port, database, user, password, err := resolveDoltConnection(city, rig)
-	if err != nil {
-		t.Fatalf("resolveDoltConnection(rig) error = %v", err)
+func TestWorkflowSQLDecodeMetadata(t *testing.T) {
+	// embedded object
+	if got := workflowSQLDecodeMetadata([]byte(`{"k":"v","n":3}`)); got["k"] != "v" || got["n"] != "3" {
+		t.Errorf("embedded object decode = %v", got)
 	}
-	if host != "db.example.com" || port != 3307 || database != "fe" || user != "agent" || password != "city-secret" {
-		t.Fatalf("inherited rig target = (%q, %d, %q, %q, %q)", host, port, database, user, password)
+	// JSON-encoded string
+	if got := workflowSQLDecodeMetadata([]byte(`"{\"k\":\"v\"}"`)); got["k"] != "v" {
+		t.Errorf("string-encoded decode = %v", got)
+	}
+	// null / empty
+	if got := workflowSQLDecodeMetadata([]byte(`null`)); got != nil {
+		t.Errorf("null decode = %v, want nil", got)
+	}
+	if got := workflowSQLDecodeMetadata(nil); got != nil {
+		t.Errorf("empty decode = %v, want nil", got)
 	}
 }
 
-func TestResolveDoltConnectionExplicitRigUsesRigStorePassword(t *testing.T) {
-	clearDoltAuthEnv(t)
-	fs := fsys.OSFS{}
-	city := t.TempDir()
-	rig := filepath.Join(t.TempDir(), "frontend")
-
-	mustWriteCanonicalConfig(t, fs, city, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "city-agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, city, "hq")
-	mustWriteStorePassword(t, city, "city-secret")
-
-	mustWriteCanonicalConfig(t, fs, rig, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "4406",
-		DoltUser:       "rig-agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, rig, "fe")
-	mustWriteStorePassword(t, rig, "rig-secret")
-
-	host, port, database, user, password, err := resolveDoltConnection(city, rig)
-	if err != nil {
-		t.Fatalf("resolveDoltConnection(rig) error = %v", err)
+func TestWorkflowSQLParseTime(t *testing.T) {
+	for _, in := range []string{
+		"2026-01-02 03:04:05",
+		"2026-01-02T03:04:05Z",
+		"2026-01-02 03:04:05.123456",
+	} {
+		if workflowSQLParseTime(in).IsZero() {
+			t.Errorf("parseTime(%q) returned zero", in)
+		}
 	}
-	if host != "rig-db.example.com" || port != 4406 || database != "fe" || user != "rig-agent" || password != "rig-secret" {
-		t.Fatalf("explicit rig target = (%q, %d, %q, %q, %q)", host, port, database, user, password)
+	if !workflowSQLParseTime("not-a-time").IsZero() {
+		t.Error("parseTime(garbage) should be zero")
 	}
 }
 
-func TestResolveDoltConnectionUsesCredentialsFileFallback(t *testing.T) {
-	clearDoltAuthEnv(t)
-	fs := fsys.OSFS{}
-	city := t.TempDir()
-	rig := filepath.Join(t.TempDir(), "frontend")
-
-	mustWriteCanonicalConfig(t, fs, city, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginCityCanonical,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, city, "hq")
-	mustWriteCanonicalConfig(t, fs, rig, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "agent",
-	})
-	mustWriteCanonicalMetadata(t, fs, rig, "fe")
-	credentialsPath := mustWriteCredentialsFile(t, "db.example.com", 3307, "credentials-secret")
-	t.Setenv("BEADS_CREDENTIALS_FILE", credentialsPath)
-
-	host, port, database, user, password, err := resolveDoltConnection(city, rig)
-	if err != nil {
-		t.Fatalf("resolveDoltConnection(rig) error = %v", err)
-	}
-	if host != "db.example.com" || port != 3307 || database != "fe" || user != "agent" || password != "credentials-secret" {
-		t.Fatalf("credentials target = (%q, %d, %q, %q, %q)", host, port, database, user, password)
-	}
-}
-
-func TestResolveDoltConnectionUsesManagedRuntimePort(t *testing.T) {
-	clearDoltAuthEnv(t)
-	fs := fsys.OSFS{}
-	city := t.TempDir()
-	mustWriteCanonicalConfig(t, fs, city, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	mustWriteCanonicalMetadata(t, fs, city, "hq")
-	managedPort := mustWriteManagedRuntimeState(t, fs, city, 0)
-
-	host, port, database, user, password, err := resolveDoltConnection(city, city)
-	if err != nil {
-		t.Fatalf("resolveDoltConnection() error = %v", err)
-	}
-	if host != "127.0.0.1" || port != managedPort || database != "hq" || user != "" || password != "" {
-		t.Fatalf("managed target = (%q, %d, %q, %q, %q)", host, port, database, user, password)
-	}
-}
-
-func TestResolveDoltConnectionRejectsInvalidCityExplicitOrigin(t *testing.T) {
-	clearDoltAuthEnv(t)
-	fs := fsys.OSFS{}
-	city := t.TempDir()
-	mustWriteCanonicalConfig(t, fs, city, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-	})
-	mustWriteCanonicalMetadata(t, fs, city, "hq")
-
-	if _, _, _, _, _, err := resolveDoltConnection(city, city); err == nil || !strings.Contains(err.Error(), "invalid for city scope") {
-		t.Fatalf("resolveDoltConnection() error = %v, want city-scope origin rejection", err)
-	}
-}
-
-func TestBuildDoltDSNUsesResolvedUserAndPassword(t *testing.T) {
-	tests := []struct {
-		name     string
-		user     string
-		password string
-		want     string
-	}{
-		{name: "explicit user", user: "agent", want: "agent@tcp(db.example.com:3307)/hq?checkConnLiveness=false&parseTime=true&timeout=10s&maxAllowedPacket=0"},
-		{name: "defaults to root", user: "", want: "root@tcp(db.example.com:3307)/hq?checkConnLiveness=false&parseTime=true&timeout=10s&maxAllowedPacket=0"},
-		{name: "escapes password", user: "agent", password: "p@ss:word", want: "agent:p@ss:word@tcp(db.example.com:3307)/hq?checkConnLiveness=false&parseTime=true&timeout=10s&maxAllowedPacket=0"},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := buildDoltDSN(tt.user, tt.password, "db.example.com", 3307, "hq")
-			if got != tt.want {
-				t.Fatalf("buildDoltDSN() = %q, want %q", got, tt.want)
-			}
-			cfg, err := mysql.ParseDSN(got)
-			if err != nil {
-				t.Fatalf("ParseDSN(%q) error = %v", got, err)
-			}
-			if !cfg.AllowNativePasswords {
-				t.Fatal("buildDoltDSN() disabled mysql native password authentication")
-			}
-		})
-	}
-}
-
-func clearDoltAuthEnv(t *testing.T) {
-	t.Helper()
-	for _, key := range []string{"GC_DOLT_USER", "GC_DOLT_PASSWORD", "BEADS_DOLT_PASSWORD", "BEADS_CREDENTIALS_FILE"} {
-		t.Setenv(key, "")
-	}
-}
-
-//nolint:unparam // helper keeps FS explicit in tests
-func mustWriteCanonicalConfig(t *testing.T, fs fsys.FS, dir string, state contract.ConfigState) {
-	t.Helper()
-	if err := fs.MkdirAll(filepath.Join(dir, ".beads"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := contract.EnsureCanonicalConfig(fs, filepath.Join(dir, ".beads", "config.yaml"), state); err != nil {
-		t.Fatal(err)
-	}
-}
-
-//nolint:unparam // helper keeps FS explicit in tests
-func mustWriteCanonicalMetadata(t *testing.T, fs fsys.FS, dir, db string) {
-	t.Helper()
-	if _, err := contract.EnsureCanonicalMetadata(fs, filepath.Join(dir, ".beads", "metadata.json"), contract.MetadataState{
-		Database:     "dolt",
-		Backend:      "dolt",
-		DoltMode:     "server",
-		DoltDatabase: db,
-	}); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func mustWriteStorePassword(t *testing.T, dir, password string) {
-	t.Helper()
-	if err := os.MkdirAll(filepath.Join(dir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(dir, ".beads", ".env"), []byte("BEADS_DOLT_PASSWORD="+password+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-}
-
-func mustWriteCredentialsFile(t *testing.T, host string, port int, password string) string {
-	t.Helper()
-	path := filepath.Join(t.TempDir(), "credentials")
-	contents := "[" + host + ":" + strconv.Itoa(port) + "]\npassword=" + password + "\n"
-	if err := os.WriteFile(path, []byte(contents), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-func mustWriteManagedRuntimeState(t *testing.T, fs fsys.FS, city string, port int) int {
-	t.Helper()
-	stateDir := filepath.Join(city, ".gc", "runtime", "packs", "dolt")
-	if err := fs.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	addr := "127.0.0.1:0"
-	if port > 0 {
-		addr = net.JoinHostPort("127.0.0.1", strconv.Itoa(port))
-	}
-	ln, err := net.Listen("tcp", addr)
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = ln.Close() })
-	port = ln.Addr().(*net.TCPAddr).Port
-	payload, err := json.Marshal(struct {
-		Running bool   `json:"running"`
-		PID     int    `json:"pid"`
-		Port    int    `json:"port"`
-		DataDir string `json:"data_dir"`
-	}{
-		Running: true,
-		PID:     os.Getpid(),
-		Port:    port,
-		DataDir: filepath.Join(city, ".beads", "dolt"),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(stateDir, "dolt-state.json"), payload, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return port
-}
+// compile-time assertion that *beads.BdStore satisfies the capability the
+// snapshot path type-asserts.
+var _ beads.SQLQuerier = (*beads.BdStore)(nil)

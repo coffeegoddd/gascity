@@ -34,12 +34,12 @@ func resolveManagedDoltRuntimeLayout(cityPath string) (managedDoltRuntimeLayout,
 			packStateDir = citylayout.PackStateDir(cityPath, "dolt")
 		}
 	}
-	dataDir := defaultEnvPath("GC_DOLT_DATA_DIR", filepath.Join(cityPath, ".beads", "dolt"))
-	logFile := defaultEnvPath("GC_DOLT_LOG_FILE", filepath.Join(packStateDir, "dolt.log"))
-	stateFile := defaultEnvPath("GC_DOLT_STATE_FILE", filepath.Join(packStateDir, "dolt-provider-state.json"))
-	pidFile := defaultEnvPath("GC_DOLT_PID_FILE", filepath.Join(packStateDir, "dolt.pid"))
-	lockFile := defaultEnvPath("GC_DOLT_LOCK_FILE", filepath.Join(packStateDir, "dolt.lock"))
-	configFile := defaultEnvPath("GC_DOLT_CONFIG_FILE", filepath.Join(packStateDir, "dolt-config.yaml"))
+	dataDir := defaultEnvPath("GC_BEADS_DATA_DIR", filepath.Join(cityPath, ".beads", "dolt"))
+	logFile := defaultEnvPath("GC_BEADS_LOG_FILE", filepath.Join(packStateDir, "dolt.log"))
+	stateFile := defaultEnvPath("GC_BEADS_STATE_FILE", filepath.Join(packStateDir, "dolt-provider-state.json"))
+	pidFile := defaultEnvPath("GC_BEADS_PID_FILE", filepath.Join(packStateDir, "dolt.pid"))
+	lockFile := defaultEnvPath("GC_BEADS_LOCK_FILE", filepath.Join(packStateDir, "dolt.lock"))
+	configFile := defaultEnvPath("GC_BEADS_CONFIG_FILE", filepath.Join(packStateDir, "dolt-config.yaml"))
 
 	return managedDoltRuntimeLayout{
 		PackStateDir: packStateDir,
@@ -57,16 +57,4 @@ func defaultEnvPath(key, fallback string) string {
 		return normalizePathForCompare(value)
 	}
 	return normalizePathForCompare(fallback)
-}
-
-func doltRuntimeLayoutFields(layout managedDoltRuntimeLayout) []string {
-	return []string{
-		"GC_PACK_STATE_DIR\t" + layout.PackStateDir,
-		"GC_DOLT_DATA_DIR\t" + layout.DataDir,
-		"GC_DOLT_LOG_FILE\t" + layout.LogFile,
-		"GC_DOLT_STATE_FILE\t" + layout.StateFile,
-		"GC_DOLT_PID_FILE\t" + layout.PIDFile,
-		"GC_DOLT_LOCK_FILE\t" + layout.LockFile,
-		"GC_DOLT_CONFIG_FILE\t" + layout.ConfigFile,
-	}
 }

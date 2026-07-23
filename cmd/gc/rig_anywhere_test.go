@@ -557,7 +557,7 @@ func TestRigAnywhere_ResolveContext(t *testing.T) {
 func TestRigAnywhere_RigAddName(t *testing.T) {
 	t.Run("name_flag_overrides_basename", func(t *testing.T) {
 		t.Setenv("GC_HOME", t.TempDir())
-		t.Setenv("GC_DOLT", "skip")
+		t.Setenv("GC_BEADS_SKIP", "skip")
 		t.Setenv("GC_BEADS", "file")
 
 		cityPath := setupCity(t, "test-city")
@@ -592,7 +592,7 @@ func TestRigAnywhere_RigAddName(t *testing.T) {
 
 	t.Run("no_name_flag_uses_basename", func(t *testing.T) {
 		t.Setenv("GC_HOME", t.TempDir())
-		t.Setenv("GC_DOLT", "skip")
+		t.Setenv("GC_BEADS_SKIP", "skip")
 		t.Setenv("GC_BEADS", "file")
 
 		cityPath := setupCity(t, "test-city")
@@ -619,7 +619,7 @@ func TestRigAnywhere_RigAddName(t *testing.T) {
 	t.Run("same_name_allowed_in_different_cities", func(t *testing.T) {
 		gcHome := t.TempDir()
 		t.Setenv("GC_HOME", gcHome)
-		t.Setenv("GC_DOLT", "skip")
+		t.Setenv("GC_BEADS_SKIP", "skip")
 		t.Setenv("GC_BEADS", "file")
 
 		city1 := setupCity(t, "city-one")
@@ -664,7 +664,7 @@ func TestRigAnywhere_RigAddSiteBindingSync(t *testing.T) {
 	t.Run("add_writes_site_binding_not_cities_toml_rigs", func(t *testing.T) {
 		gcHome := t.TempDir()
 		t.Setenv("GC_HOME", gcHome)
-		t.Setenv("GC_DOLT", "skip")
+		t.Setenv("GC_BEADS_SKIP", "skip")
 		t.Setenv("GC_BEADS", "file")
 
 		cityPath := setupCity(t, "sync-city")
@@ -696,7 +696,7 @@ func TestRigAnywhere_RigAddSiteBindingSync(t *testing.T) {
 	t.Run("re_add_same_city_idempotent", func(t *testing.T) {
 		gcHome := t.TempDir()
 		t.Setenv("GC_HOME", gcHome)
-		t.Setenv("GC_DOLT", "skip")
+		t.Setenv("GC_BEADS_SKIP", "skip")
 		t.Setenv("GC_BEADS", "file")
 
 		cityPath := setupCity(t, "idem-city")
@@ -746,7 +746,7 @@ func TestRigAnywhere_RigAddSiteBindingSync(t *testing.T) {
 func TestRigAnywhere_RigAddBeadsEnv(t *testing.T) {
 	t.Run("writes_gt_root", func(t *testing.T) {
 		t.Setenv("GC_HOME", t.TempDir())
-		t.Setenv("GC_DOLT", "skip")
+		t.Setenv("GC_BEADS_SKIP", "skip")
 		t.Setenv("GC_BEADS", "file")
 
 		cityPath := setupCity(t, "env-city")
@@ -774,7 +774,7 @@ func TestRigAnywhere_RigAddBeadsEnv(t *testing.T) {
 
 	t.Run("re_add_updates_gt_root", func(t *testing.T) {
 		t.Setenv("GC_HOME", t.TempDir())
-		t.Setenv("GC_DOLT", "skip")
+		t.Setenv("GC_BEADS_SKIP", "skip")
 		t.Setenv("GC_BEADS", "file")
 
 		city1 := setupCity(t, "city-one")

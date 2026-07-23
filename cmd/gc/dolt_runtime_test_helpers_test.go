@@ -11,12 +11,16 @@ import (
 	"time"
 )
 
+// writeReachableManagedDoltState provisions a scope's `.beads` directory and
+// returns a bound-but-idle ephemeral port. gascity no longer manages a dolt
+// sql-server or publishes runtime endpoint state — bd owns the proxied server
+// behind the bd CLI — so this only stands up the on-disk scope shape a test
+// needs. The port is returned for callers that still thread it through their
+// fixtures; the listener stays open for the test's lifetime so the port cannot
+// be reused underneath the test.
 func writeReachableManagedDoltState(t *testing.T, cityPath string) int {
 	t.Helper()
 
-	if err := os.MkdirAll(filepath.Join(cityPath, ".gc", "runtime", "packs", "dolt"), 0o755); err != nil {
-		t.Fatalf("MkdirAll(runtime dolt): %v", err)
-	}
 	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o700); err != nil {
 		t.Fatalf("MkdirAll(city .beads): %v", err)
 	}
@@ -28,26 +32,15 @@ func writeReachableManagedDoltState(t *testing.T, cityPath string) int {
 	t.Cleanup(func() {
 		_ = ln.Close()
 	})
-
-	port := ln.Addr().(*net.TCPAddr).Port
-	if err := writeDoltState(cityPath, doltRuntimeState{
-		Running:   true,
-		PID:       os.Getpid(),
-		Port:      port,
-		DataDir:   filepath.Join(cityPath, ".beads", "dolt"),
-		StartedAt: time.Now().UTC().Format(time.RFC3339),
-	}); err != nil {
-		t.Fatalf("writeDoltState: %v", err)
-	}
-	return port
+	return ln.Addr().(*net.TCPAddr).Port
 }
 
+// writeReachableProviderManagedDoltState is the provider-scope variant of
+// writeReachableManagedDoltState: it additionally creates the `.beads/dolt`
+// data subdirectory some provider tests expect on disk.
 func writeReachableProviderManagedDoltState(t *testing.T, cityPath string) int {
 	t.Helper()
 
-	if err := os.MkdirAll(filepath.Join(cityPath, ".gc", "runtime", "packs", "dolt"), 0o755); err != nil {
-		t.Fatalf("MkdirAll(runtime dolt): %v", err)
-	}
 	if err := os.MkdirAll(filepath.Join(cityPath, ".beads", "dolt"), 0o755); err != nil {
 		t.Fatalf("MkdirAll(city .beads/dolt): %v", err)
 	}
@@ -59,18 +52,7 @@ func writeReachableProviderManagedDoltState(t *testing.T, cityPath string) int {
 	t.Cleanup(func() {
 		_ = ln.Close()
 	})
-
-	port := ln.Addr().(*net.TCPAddr).Port
-	if err := writeDoltRuntimeStateFile(providerManagedDoltStatePath(cityPath), doltRuntimeState{
-		Running:   true,
-		PID:       os.Getpid(),
-		Port:      port,
-		DataDir:   filepath.Join(cityPath, ".beads", "dolt"),
-		StartedAt: time.Now().UTC().Format(time.RFC3339),
-	}); err != nil {
-		t.Fatalf("write provider Dolt state: %v", err)
-	}
-	return port
+	return ln.Addr().(*net.TCPAddr).Port
 }
 
 //nolint:unused // exercised by native_dolt_rebind_integration_test.go

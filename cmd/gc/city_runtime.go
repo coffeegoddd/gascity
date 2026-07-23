@@ -121,9 +121,6 @@ type CityRuntime struct {
 	activeReload        *reloadRequest
 	onStarted           func()
 	onStatus            func(string)
-	managedDoltHealth   func(string) error
-	managedDoltOwned    func(string) (bool, error)
-	managedDoltPort     func(string) string
 
 	shutdownOnce             sync.Once
 	preserveSessionsShutdown atomic.Bool
@@ -235,25 +232,12 @@ func newCityRuntime(p CityRuntimeParams) *CityRuntime {
 
 	wg := newWispGCForConfig(p.Cfg)
 
-	managedDoltHealth := p.ManagedDoltHealth
-	if managedDoltHealth == nil {
-		managedDoltHealth = healthBeadsProvider
-	}
-	managedDoltOwned := p.ManagedDoltOwned
-	if managedDoltOwned == nil {
-		managedDoltOwned = managedDoltLifecycleOwned
-	}
-	managedDoltPort := p.ManagedDoltPort
-	if managedDoltPort == nil {
-		managedDoltPort = currentResolvableManagedDoltPort
-	}
-
+	// bd's proxied-server provider owns the dolt server lifecycle and its
+	// endpoint; gascity no longer publishes a managed-dolt runtime state.
 	logPrefix := p.LogPrefix
 	if logPrefix == "" {
 		logPrefix = "gc start"
 	}
-
-	ensureManagedDoltPublishedForRuntime(p.CityPath, p.Stderr, logPrefix, managedDoltHealth, managedDoltOwned, managedDoltPort)
 
 	// Sweep orphaned order-tracking beads on startup only (not config reload).
 	// A previous controller instance may have left tracking beads open
@@ -328,15 +312,12 @@ func newCityRuntime(p CityRuntimeParams) *CityRuntime {
 			}
 			return make(chan struct{}, 1)
 		}(),
-		nudgeWakeCh:       make(chan struct{}, 1),
-		onStarted:         p.OnStarted,
-		onStatus:          p.OnStatus,
-		managedDoltHealth: managedDoltHealth,
-		managedDoltOwned:  managedDoltOwned,
-		managedDoltPort:   managedDoltPort,
-		logPrefix:         logPrefix,
-		stdout:            p.Stdout,
-		stderr:            p.Stderr,
+		nudgeWakeCh: make(chan struct{}, 1),
+		onStarted:   p.OnStarted,
+		onStatus:    p.OnStatus,
+		logPrefix:   logPrefix,
+		stdout:      p.Stdout,
+		stderr:      p.Stderr,
 	}
 	cr.svc = workspacesvc.NewManager(&serviceRuntime{cr: cr})
 	if err := cr.svc.Reload(); err != nil {
@@ -549,7 +530,6 @@ func (cr *CityRuntime) run(ctx context.Context) {
 	// ctx cancellation, or normal completion alike.
 	startupComplete := false
 	if !retryStartupStep("startup", func() bool { return startupComplete }, func() {
-		cr.ensureManagedDoltPublishedForTick()
 		sessionBeads := cr.loadSessionBeadSnapshot()
 		startupTrace := cr.beginTraceCycle("startup", "initial_reconcile", sessionBeads)
 		completion := TraceCompletionAborted
@@ -1082,7 +1062,6 @@ func (cr *CityRuntime) tick(
 	}
 
 	phaseStart := time.Now()
-	cr.ensureManagedDoltPublishedForTick()
 	recordPhase(TraceSiteControllerTickPhase, "managed_dolt_preflight", phaseStart, nil)
 	if ctx.Err() != nil {
 		return
@@ -2189,19 +2168,6 @@ func (cr *CityRuntime) beadReconcileTick(ctx context.Context, result DesiredStat
 		emitDeadAssigneeReopenedEvents(cr.rec, assignedWorkBeads, released, time.Now())
 		assignedWorkBeads, assignedWorkStoreRefs = filterReleasedAssignedWorkSnapshot(assignedWorkBeads, assignedWorkStoreRefs, released)
 	}
-	// Squatter guard (gastownhall/gascity#2930): a foreign Dolt that has bound
-	// this city's managed port returns zero demand, indistinguishable from a
-	// genuinely-idle fleet — and would drain every running pool. This runs on
-	// the steady-state tick (not just startup), before the sweep and the
-	// singleton reconcile below. The ctx-bounded @@datadir probe is paid only
-	// when the sweep would actually close a running pool session this tick (a
-	// scale-down event), so a steady warm fleet pays nothing; a confirmed
-	// data-dir mismatch marks the tick partial so the existing hold suppresses
-	// the drain. Fail-open in every other case.
-	if storeIdentityHold(ctx, cr.cityPath, poolSweepWouldDrain(sessionBeads, result.State, cr.cfg), cr.stderr) {
-		fmt.Fprintf(cr.stderr, "%s: managed dolt serves an unexpected data-dir (squatter on the managed port?); holding pools this tick — see gastownhall/gascity#2930\n", cr.logPrefix) //nolint:errcheck // best-effort stderr
-		result.StoreQueryPartial = true
-	}
 	// poolDesired determines how many sessions should be AWAKE. Uses the
 	// same scale_check counts that buildDesiredState already computed (no
 	// duplicate shell-outs). Resume tier from cross-referenced assigned
@@ -2687,32 +2653,6 @@ func (cr *CityRuntime) waitForAsyncStops() bool {
 	return true
 }
 
-// poolSweepWouldDrain reports whether sweepUndesiredPoolSessionBeads would
-// close at least one running pool session this tick — i.e. an open pool session
-// bead is not present in desiredState. It mirrors the sweep's core candidate
-// filter (open, not desired, not a manual/named session); it intentionally
-// omits the sweep's transient create/post-create grace checks because an
-// over-inclusive answer only costs an extra identity probe, never a wrong hold.
-// Used to gate the managed-Dolt squatter probe to actual scale-down events.
-func poolSweepWouldDrain(sessionBeads *sessionBeadSnapshot, desiredState map[string]TemplateParams, cfg *config.City) bool {
-	if sessionBeads == nil || cfg == nil {
-		return false
-	}
-	for _, info := range sessionBeads.OpenInfos() {
-		if info.Closed {
-			continue
-		}
-		if _, desired := desiredState[info.SessionNameMetadata]; desired {
-			continue
-		}
-		if isManualSessionInfo(info) || isNamedSessionInfo(info) {
-			continue
-		}
-		return true
-	}
-	return false
-}
-
 func sweepUndesiredPoolSessionBeads(
 	store beads.SessionStore,
 	rigStores map[string]beads.Store,
@@ -2954,8 +2894,6 @@ func (cr *CityRuntime) controlDispatcherTick(ctx context.Context) {
 		return
 	}
 
-	cr.ensureManagedDoltPublishedForTick()
-
 	sessionBeads := cr.loadSessionBeadSnapshot()
 	wfcResult := buildDesiredStateWithSessionBeads(
 		cr.cityName,
@@ -3040,49 +2978,6 @@ func (cr *CityRuntime) controlDispatcherTick(ctx context.Context) {
 		cr.stderr,
 	)
 	cr.requestDeferredDrainFollowUpTick()
-}
-
-func (cr *CityRuntime) ensureManagedDoltPublishedForTick() {
-	healthFn := cr.managedDoltHealth
-	if healthFn == nil {
-		healthFn = healthBeadsProvider
-	}
-	ownedFn := cr.managedDoltOwned
-	if ownedFn == nil {
-		ownedFn = managedDoltLifecycleOwned
-	}
-	portFn := cr.managedDoltPort
-	if portFn == nil {
-		portFn = currentResolvableManagedDoltPort
-	}
-	ensureManagedDoltPublishedForRuntime(cr.cityPath, cr.stderr, cr.logPrefix, healthFn, ownedFn, portFn)
-}
-
-func ensureManagedDoltPublishedForRuntime(
-	cityPath string,
-	stderr io.Writer,
-	logPrefix string,
-	healthFn func(string) error,
-	ownedFn func(string) (bool, error),
-	portFn func(string) string,
-) {
-	if !cityUsesBdStoreContract(cityPath) {
-		return
-	}
-	owned, err := ownedFn(cityPath)
-	if err != nil {
-		fmt.Fprintf(stderr, "%s: managed dolt ownership preflight: %v\n", logPrefix, err) //nolint:errcheck // best-effort stderr
-		return
-	}
-	if !owned {
-		return
-	}
-	if portFn(cityPath) != "" {
-		return
-	}
-	if err := healthFn(cityPath); err != nil {
-		fmt.Fprintf(stderr, "%s: managed dolt health preflight: %v\n", logPrefix, err) //nolint:errcheck // best-effort stderr
-	}
 }
 
 // syncBeadsAndUpdateIndex runs syncSessionBeads.

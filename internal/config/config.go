@@ -262,8 +262,6 @@ type City struct {
 	Events EventsConfig `toml:"events,omitempty"`
 	// Usage configures the usage-fact sink backend.
 	Usage UsageConfig `toml:"usage,omitempty"`
-	// Dolt configures optional dolt server connection overrides.
-	Dolt DoltConfig `toml:"dolt,omitempty"`
 	// Formulas is the legacy [formulas] table; authored [formulas].dir is
 	// rejected at config load. Formulas live in the well-known formulas/
 	// directory.
@@ -640,15 +638,6 @@ type Rig struct {
 	// SessionSleep overrides workspace-level idle sleep defaults for agents in
 	// this rig.
 	SessionSleep SessionSleepConfig `toml:"session_sleep,omitempty"`
-	// DoltHost overrides the city-level Dolt host for this rig's beads.
-	// Use when the rig's database lives on a different Dolt server (e.g.,
-	// shared from another city).
-	DoltHost string `toml:"dolt_host,omitempty"`
-	// DoltPort overrides the city-level Dolt port for this rig's beads.
-	// When set, controller commands (scale_check, work_query) prefix their
-	// shell invocations with BEADS_DOLT_SERVER_PORT=<port> so bd connects to the
-	// correct server instead of the city-level default.
-	DoltPort string `toml:"dolt_port,omitempty"`
 	// FormulaVars provides rig-scoped defaults for formula vars. Keys match
 	// var names declared in formula `[vars.<name>]` blocks. Values are used
 	// when a formula runs in this rig and the caller did not pass an
@@ -1379,10 +1368,9 @@ type BeadsConfig struct {
 	// EventHooks controls installation of the bead event-forwarding hooks
 	// (.beads/hooks/on_create,on_update,on_close) that shell out to
 	// `gc event emit` on every bead write. Defaults to true. Set to false
-	// once the controller's native cache-events already observe bead changes
-	// (the bd_hooks doctor gate): the lifecycle then removes the event hooks
-	// (leaving git hooks untouched) and stops reinstalling them, clearing the
-	// per-write churn and the native-store gate.
+	// once the controller's cache-events already observe bead changes: the
+	// lifecycle then removes the event hooks (leaving git hooks untouched) and
+	// stops reinstalling them, clearing the per-write churn.
 	EventHooks *bool `toml:"event_hooks,omitempty" jsonschema:"default=true"`
 	// BDCompatibility selects the bd CLI semantics Gas City may rely on.
 	// Empty defaults to "bd-1.0.4", which keeps claimable work history-backed
@@ -1404,6 +1392,11 @@ type BeadsConfig struct {
 	// Policy names are interpreted by higher-level systems; unknown names are
 	// preserved so packs can stage future policy classes without breaking load.
 	Policies map[string]BeadPolicyConfig `toml:"policies,omitempty"`
+	// Server configures the beads storage server's operational tuning (the
+	// dolt sql-server bd manages via proxied-server): archive level, auto-GC,
+	// max connections, and read/write timeouts. gascity is dolt-agnostic — this
+	// is the [beads.server] table; the endpoint itself is owned by bd.
+	Server DoltConfig `toml:"server,omitempty"`
 }
 
 // EventHooksEnabled reports whether bead event hooks should be installed.
@@ -1895,11 +1888,6 @@ const (
 // DoltConfig holds optional dolt server overrides.
 // When present in city.toml, these override the defaults.
 type DoltConfig struct {
-	// Port is the dolt server port. 0 means use ephemeral port allocation
-	// (hashed from city path). Set explicitly to override.
-	Port int `toml:"port,omitempty" jsonschema:"default=0"`
-	// Host is the dolt server hostname. Defaults to localhost.
-	Host string `toml:"host,omitempty" jsonschema:"default=localhost"`
 	// ArchiveLevel controls Dolt's auto_gc archive aggressiveness.
 	// 0 disables archive compaction (lower CPU on startup).
 	// 1 enables archive compaction (higher CPU on startup).
@@ -1934,7 +1922,7 @@ type DoltConfig struct {
 	// to probe once with no wait (still fail-closed when held). Negative
 	// values are rejected at config load. The managed lifecycle also
 	// projects this value into the gc-beads-bd.sh shell fallback as
-	// GC_DOLT_LOCK_RELEASE_TIMEOUT_MS (milliseconds), so both paths honor
+	// GC_BEADS_LOCK_RELEASE_TIMEOUT_MS (milliseconds), so both paths honor
 	// the configured window.
 	DoltLockReleaseTimeout string `toml:"dolt_lock_release_timeout,omitempty" jsonschema:"default=1m"`
 }

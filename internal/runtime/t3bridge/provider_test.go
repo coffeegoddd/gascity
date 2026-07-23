@@ -328,11 +328,10 @@ func TestBuildThreadEnv_DropsStartupEnvelopeAndDoltliteServerEnv(t *testing.T) {
 	env := buildThreadEnv(map[string]string{
 		"GC_STARTUP_ENVELOPE":      `{"runtime":{"provider":"claudeAgent","model":"claude-sonnet-4-6"}}`,
 		"GC_BEADS_BACKEND":         "doltlite",
-		"GC_NATIVE_DOLTLITE_BEADS": "true",
 		"GC_MODEL":                 "gpt-5.4-mini",
 		"GC_SESSION_NAME":          "gc--mayor",
-		"GC_DOLT_HOST":             "127.0.0.1",
-		"GC_DOLT_PORT":             "35819",
+		"GC_BEADS_HOST":             "127.0.0.1",
+		"GC_BEADS_PORT":             "35819",
 		"BEADS_DOLT_SHARED_SERVER": "1",
 		"NOT_GC":                   "ignore",
 	})
@@ -346,7 +345,7 @@ func TestBuildThreadEnv_DropsStartupEnvelopeAndDoltliteServerEnv(t *testing.T) {
 	if env["GC_SESSION_NAME"] != "gc--mayor" {
 		t.Fatalf("GC_SESSION_NAME = %q, want gc--mayor", env["GC_SESSION_NAME"])
 	}
-	for _, key := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "BEADS_DOLT_SHARED_SERVER", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT", "BEADS_DOLT_SERVER_MODE"} {
+	for _, key := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT", "BEADS_DOLT_SHARED_SERVER", "BEADS_DOLT_SERVER_HOST", "BEADS_DOLT_SERVER_PORT", "BEADS_DOLT_SERVER_MODE"} {
 		if _, ok := env[key]; ok {
 			t.Fatalf("%s should not persist into DoltLite thread env", key)
 		}
@@ -359,9 +358,8 @@ func TestBuildThreadEnv_DropsStartupEnvelopeAndDoltliteServerEnv(t *testing.T) {
 func TestBuildThreadEnv_MirrorsDoltEndpointForNonDoltliteSessions(t *testing.T) {
 	env := buildThreadEnv(map[string]string{
 		"GC_BEADS_BACKEND":         "dolt",
-		"GC_NATIVE_DOLTLITE_BEADS": "true",
-		"GC_DOLT_HOST":             "dolt.example.internal",
-		"GC_DOLT_PORT":             "4407",
+		"GC_BEADS_HOST":             "dolt.example.internal",
+		"GC_BEADS_PORT":             "4407",
 		"BEADS_DOLT_SERVER_HOST":   "stale.example.invalid",
 		"BEADS_DOLT_SERVER_PORT":   "9999",
 		"BEADS_DOLT_PORT":          "9998",
@@ -372,8 +370,8 @@ func TestBuildThreadEnv_MirrorsDoltEndpointForNonDoltliteSessions(t *testing.T) 
 	})
 
 	want := map[string]string{
-		"GC_DOLT_HOST":           "dolt.example.internal",
-		"GC_DOLT_PORT":           "4407",
+		"GC_BEADS_HOST":           "dolt.example.internal",
+		"GC_BEADS_PORT":           "4407",
 		"BEADS_DOLT_SERVER_HOST": "dolt.example.internal",
 		"BEADS_DOLT_SERVER_PORT": "4407",
 		"BEADS_DOLT_PORT":        "4407",

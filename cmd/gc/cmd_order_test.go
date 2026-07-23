@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -2662,14 +2661,14 @@ prefix = "ct"
 		t.Fatalf("loadCityConfig: %v", err)
 	}
 
-	t.Setenv("GC_DOLT_HOST", "ambient.invalid")
-	t.Setenv("GC_DOLT_PORT", "9999")
+	t.Setenv("GC_BEADS_HOST", "ambient.invalid")
+	t.Setenv("GC_BEADS_PORT", "9999")
 	outPath := filepath.Join(cityDir, "exec-dolt-env.txt")
 	a := orders.Order{
 		Name:     "poll",
 		Trigger:  "cooldown",
 		Interval: "1m",
-		Exec:     fmt.Sprintf(`printf '%%s\n%%s\n%%s\n' "$GC_DOLT_HOST" "$GC_DOLT_PORT" "$GC_DOLT_USER" > %q`, outPath),
+		Exec:     fmt.Sprintf(`printf '%%s\n%%s\n%%s\n' "$GC_BEADS_HOST" "$GC_BEADS_PORT" "$GC_BEADS_USER" > %q`, outPath),
 	}
 
 	var stdout, stderr bytes.Buffer
@@ -2686,234 +2685,13 @@ prefix = "ct"
 		t.Fatalf("exec dolt env lines = %d, want 3 (%q)", len(lines), string(data))
 	}
 	if lines[0] != "external.example.internal" {
-		t.Fatalf("GC_DOLT_HOST = %q, want external.example.internal", lines[0])
+		t.Fatalf("GC_BEADS_HOST = %q, want external.example.internal", lines[0])
 	}
 	if lines[1] != "4406" {
-		t.Fatalf("GC_DOLT_PORT = %q, want 4406", lines[1])
+		t.Fatalf("GC_BEADS_PORT = %q, want 4406", lines[1])
 	}
 	if lines[2] != "maintenance-user" {
-		t.Fatalf("GC_DOLT_USER = %q, want maintenance-user", lines[2])
-	}
-}
-
-func TestOrderRunExecPreservesAuthOnlyOverridesForManagedLocal(t *testing.T) {
-	cityDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads", "dolt"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, "city.toml"), `[workspace]
-name = "test-city"
-prefix = "ct"
-`)
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"",
-	}, "\n"))
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Fatalf("Close listener: %v", err)
-		}
-	}()
-	port := fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
-	stateDir := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(stateDir, "dolt-state.json"), fmt.Sprintf(
-		`{"running":true,"pid":%d,"port":%s,"data_dir":%q}`,
-		os.Getpid(),
-		port,
-		filepath.Join(cityDir, ".beads", "dolt"),
-	))
-	cfg, err := loadCityConfig(cityDir)
-	if err != nil {
-		t.Fatalf("loadCityConfig: %v", err)
-	}
-
-	t.Setenv("GC_DOLT_HOST", "ambient.invalid")
-	t.Setenv("GC_DOLT_PORT", "9999")
-	t.Setenv("GC_DOLT_USER", "ambient-user")
-	t.Setenv("GC_DOLT_PASSWORD", "ambient-secret")
-	t.Setenv("BEADS_DOLT_SERVER_HOST", "ambient-beads.invalid")
-	t.Setenv("BEADS_DOLT_SERVER_PORT", "9998")
-	t.Setenv("BEADS_DOLT_SERVER_USER", "ambient-beads-user")
-	t.Setenv("BEADS_DOLT_PASSWORD", "ambient-beads-secret")
-	outPath := filepath.Join(cityDir, "exec-dolt-env.txt")
-	a := orders.Order{
-		Name:     "poll",
-		Trigger:  "cooldown",
-		Interval: "1m",
-		Exec: fmt.Sprintf(
-			`printf 'host=<%%s>\nport=<%%s>\nuser=<%%s>\npass=<%%s>\nbeads_host=<%%s>\nbeads_port=<%%s>\nbeads_user=<%%s>\nbeads_pass=<%%s>\n' "$GC_DOLT_HOST" "$GC_DOLT_PORT" "$GC_DOLT_USER" "$GC_DOLT_PASSWORD" "$BEADS_DOLT_SERVER_HOST" "$BEADS_DOLT_SERVER_PORT" "$BEADS_DOLT_SERVER_USER" "$BEADS_DOLT_PASSWORD" > %q`,
-			outPath,
-		),
-	}
-
-	var stdout, stderr bytes.Buffer
-	code := doOrderRunExec(a, cityDir, cfg, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("doOrderRunExec = %d, want 0; stderr: %s", code, stderr.String())
-	}
-	data, err := os.ReadFile(outPath)
-	if err != nil {
-		t.Fatalf("ReadFile(exec-dolt-env): %v", err)
-	}
-	got := strings.Split(strings.TrimSuffix(string(data), "\n"), "\n")
-	want := []string{
-		"host=<>",
-		"port=<" + port + ">",
-		"user=<ambient-user>",
-		"pass=<ambient-secret>",
-		"beads_host=<>",
-		"beads_port=<" + port + ">",
-		"beads_user=<ambient-user>",
-		"beads_pass=<ambient-secret>",
-	}
-	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Fatalf("exec dolt env:\ngot:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
-	}
-}
-
-func TestOrderRunExecMarksExternalDoltTargetForManagedLocalOnlyOrders(t *testing.T) {
-	cityDir := t.TempDir()
-	t.Setenv("GC_PACK_STATE_DIR", filepath.Join(t.TempDir(), "poison-pack-state"))
-	t.Setenv("GC_DOLT_DATA_DIR", filepath.Join(t.TempDir(), "poison-dolt-data"))
-	t.Setenv("GC_DOLT_CONFIG_FILE", filepath.Join(t.TempDir(), "poison-dolt-config.yaml"))
-	t.Setenv("GC_DOLT_STATE_FILE", filepath.Join(t.TempDir(), "poison-state.json"))
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, "city.toml"), `[workspace]
-name = "test-city"
-prefix = "ct"
-`)
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: city_canonical",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"dolt.host: external.example.internal",
-		"dolt.port: 4406",
-		"",
-	}, "\n"))
-	cfg, err := loadCityConfig(cityDir)
-	if err != nil {
-		t.Fatalf("loadCityConfig: %v", err)
-	}
-
-	outPath := filepath.Join(cityDir, "exec-managed-marker.txt")
-	a := orders.Order{
-		Name:     "dolt-test-cooldown",
-		Trigger:  "cooldown",
-		Interval: "1m",
-		Exec:     fmt.Sprintf(`printf 'managed=<%%s>\nhost=<%%s>\nport=<%%s>\npack_state=<%%s>\ndata=<%%s>\nconfig=<%%s>\nstate=<%%s>\n' "$GC_DOLT_MANAGED_LOCAL" "$GC_DOLT_HOST" "$GC_DOLT_PORT" "$GC_PACK_STATE_DIR" "$GC_DOLT_DATA_DIR" "$GC_DOLT_CONFIG_FILE" "$GC_DOLT_STATE_FILE" > %q`, outPath),
-	}
-
-	var stdout, stderr bytes.Buffer
-	code := doOrderRunExec(a, cityDir, cfg, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("doOrderRunExec = %d, want 0; stderr: %s", code, stderr.String())
-	}
-	got := strings.TrimSpace(readFileString(t, outPath))
-	externalRoot := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt", "external-target")
-	want := strings.Join([]string{
-		"managed=<0>",
-		"host=<external.example.internal>",
-		"port=<4406>",
-		"pack_state=<>",
-		"data=<" + externalRoot + ">",
-		"config=<" + filepath.Join(externalRoot, "dolt-config.yaml") + ">",
-		"state=<" + filepath.Join(externalRoot, "dolt-state.json") + ">",
-	}, "\n")
-	if got != want {
-		t.Fatalf("order exec env:\ngot:\n%s\nwant:\n%s", got, want)
-	}
-}
-
-func TestOrderRunExecPropagatesManagedDoltLayout(t *testing.T) {
-	clearGCEnv(t)
-	t.Setenv("GC_DOLT", "skip")
-	cityDir := t.TempDir()
-	dataDir := filepath.Join(t.TempDir(), "managed-dolt")
-	configFile := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt", "dolt-config.yaml")
-	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(cityDir, "city.toml"), `[workspace]
-name = "test-city"
-prefix = "ct"
-`)
-	writeFile(t, filepath.Join(cityDir, ".beads", "config.yaml"), strings.Join([]string{
-		"issue_prefix: ct",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-		"",
-	}, "\n"))
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Listen: %v", err)
-	}
-	defer func() {
-		if err := listener.Close(); err != nil {
-			t.Fatalf("Close listener: %v", err)
-		}
-	}()
-	port := fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
-	stateDir := filepath.Join(cityDir, ".gc", "runtime", "packs", "dolt")
-	if err := os.MkdirAll(stateDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeFile(t, filepath.Join(stateDir, "dolt-state.json"), fmt.Sprintf(
-		`{"running":true,"pid":%d,"port":%s,"data_dir":%q}`,
-		os.Getpid(),
-		port,
-		dataDir,
-	))
-	cfg, err := loadCityConfig(cityDir)
-	if err != nil {
-		t.Fatalf("loadCityConfig: %v", err)
-	}
-
-	t.Setenv("GC_DOLT_DATA_DIR", filepath.Join(t.TempDir(), "poison-dolt-data"))
-	t.Setenv("GC_DOLT_CONFIG_FILE", filepath.Join(t.TempDir(), "poison-dolt-config.yaml"))
-	t.Setenv("GC_PACK_STATE_DIR", filepath.Join(t.TempDir(), "poison-pack-state"))
-	t.Setenv("GC_DOLT_STATE_FILE", filepath.Join(t.TempDir(), "poison-state.json"))
-	outPath := filepath.Join(cityDir, "exec-managed-layout.txt")
-	a := orders.Order{
-		Name:     "dolt-test-cooldown",
-		Trigger:  "cooldown",
-		Interval: "1m",
-		Exec:     fmt.Sprintf(`printf 'managed=<%%s>\nport=<%%s>\ndata=<%%s>\nconfig=<%%s>\n' "$GC_DOLT_MANAGED_LOCAL" "$GC_DOLT_PORT" "$GC_DOLT_DATA_DIR" "$GC_DOLT_CONFIG_FILE" > %q`, outPath),
-	}
-
-	var stdout, stderr bytes.Buffer
-	code := doOrderRunExec(a, cityDir, cfg, nil, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("doOrderRunExec = %d, want 0; stderr: %s", code, stderr.String())
-	}
-	got := strings.TrimSpace(readFileString(t, outPath))
-	want := strings.Join([]string{
-		"managed=<1>",
-		"port=<" + port + ">",
-		"data=<" + dataDir + ">",
-		"config=<" + configFile + ">",
-	}, "\n")
-	if got != want {
-		t.Fatalf("order exec env:\ngot:\n%s\nwant:\n%s", got, want)
+		t.Fatalf("GC_BEADS_USER = %q, want maintenance-user", lines[2])
 	}
 }
 
@@ -3731,7 +3509,7 @@ formula = "mol-digest"
 	if err := os.WriteFile(filepath.Join(ordersDir, "digest.toml"), []byte(orderToml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	return cityPath

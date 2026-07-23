@@ -4,11 +4,11 @@
 # Checks server status and latency, per-database commit counts and open
 # beads, backup freshness, orphan databases, and zombie Dolt processes.
 #
-# Environment: GC_CITY_PATH, GC_DOLT_PORT, GC_DOLT_HOST, GC_DOLT_USER,
-#              GC_DOLT_PASSWORD, GC_DOLT_RIG_LIST_TIMEOUT_SECS
+# Environment: GC_CITY_PATH, GC_BEADS_PORT, GC_BEADS_HOST, GC_BEADS_USER,
+#              GC_BEADS_PASSWORD, GC_BEADS_RIG_LIST_TIMEOUT_SECS
 set -e
 
-: "${GC_DOLT_USER:=root}"
+: "${GC_BEADS_USER:=root}"
 PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 . "$PACK_DIR/assets/scripts/runtime.sh"
 
@@ -23,7 +23,7 @@ metadata_files() {
     # slow-but-healthy gc on a busy host (~16s observed) because the
     # fallback scan only sees the city directory and silently drops
     # external rig databases (gascity#2740).
-    rig_paths=$(run_bounded "$GC_DOLT_RIG_LIST_TIMEOUT_SECS" gc rig list --json 2>/dev/null \
+    rig_paths=$(run_bounded "$GC_BEADS_RIG_LIST_TIMEOUT_SECS" gc rig list --json 2>/dev/null \
       | if command -v jq >/dev/null 2>&1; then
           jq -r '.rigs[].path' 2>/dev/null
         else
@@ -73,7 +73,7 @@ done
 # Note: run_bounded / TIMEOUT_BIN are provided by assets/scripts/runtime.sh.
 
 # Determine host for probing.
-host="${GC_DOLT_HOST:-127.0.0.1}"
+host="${GC_BEADS_HOST:-127.0.0.1}"
 
 # Check if server is running.
 server_running=false
@@ -94,19 +94,19 @@ now_ms() {
 
 # Find dolt PID by port for local managed servers. External Dolt endpoints do
 # not listen on 127.0.0.1, so do not let the local TCP precheck suppress the
-# real SQL ping to GC_DOLT_HOST:GC_DOLT_PORT. is_local_dolt_host is provided by
+# real SQL ping to GC_BEADS_HOST:GC_BEADS_PORT. is_local_dolt_host is provided by
 # runtime.sh and shared with the status/logs commands.
 should_probe_sql=false
 is_external=false
 if is_local_dolt_host "$host"; then
-  pid=$(managed_runtime_listener_pid "$GC_DOLT_PORT" || true)
-  if [ -n "$pid" ] || managed_runtime_tcp_reachable "$GC_DOLT_PORT"; then
+  pid=$(managed_runtime_listener_pid "$GC_BEADS_PORT" || true)
+  if [ -n "$pid" ] || managed_runtime_tcp_reachable "$GC_BEADS_PORT"; then
     server_running=true
     [ -n "$pid" ] && server_pid="$pid"
     should_probe_sql=true
   fi
 else
-  # Configured external Dolt endpoint (non-local GC_DOLT_HOST). GC does not own
+  # Configured external Dolt endpoint (non-local GC_BEADS_HOST). GC does not own
   # a local managed process here, so server.running / server.pid keep their
   # local-process defaults (false / 0). Reachability is decided by the SQL ping
   # below and reported honestly via server.reachable + server.external — a
@@ -119,14 +119,14 @@ fi
 if [ "$should_probe_sql" = true ]; then
   # Measure query latency.
   start_ms=$(now_ms)
-  conn_args="--host $host --port $GC_DOLT_PORT --user $GC_DOLT_USER --no-tls"
+  conn_args="--host $host --port $GC_BEADS_PORT --user $GC_BEADS_USER --no-tls"
   # Always export DOLT_CLI_PASSWORD (even empty) so the client does not
   # prompt for a password on stdin. Without this, the SELECT 1 probe
   # silently fails with "Failed to parse credentials: operation not
   # supported by device" on sessions without a controlling TTY —
   # which then left the health report claiming "server: running" but
   # never reporting per-database detail.
-  export DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}"
+  export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
   # Bound the ping. A TCP-reachable but unresponsive server (stuck
   # goroutine, saturated pool, migration lock) would otherwise hang.
   if run_bounded 5 dolt $conn_args sql -q "SELECT 1" >/dev/null 2>&1; then
@@ -374,7 +374,7 @@ if [ "${GC_HEALTH_SKIP_ZOMBIE_SCAN:-0}" != "1" ]; then
     [ -f "$config_file" ] || continue
     rig_port=$(grep '^dolt\.port:' "$config_file" 2>/dev/null | sed "s/^dolt\\.port:[[:space:]]*//; s/[[:space:]]*#.*$//; s/['\\\"]//g; s/[[:space:]]*$//" | head -1)
     case "$rig_port" in ''|*[!0-9]*) continue ;; esac
-    [ "$rig_port" = "$GC_DOLT_PORT" ] && continue
+    [ "$rig_port" = "$GC_BEADS_PORT" ] && continue
     rig_pid=$(managed_runtime_listener_pid "$rig_port" || true)
     [ -n "$rig_pid" ] && rig_dolt_pids="$rig_dolt_pids $rig_pid "
   done < "$_meta_cache"
@@ -480,7 +480,7 @@ if [ "$json_output" = true ]; then
     "reachable": $server_reachable,
     "external": $is_external,
     "pid": $server_pid,
-    "port": $GC_DOLT_PORT,
+    "port": $GC_BEADS_PORT,
     "latency_ms": $server_latency
   },
   "databases": [
@@ -531,11 +531,11 @@ fi
 # local-process "not running" signal that would misread as a downed server
 # (su-deol8).
 if [ "$server_running" = true ]; then
-  echo "Server: running (PID $server_pid, port $GC_DOLT_PORT, latency ${server_latency}ms)"
+  echo "Server: running (PID $server_pid, port $GC_BEADS_PORT, latency ${server_latency}ms)"
 elif [ "$is_external" = true ] && [ "$server_reachable" = true ]; then
-  echo "Server: external endpoint reachable ($host:$GC_DOLT_PORT, latency ${server_latency}ms)"
+  echo "Server: external endpoint reachable ($host:$GC_BEADS_PORT, latency ${server_latency}ms)"
 elif [ "$is_external" = true ]; then
-  echo "Server: external endpoint unreachable ($host:$GC_DOLT_PORT)"
+  echo "Server: external endpoint unreachable ($host:$GC_BEADS_PORT)"
 else
   echo "Server: not running"
 fi

@@ -48,6 +48,13 @@ func stubInitDependencyChecks(t *testing.T) {
 		}
 	}
 	t.Cleanup(func() { initRunVersion = oldRunVersion })
+
+	// Tests run against a fake bd on PATH that does not implement --proxied-server;
+	// treat it as capable so the gc start bd-capability preflight does not mask the
+	// behavior under test. TestBdProxiedServerStartError covers the guard itself.
+	oldBdProxied := bdProxiedServerCapability
+	bdProxiedServerCapability = func() (supported bool, present bool) { return true, true }
+	t.Cleanup(func() { bdProxiedServerCapability = oldBdProxied })
 }
 
 func stubInitDoltAuthorIdentity(t *testing.T, values map[string]string) {
@@ -129,7 +136,7 @@ func TestProviderStatusFixHintIncludesClaudeSetupTokenForNeedsAuth(t *testing.T)
 
 func TestFinalizeInitBlocksProviderReadinessBeforeSupervisorRegistration(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -193,7 +200,7 @@ func TestFinalizeInitBlocksProviderReadinessBeforeSupervisorRegistration(t *test
 
 func TestFinalizeInitWarnsForUnprobeableCustomProviderAndContinues(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -247,7 +254,7 @@ func TestFinalizeInitWarnsForUnprobeableCustomProviderAndContinues(t *testing.T)
 
 func TestFinalizeInitFetchesRemotePacksBeforeProviderReadiness(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -322,7 +329,7 @@ func TestFinalizeInitFetchesRemotePacksBeforeProviderReadiness(t *testing.T) {
 
 func TestFinalizeInitChecksRemoteImportProvidersAfterInstall(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("HOME", t.TempDir())
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
@@ -410,7 +417,7 @@ name = "bright-lights"
 
 func TestFinalizeInitDoesNotWriteImplicitImportState(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	cityPath := filepath.Join(t.TempDir(), "bright-lights")
@@ -530,7 +537,7 @@ source = "./packs/local"
 
 func TestFinalizeInitReportsRemoteImportInstallFailure(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 	stubInitDependencyChecks(t)
@@ -570,7 +577,7 @@ func TestFinalizeInitReportsRemoteImportInstallFailure(t *testing.T) {
 
 func TestFinalizeInitReportsConfigLoadErrorDuringProviderPreflight(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -602,7 +609,7 @@ func TestFinalizeInitReportsConfigLoadErrorDuringProviderPreflight(t *testing.T)
 
 func TestFinalizeInitWithoutProgressSkipsStepCounter(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -662,7 +669,7 @@ func TestFinalizeInitWithoutProgressSkipsStepCounter(t *testing.T) {
 
 func TestCmdInitResumesFinalizeForExistingCity(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -724,7 +731,7 @@ func TestCmdInitResumesFinalizeForExistingCity(t *testing.T) {
 
 func TestLoadInitProviderPreflightConfigFallsBackForUninstalledRemoteImports(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -749,7 +756,7 @@ func TestLoadInitProviderPreflightConfigFallsBackForUninstalledRemoteImports(t *
 
 func TestCmdInitSkipProviderReadinessBypassesBlockedProvider(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -810,7 +817,7 @@ func TestCmdInitSkipProviderReadinessBypassesBlockedProvider(t *testing.T) {
 // it even when the caller explicitly asked to skip readiness checks (#4392).
 func TestCmdInitSkipProviderReadinessAllowsBuiltinWithoutProbe(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -841,7 +848,7 @@ func TestCmdInitSkipProviderReadinessAllowsBuiltinWithoutProbe(t *testing.T) {
 
 func TestCmdInitNoStartSkipsSupervisorRegistration(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	disableBootstrapForTests(t)
 
@@ -1241,7 +1248,7 @@ path = "frontend"
 
 func TestFinalizeInitCanonicalizesBdStoreBeforeProviderReadinessBlock(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 	stubInitDependencyChecks(t)
 
@@ -1260,11 +1267,10 @@ func TestFinalizeInitCanonicalizesBdStoreBeforeProviderReadinessBlock(t *testing
 		if !fresh {
 			t.Fatal("finalizeInit should force a fresh readiness probe")
 		}
-		if _, err := os.Stat(filepath.Join(cityPath, ".beads", "metadata.json")); err != nil {
-			t.Fatalf("metadata.json missing before readiness block: %v", err)
-		}
-		if _, err := os.Stat(filepath.Join(cityPath, ".beads", "config.yaml")); err != nil {
-			t.Fatalf("config.yaml missing before readiness block: %v", err)
+		// bd's proxied-server init writes metadata.json/config.yaml at gc start;
+		// deferred init only ensures the .beads directory exists here.
+		if _, err := os.Stat(filepath.Join(cityPath, ".beads")); err != nil {
+			t.Fatalf(".beads directory missing before readiness block: %v", err)
 		}
 		return map[string]api.ReadinessItem{
 			"claude": {
@@ -1293,18 +1299,17 @@ func TestFinalizeInitCanonicalizesBdStoreBeforeProviderReadinessBlock(t *testing
 	if calledRegister {
 		t.Fatal("registerCityWithSupervisor should not run when provider readiness blocks init")
 	}
-	if _, err := os.Stat(filepath.Join(cityPath, ".beads", "metadata.json")); err != nil {
-		t.Fatalf("metadata.json missing after readiness block: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(cityPath, ".beads", "config.yaml")); err != nil {
-		t.Fatalf("config.yaml missing after readiness block: %v", err)
+	// bd owns metadata.json/config.yaml (written at gc start); a readiness-blocked
+	// deferred init only guarantees the .beads directory exists.
+	if _, err := os.Stat(filepath.Join(cityPath, ".beads")); err != nil {
+		t.Fatalf(".beads directory missing after readiness block: %v", err)
 	}
 }
 
 func TestFinalizeInitBlocksManagedBdWhenDoltIdentityMissing(t *testing.T) {
 	configureIsolatedRuntimeEnv(t)
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	disableBootstrapForTests(t)
 	stubInitDependencyChecks(t)
 	stubInitDoltAuthorIdentity(t, map[string]string{})
@@ -1349,7 +1354,7 @@ func TestDoStartBlocksManagedBdWhenDoltIdentityMissingBeforeSupervisorRegistrati
 	clearInheritedBeadsEnv(t)
 	configureIsolatedRuntimeEnv(t)
 	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	stubInitDependencyChecks(t)
 	stubInitDoltAuthorIdentity(t, map[string]string{})
 
@@ -1389,7 +1394,7 @@ func TestDoStartForegroundBlocksManagedBdWhenDoltIdentityMissingBeforeLifecycle(
 	clearInheritedBeadsEnv(t)
 	configureIsolatedRuntimeEnv(t)
 	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	stubInitDependencyChecks(t)
 	stubInitDoltAuthorIdentity(t, map[string]string{})
 
@@ -1419,7 +1424,7 @@ func TestDoStartForegroundReportsHardDependenciesBeforeDoltIdentity(t *testing.T
 	clearInheritedBeadsEnv(t)
 	configureIsolatedRuntimeEnv(t)
 	t.Setenv("GC_BEADS", "")
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 
 	oldLookPath := initLookPath
 	initLookPath = func(name string) (string, error) {
@@ -1475,23 +1480,23 @@ func TestDoStartForegroundReportsHardDependenciesBeforeDoltIdentity(t *testing.T
 func TestCheckDoltAuthorIdentitySkipsWhenGCDoltSkip(t *testing.T) {
 	clearInheritedBeadsEnv(t)
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", " skip ")
+	t.Setenv("GC_BEADS_SKIP", " skip ")
 	stubInitDependencyChecks(t)
 
 	old := initRunDoltConfigGet
 	initRunDoltConfigGet = func(string) (string, error) {
-		t.Fatal("Dolt identity should not be probed when GC_DOLT=skip")
+		t.Fatal("Dolt identity should not be probed when GC_BEADS_SKIP=1")
 		return "", nil
 	}
 	t.Cleanup(func() { initRunDoltConfigGet = old })
 
 	if status := checkDoltAuthorIdentity(t.TempDir()); status.blocked() {
-		t.Fatalf("checkDoltAuthorIdentity blocked with GC_DOLT=skip: %#v", status)
+		t.Fatalf("checkDoltAuthorIdentity blocked with GC_BEADS_SKIP=1: %#v", status)
 	}
 }
 
 func TestGCDoltSkipTrimsWhitespace(t *testing.T) {
-	t.Setenv("GC_DOLT", " skip ")
+	t.Setenv("GC_BEADS_SKIP", " skip ")
 
 	if !gcDoltSkip() {
 		t.Fatal("gcDoltSkip() = false, want true for whitespace-padded skip")
@@ -1589,10 +1594,21 @@ name = "demo"
 
 [beads]
 provider = "bd"
-
-[dolt]
-host = "city-db.example.com"
-port = 3307
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// The external endpoint is pinned only in canonical .beads/config.yaml —
+	// city.toml no longer carries [dolt] endpoint coords (Phase C4b).
+	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityDir, ".beads", "config.yaml"), []byte(`issue_prefix: demo
+gc.endpoint_origin: city_canonical
+gc.endpoint_status: verified
+dolt.auto-start: false
+dolt.host: city-db.example.com
+dolt.port: 3307
+dolt.user: city-user
 `), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1795,11 +1811,10 @@ func TestFinalizeInitCanonicalizesBdStoreBeforeProviderReadinessBlockWithoutSkip
 		if !fresh {
 			t.Fatal("finalizeInit should force a fresh readiness probe")
 		}
-		if _, err := os.Stat(filepath.Join(cityPath, ".beads", "metadata.json")); err != nil {
-			t.Fatalf("metadata.json missing before readiness block: %v", err)
-		}
-		if _, err := os.Stat(filepath.Join(cityPath, ".beads", "config.yaml")); err != nil {
-			t.Fatalf("config.yaml missing before readiness block: %v", err)
+		// bd's proxied-server init writes metadata.json/config.yaml at gc start;
+		// deferred init only ensures the .beads directory exists here.
+		if _, err := os.Stat(filepath.Join(cityPath, ".beads")); err != nil {
+			t.Fatalf(".beads directory missing before readiness block: %v", err)
 		}
 		return map[string]api.ReadinessItem{
 			"claude": {
@@ -1817,17 +1832,16 @@ func TestFinalizeInitCanonicalizesBdStoreBeforeProviderReadinessBlockWithoutSkip
 	if code != 1 {
 		t.Fatalf("finalizeInit = %d, want 1", code)
 	}
-	if _, err := os.Stat(filepath.Join(cityPath, ".beads", "metadata.json")); err != nil {
-		t.Fatalf("metadata.json missing after readiness block: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(cityPath, ".beads", "config.yaml")); err != nil {
-		t.Fatalf("config.yaml missing after readiness block: %v", err)
+	// bd owns metadata.json/config.yaml (written at gc start); a readiness-blocked
+	// deferred init only guarantees the .beads directory exists.
+	if _, err := os.Stat(filepath.Join(cityPath, ".beads")); err != nil {
+		t.Fatalf(".beads directory missing after readiness block: %v", err)
 	}
 }
 
 func TestFinalizeInitDoesNotRunBdProviderBeforeProviderReadinessBlock(t *testing.T) {
 	configureIsolatedRuntimeEnv(t)
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	stubInitDependencyChecks(t)
 	stubInitDoltAuthorIdentity(t, map[string]string{
 		"user.name":  "gc-test",

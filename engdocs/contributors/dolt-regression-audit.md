@@ -21,7 +21,7 @@ is to answer two questions for every Dolt-related item:
 
 ### Currently labeled Dolt issues
 
-- `#245` `bd/gc dolt port env var mismatch: GC_DOLT_PORT vs BEADS_DOLT_PORT`
+- `#245` `bd/gc dolt port env var mismatch: GC_BEADS_PORT vs BEADS_DOLT_PORT`
 - `#323` `Dolt/beads reliability: journal corruption prevention, port pinning, boundary scan fixes`
 - `#525` `bug: dolt server port drift and stale runtime state cause bd connection failures`
 - `#560` `bug: gc dolt sync double-restarts dolt via start + ensure-ready race`
@@ -31,9 +31,9 @@ is to answer two questions for every Dolt-related item:
 
 ### Currently labeled Dolt PRs
 
-- `#454` `[bug] DoltServerCheck trusts stale GC_DOLT_PORT env var over current port file (ga-egq)`
-- `#455` `[bug] DoltServerCheck trusts stale GC_DOLT_PORT env var over current port file (ga-egq v2)`
-- `#459` `Shell scripts use stale GC_DOLT_PORT with no port file fallback — breaks after any dolt restart (ga-bys)`
+- `#454` `[bug] DoltServerCheck trusts stale GC_BEADS_PORT env var over current port file (ga-egq)`
+- `#455` `[bug] DoltServerCheck trusts stale GC_BEADS_PORT env var over current port file (ga-egq v2)`
+- `#459` `Shell scripts use stale GC_BEADS_PORT with no port file fallback — breaks after any dolt restart (ga-bys)`
 - `#479` `fix(k8s): inject BEADS_DOLT_SERVER_HOST/PORT into pod env`
 - `#554` `fix: strip all BEADS_* vars by prefix in mergeRuntimeEnv and gc bd`
 - `#680` `fix: add PID-port coherence check and clean up stale dolt state (#525)`
@@ -75,7 +75,7 @@ not in the current live `dolt` label snapshot:
 | `#454` | `supersedes: #454` | superseded by broader contract fix | doctor uses canonical target, not ambient env |
 | `#455` | `supersedes: #455` | superseded by broader contract fix | doctor uses canonical target, not ambient env |
 | `#459` | `supersedes: #459` | superseded by broader contract fix | shell-facing env uses resolved projection |
-| `#479` | `supersedes: #479` | superseded by broader contract fix | K8s projects canonical `GC_DOLT_*` then mirrors `BEADS_*` |
+| `#479` | `supersedes: #479` | superseded by broader contract fix | K8s projects canonical `GC_BEADS_*` then mirrors `BEADS_*` |
 | `#554` | `supersedes: #554` | superseded by broader contract fix | sanitize-and-populate env projection |
 | `#680` | `supersedes: #680` | superseded by broader contract fix | stale-state rejection + runtime-required managed resolution |
 | `#683` | `supersedes: #683` | superseded by canonical endpoint ownership | explicit rig endpoint preserved over city sync |
@@ -85,7 +85,7 @@ not in the current live `dolt` label snapshot:
 
 ## Detailed Issue Entries
 
-### `fixes: #245` `GC_DOLT_PORT` versus `BEADS_DOLT_PORT` mismatch
+### `fixes: #245` `GC_BEADS_PORT` versus `BEADS_DOLT_PORT` mismatch
 
 - Historical failure:
   different callers projected different Dolt env families, so raw `bd`,
@@ -100,7 +100,7 @@ not in the current live `dolt` label snapshot:
 - Why this branch closes it:
   `cmd/gc/bd_env.go` is now the projection owner for GC-native Dolt env,
   and the compatibility mirror is derived from that same resolved target.
-  Ambient `GC_DOLT_*` / `BEADS_*` state is explicitly stripped or ignored,
+  Ambient `GC_BEADS_*` / `BEADS_*` state is explicitly stripped or ignored,
   so `gc bd`, sessions, and exec backends all see the same host/port/user.
 
 ### `fixes: #323` Dolt/beads reliability: journal corruption prevention, port pinning, boundary scan fixes
@@ -163,7 +163,7 @@ not in the current live `dolt` label snapshot:
 ### `fixes: #541` environment sanitization leaks stale `BEADS_*` state
 
 - Historical failure:
-  callers inherited ambient `BEADS_*` / `GC_DOLT_*` values and overlaid new
+  callers inherited ambient `BEADS_*` / `GC_BEADS_*` values and overlaid new
   values incompletely, so sessions and helpers could silently talk to the
   wrong server.
 - Regression tests:
@@ -174,7 +174,7 @@ not in the current live `dolt` label snapshot:
   - `cmd/gc/cmd_bd_test.go`: `TestGcBdWarnsOnExternalOverrideDrift`
 - Why this branch closes it:
   projection is now sanitize-and-populate, not merge-and-hope. GC-native
-  code consumes resolved `GC_DOLT_*` values, and the `BEADS_*` mirror is a
+  code consumes resolved `GC_BEADS_*` values, and the `BEADS_*` mirror is a
   compatibility output derived from the same target after ambient drift has
   been cleared.
 
@@ -274,10 +274,10 @@ not in the current live `dolt` label snapshot:
 
 ## Detailed PR Entries
 
-### `supersedes: #454` stale `GC_DOLT_PORT` in `DoltServerCheck`
+### `supersedes: #454` stale `GC_BEADS_PORT` in `DoltServerCheck`
 
 - Original PR intent:
-  stop doctor from trusting stale ambient `GC_DOLT_PORT` over the current
+  stop doctor from trusting stale ambient `GC_BEADS_PORT` over the current
   managed or canonical target.
 - Regression tests:
   - `internal/doctor/checks_test.go`: `TestDoltServerCheck_ManagedCityUsesRuntimeState`
@@ -288,7 +288,7 @@ not in the current live `dolt` label snapshot:
   contract-resolved managed runtime publication or canonical external target
   as the rest of GC.
 
-### `supersedes: #455` stale `GC_DOLT_PORT` in `DoltServerCheck` v2
+### `supersedes: #455` stale `GC_BEADS_PORT` in `DoltServerCheck` v2
 
 - Original PR intent:
   same failure class as `#454`, with a second attempt at the same narrow
@@ -303,7 +303,7 @@ not in the current live `dolt` label snapshot:
   doctor-only env precedence tweak; it is shared target resolution for both
   city and rig checks.
 
-### `supersedes: #459` shell scripts use stale `GC_DOLT_PORT` with no port-file fallback
+### `supersedes: #459` shell scripts use stale `GC_BEADS_PORT` with no port-file fallback
 
 - Original PR intent:
   make shell-facing paths resilient after Dolt restarts instead of leaving
@@ -329,7 +329,7 @@ not in the current live `dolt` label snapshot:
   - `internal/runtime/k8s/provider_test.go`: `TestBuildPodEnvRejectsHostOnlyProjectedTarget`
   - `internal/runtime/k8s/provider_test.go`: `TestBuildPodEnvUsesProviderManagedAlias`
 - Why this branch supersedes it:
-  K8s now consumes the canonical projected `GC_DOLT_*` target and mirrors
+  K8s now consumes the canonical projected `GC_BEADS_*` target and mirrors
   `BEADS_DOLT_SERVER_*` from that one source. The old K8s-only env contract
   is compatibility-only, not authoritative.
 
@@ -458,7 +458,7 @@ than many one-off patches:
 - `cmd/gc/gc-beads-bd`
   now also implements the exec store bridge for `exec:gc-beads-bd`.
 - `internal/runtime/k8s/provider.go`
-  projects pod env from canonical `GC_DOLT_*` state and mirrors `BEADS_*`
+  projects pod env from canonical `GC_BEADS_*` state and mirrors `BEADS_*`
   only as compatibility output.
 
 ## Verification Command Set

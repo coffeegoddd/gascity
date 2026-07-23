@@ -15,34 +15,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// EndpointOrigin describes who owns a scope's endpoint definition.
-type EndpointOrigin string
-
-// Canonical endpoint origin values.
-const (
-	EndpointOriginManagedCity   EndpointOrigin = "managed_city"
-	EndpointOriginCityCanonical EndpointOrigin = "city_canonical"
-	EndpointOriginInheritedCity EndpointOrigin = "inherited_city"
-	EndpointOriginExplicit      EndpointOrigin = "explicit"
-)
-
-// EndpointStatus records whether a canonical external endpoint has been validated.
-type EndpointStatus string
-
-// Canonical endpoint status values.
-const (
-	EndpointStatusVerified   EndpointStatus = "verified"
-	EndpointStatusUnverified EndpointStatus = "unverified"
-)
-
 // ConfigState is the canonical endpoint-bearing subset of .beads/config.yaml.
+//
+// bd owns the endpoint in proxied-server mode, so a scope is either LOCAL (no
+// dolt coords — bd owns the proxied local server) or EXTERNAL (dolt.host/
+// dolt.port present — an operator-managed server bd fronts). There is no stored
+// endpoint-origin taxonomy or verification status: the presence of coords is
+// the whole model, and bd verifies external endpoints at init.
 type ConfigState struct {
-	IssuePrefix    string
-	EndpointOrigin EndpointOrigin
-	EndpointStatus EndpointStatus
-	DoltHost       string
-	DoltPort       string
-	DoltUser       string
+	IssuePrefix string
+	DoltHost    string
+	DoltPort    string
+	DoltUser    string
 	// DoltMode is the beads dolt.mode value to write to config.yaml.
 	// When non-empty, EnsureCanonicalConfig writes dolt.mode to the canonical config.
 	// When empty, the existing dolt.mode value is preserved.
@@ -66,15 +50,6 @@ type ConfigState struct {
 // DoltConfig is the Dolt-specific subset of .beads/config.yaml that GC owns.
 type DoltConfig struct {
 	DisableEventFlush *bool
-}
-
-// DisableEventFlushEnabled returns whether managed Dolt launches should disable
-// Dolt's event-flush telemetry reporter. Missing config defaults to true.
-func (c DoltConfig) DisableEventFlushEnabled() bool {
-	if c.DisableEventFlush == nil {
-		return true
-	}
-	return *c.DisableEventFlush
 }
 
 // MetadataState is the canonical subset of .beads/metadata.json used by GC.
@@ -240,53 +215,6 @@ func ReadExportAuto(fs fsys.FS, path string) (value bool, ok bool, err error) {
 		return false, false, nil
 	}
 	return false, false, nil
-}
-
-// ReadDoltConfig reads the Dolt-specific GC config object from config.yaml.
-func ReadDoltConfig(fs fsys.FS, path string) (DoltConfig, bool, error) {
-	doc, err := readConfigDoc(fs, path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return DoltConfig{}, false, nil
-		}
-		if data, readErr := fs.ReadFile(path); readErr == nil {
-			if cfg, ok := readDoltConfigFromData(data); ok {
-				return cfg, true, nil
-			}
-		}
-		return DoltConfig{}, false, err
-	}
-	cfg := readDoltConfigFromRoot(mappingRoot(doc))
-	return cfg, cfg.hasValues(), nil
-}
-
-// ReadEndpointStatus reads gc.endpoint_status when present.
-func ReadEndpointStatus(fs fsys.FS, path string) (EndpointStatus, bool, error) {
-	doc, err := readConfigDoc(fs, path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", false, nil
-		}
-		if data, readErr := fs.ReadFile(path); readErr == nil {
-			if value, ok := scanConfigLineValueFromData(data, "gc.endpoint_status:"); ok {
-				status := EndpointStatus(value)
-				switch status {
-				case EndpointStatusVerified, EndpointStatusUnverified:
-					return status, true, nil
-				}
-				return "", false, nil
-			}
-		}
-		return "", false, err
-	}
-	if value, ok := configStringValue(mappingRoot(doc), "gc.endpoint_status"); ok {
-		status := EndpointStatus(value)
-		switch status {
-		case EndpointStatusVerified, EndpointStatusUnverified:
-			return status, true, nil
-		}
-	}
-	return "", false, nil
 }
 
 // ReadConfigState reads canonical endpoint config from .beads/config.yaml.
@@ -508,12 +436,8 @@ func EnsureCanonicalConfig(fs fsys.FS, path string, state ConfigState) (bool, er
 	// root cause of the 2026-06-08 town-wide wedge (ga-0eq). BD_BACKUP_ENABLED
 	// env-var suppression only covers gc's own calls, so bake it in too.
 	changed = setBool(root, "backup.enabled", false) || changed
-	if state.EndpointOrigin != "" {
-		changed = setString(root, "gc.endpoint_origin", string(state.EndpointOrigin)) || changed
-	}
-	if state.EndpointStatus != "" {
-		changed = setString(root, "gc.endpoint_status", string(state.EndpointStatus)) || changed
-	}
+	// gc.endpoint_origin / gc.endpoint_status are legacy keys bd's config.yaml
+	// never carries; deleteKeys below strips any stale ones from old configs.
 
 	host := strings.TrimSpace(state.DoltHost)
 	port := strings.TrimSpace(state.DoltPort)
@@ -654,12 +578,6 @@ func ensureCanonicalConfigFallback(fs fsys.FS, path string, state ConfigState) (
 	if prefix != "" {
 		replacements["issue_prefix"] = "issue_prefix: " + prefix
 		replacements["issue-prefix"] = "issue-prefix: " + prefix
-	}
-	if state.EndpointOrigin != "" {
-		replacements["gc.endpoint_origin"] = "gc.endpoint_origin: " + string(state.EndpointOrigin)
-	}
-	if state.EndpointStatus != "" {
-		replacements["gc.endpoint_status"] = "gc.endpoint_status: " + string(state.EndpointStatus)
 	}
 
 	host := strings.TrimSpace(state.DoltHost)
@@ -987,8 +905,6 @@ func scanNestedConfigLineValueFromData(data []byte, section string, keys ...stri
 func readConfigStateFromData(data []byte) ConfigState {
 	return ConfigState{
 		IssuePrefix:    scanConfigValueFromData(data, "issue_prefix:", "issue-prefix:"),
-		EndpointOrigin: endpointOriginValue(scanConfigValueFromData(data, "gc.endpoint_origin:")),
-		EndpointStatus: endpointStatusValue(scanConfigValueFromData(data, "gc.endpoint_status:")),
 		DoltHost:       scanConfigValueFromData(data, "dolt.host:"),
 		DoltPort:       scanConfigValueFromData(data, "dolt.port:"),
 		DoltUser:       scanConfigValueFromData(data, "dolt.user:"),
@@ -999,8 +915,6 @@ func readConfigStateFromData(data []byte) ConfigState {
 func readConfigStateFromRoot(root *yaml.Node) ConfigState {
 	return ConfigState{
 		IssuePrefix:    configValue(root, "issue_prefix", "issue-prefix"),
-		EndpointOrigin: endpointOriginValue(configValue(root, "gc.endpoint_origin")),
-		EndpointStatus: endpointStatusValue(configValue(root, "gc.endpoint_status")),
 		DoltHost:       configValue(root, "dolt.host"),
 		DoltPort:       configValue(root, "dolt.port"),
 		DoltUser:       configValue(root, "dolt.user"),
@@ -1148,26 +1062,6 @@ func nestedConfigLineKey(line string) (string, bool) {
 		return "", false
 	}
 	return strings.TrimSpace(key), true
-}
-
-func endpointOriginValue(value string) EndpointOrigin {
-	origin := EndpointOrigin(strings.TrimSpace(value))
-	switch origin {
-	case EndpointOriginManagedCity, EndpointOriginCityCanonical, EndpointOriginInheritedCity, EndpointOriginExplicit:
-		return origin
-	default:
-		return ""
-	}
-}
-
-func endpointStatusValue(value string) EndpointStatus {
-	status := EndpointStatus(strings.TrimSpace(value))
-	switch status {
-	case EndpointStatusVerified, EndpointStatusUnverified:
-		return status
-	default:
-		return ""
-	}
 }
 
 func findValue(root *yaml.Node, key string) *yaml.Node {

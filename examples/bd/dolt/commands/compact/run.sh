@@ -55,47 +55,47 @@
 #
 # Environment:
 #   GC_CITY_PATH                          (required) — city root
-#   GC_DOLT_PORT                          (required) — managed dolt port
-#   GC_DOLT_HOST                          (default: 127.0.0.1)
-#   GC_DOLT_USER                          (default: root)
-#   GC_DOLT_PASSWORD                      (optional)
-#   GC_DOLT_COMPACT_THRESHOLD_COMMITS
+#   GC_BEADS_PORT                          (required) — managed dolt port
+#   GC_BEADS_HOST                          (default: 127.0.0.1)
+#   GC_BEADS_USER                          (default: root)
+#   GC_BEADS_PASSWORD                      (optional)
+#   GC_BEADS_COMPACT_THRESHOLD_COMMITS
 #     (default: 2000) — skip databases with fewer commits than this.
-#   GC_DOLT_COMPACT_CALL_TIMEOUT_SECS
+#   GC_BEADS_COMPACT_CALL_TIMEOUT_SECS
 #     (default: 1800) — wall-clock bound for each SQL CALL.
-#   GC_DOLT_COMPACT_PUSH_TIMEOUT_SECS
+#   GC_BEADS_COMPACT_PUSH_TIMEOUT_SECS
 #     (default: 120) — wall-clock bound for remote compare-and-push
 #                     after local compaction. Push failures are recorded for
 #                     repair but do not fail local compaction.
-#   GC_DOLT_RIG_LIST_TIMEOUT_SECS
+#   GC_BEADS_RIG_LIST_TIMEOUT_SECS
 #     (default: 30) — wall-clock bound for `gc rig list --json` rig
 #                     discovery. Shared with the health command; the
 #                     default lives in runtime.sh.
-#   GC_DOLT_COMPACT_PENDING_PUSH_MAX_AGE_SECS
+#   GC_BEADS_COMPACT_PENDING_PUSH_MAX_AGE_SECS
 #     (default: 172800) — maximum age for automatic pending remote-push retry.
 #                       Older markers require manual review before push.
-#   GC_DOLT_COMPACT_REMOTE               (optional) — remote to fetch/push.
+#   GC_BEADS_COMPACT_REMOTE               (optional) — remote to fetch/push.
 #                                         Defaults to origin when present;
 #                                         ambiguous multi-remote stores fail.
-#   GC_DOLT_COMPACT_DRY_RUN              (optional) — when set, prints
+#   GC_BEADS_COMPACT_DRY_RUN              (optional) — when set, prints
 #                                         what would happen but does not
 #                                         execute any DOLT_RESET / COMMIT.
-#   GC_DOLT_COMPACT_ONLY_DBS              (optional) — comma-separated list of
+#   GC_BEADS_COMPACT_ONLY_DBS              (optional) — comma-separated list of
 #                                         database names to compact. When set,
 #                                         all other databases are skipped.
-#   GC_DOLT_MANAGED_LOCAL                 (optional) — 1 for gc-managed local
+#   GC_BEADS_MANAGED_LOCAL                 (optional) — 1 for gc-managed local
 #                                         runtime validation; 0 allows explicit
 #                                         loopback host/port targets and skips
 #                                         non-local external targets.
-#   GC_DOLT_REFSPEC_<DB_UPPER>            (optional) — compact remote push
+#   GC_BEADS_REFSPEC_<DB_UPPER>            (optional) — compact remote push
 #                                         refspec in <local>:<remote> form.
 #                                         DB name is uppercased with '-'
 #                                         replaced by '_' to derive the env
 #                                         key; DB names that differ only by
 #                                         '-' vs '_' share that key.
-#   GC_DOLT_COMPACT_BARE_GC               (optional) — when set to a truthy
+#   GC_BEADS_COMPACT_BARE_GC               (optional) — when set to a truthy
 #                                         value (1, true, yes — matching
-#                                         the GC_DOLT_MANAGED_LOCAL style),
+#                                         the GC_BEADS_MANAGED_LOCAL style),
 #                                         skip the commit-count threshold
 #                                         AND the flatten/full-GC path
 #                                         entirely, and run a bare
@@ -108,8 +108,8 @@
 #                                         flatten, so a memory-pressure
 #                                         caller can run a short-cadence
 #                                         GC without rewriting history.
-#                                         Honors GC_DOLT_COMPACT_ONLY_DBS,
-#                                         GC_DOLT_COMPACT_DRY_RUN, and the
+#                                         Honors GC_BEADS_COMPACT_ONLY_DBS,
+#                                         GC_BEADS_COMPACT_DRY_RUN, and the
 #                                         per-db quarantine marker; does
 #                                         NOT write pending-GC /
 #                                         pending-push markers (those are
@@ -120,7 +120,7 @@ set -eu
 
 # CLI flags. The discovered-command bridge forwards `gc dolt compact` argv here
 # with flag-parsing disabled, so this script owns its option parsing. Flags map
-# onto the GC_DOLT_COMPACT_* environment defaults (and the gc_only mode) read
+# onto the GC_BEADS_COMPACT_* environment defaults (and the gc_only mode) read
 # below, giving operators a discoverable, sanctioned reclaim path without
 # exporting environment variables. --help is intercepted by the bridge.
 #   --gc-only          reclaim orphaned chunks via CALL DOLT_GC('--full') on
@@ -128,10 +128,10 @@ set -eu
 #                      the flatten path — recovery for a database stranded below
 #                      the threshold with orphaned oldgen archives.
 #   --only-db <name>   restrict to the named database (repeatable; augments
-#                      GC_DOLT_COMPACT_ONLY_DBS).
+#                      GC_BEADS_COMPACT_ONLY_DBS).
 #   --dry-run          print intended actions without mutating Dolt.
 #   --skip-fetch       bypass CALL DOLT_FETCH for every database (sets
-#                      GC_DOLT_COMPACT_SKIP_FETCH=1) — opt-out for cities whose
+#                      GC_BEADS_COMPACT_SKIP_FETCH=1) — opt-out for cities whose
 #                      remote is uncredentialed, where the fetch would crash the
 #                      managed dolt server. Compaction proceeds from the local
 #                      source of truth and any remote push is deferred.
@@ -147,10 +147,10 @@ while [ "$#" -gt 0 ]; do
         printf 'compact: --only-db requires a database name\n' >&2
         exit 2
       fi
-      if [ -n "${GC_DOLT_COMPACT_ONLY_DBS:-}" ]; then
-        GC_DOLT_COMPACT_ONLY_DBS="${GC_DOLT_COMPACT_ONLY_DBS},$2"
+      if [ -n "${GC_BEADS_COMPACT_ONLY_DBS:-}" ]; then
+        GC_BEADS_COMPACT_ONLY_DBS="${GC_BEADS_COMPACT_ONLY_DBS},$2"
       else
-        GC_DOLT_COMPACT_ONLY_DBS="$2"
+        GC_BEADS_COMPACT_ONLY_DBS="$2"
       fi
       shift 2
       ;;
@@ -160,19 +160,19 @@ while [ "$#" -gt 0 ]; do
         printf 'compact: --only-db requires a database name\n' >&2
         exit 2
       fi
-      if [ -n "${GC_DOLT_COMPACT_ONLY_DBS:-}" ]; then
-        GC_DOLT_COMPACT_ONLY_DBS="${GC_DOLT_COMPACT_ONLY_DBS},${only_db_flag_value}"
+      if [ -n "${GC_BEADS_COMPACT_ONLY_DBS:-}" ]; then
+        GC_BEADS_COMPACT_ONLY_DBS="${GC_BEADS_COMPACT_ONLY_DBS},${only_db_flag_value}"
       else
-        GC_DOLT_COMPACT_ONLY_DBS="${only_db_flag_value}"
+        GC_BEADS_COMPACT_ONLY_DBS="${only_db_flag_value}"
       fi
       shift
       ;;
     --dry-run)
-      GC_DOLT_COMPACT_DRY_RUN=1
+      GC_BEADS_COMPACT_DRY_RUN=1
       shift
       ;;
     --skip-fetch)
-      GC_DOLT_COMPACT_SKIP_FETCH=1
+      GC_BEADS_COMPACT_SKIP_FETCH=1
       shift
       ;;
     --)
@@ -190,9 +190,9 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-: "${GC_DOLT_PORT:=}"
-gc_dolt_port_input="$GC_DOLT_PORT"
-gc_dolt_host_input="${GC_DOLT_HOST:-}"
+: "${GC_BEADS_PORT:=}"
+gc_dolt_port_input="$GC_BEADS_PORT"
+gc_dolt_host_input="${GC_BEADS_HOST:-}"
 
 compact_dolt_host_is_local() (
   compact_host=$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')
@@ -220,17 +220,17 @@ compact_dolt_host_is_local() (
 )
 
 explicit_external_local_dolt=0
-case "${GC_DOLT_MANAGED_LOCAL:-}" in
+case "${GC_BEADS_MANAGED_LOCAL:-}" in
   0|false|FALSE|no|NO)
     if [ -z "$gc_dolt_port_input" ]; then
-      printf 'compact: managed local Dolt runtime is not applicable and GC_DOLT_PORT is empty — skip\n'
+      printf 'compact: managed local Dolt runtime is not applicable and GC_BEADS_PORT is empty — skip\n'
       exit 0
     fi
     if compact_dolt_host_is_local "$gc_dolt_host_input"; then
-      GC_DOLT_PORT="$gc_dolt_port_input"
+      GC_BEADS_PORT="$gc_dolt_port_input"
       explicit_external_local_dolt=1
     else
-      printf 'compact: GC_DOLT_HOST=%s is not a local Dolt compaction target — skip\n' \
+      printf 'compact: GC_BEADS_HOST=%s is not a local Dolt compaction target — skip\n' \
         "$gc_dolt_host_input"
       exit 0
     fi
@@ -243,37 +243,37 @@ PACK_DIR="${GC_PACK_DIR:-$(unset CDPATH; cd -- "$(dirname "$0")/.." && pwd)}"
 # shellcheck disable=SC1091
 . "$PACK_DIR/assets/scripts/compact-gain-drift-proof.sh"
 
-if [ "${GC_DOLT_MANAGED_LOCAL:-}" = "1" ]; then
+if [ "${GC_BEADS_MANAGED_LOCAL:-}" = "1" ]; then
   managed_port=$(managed_runtime_port "$DOLT_STATE_FILE" "$DOLT_DATA_DIR" || true)
   if [ -n "$managed_port" ]; then
     if [ -n "$gc_dolt_port_input" ] && [ "$gc_dolt_port_input" != "$managed_port" ]; then
-      printf 'compact: GC_DOLT_PORT=%s does not match managed runtime port=%s for data_dir=%s — skip\n' \
+      printf 'compact: GC_BEADS_PORT=%s does not match managed runtime port=%s for data_dir=%s — skip\n' \
         "$gc_dolt_port_input" "$managed_port" "$DOLT_DATA_DIR"
       exit 0
     fi
-    GC_DOLT_PORT="$managed_port"
+    GC_BEADS_PORT="$managed_port"
   elif [ -z "$gc_dolt_port_input" ]; then
     printf 'compact: managed local Dolt runtime is not active for data_dir=%s — skip\n' \
       "$DOLT_DATA_DIR"
     exit 0
   else
-    GC_DOLT_PORT="$gc_dolt_port_input"
+    GC_BEADS_PORT="$gc_dolt_port_input"
   fi
 elif [ "$explicit_external_local_dolt" = "1" ]; then
   :
 elif [ -n "$gc_dolt_port_input" ]; then
   if ! compact_dolt_host_is_local "$gc_dolt_host_input"; then
-    printf 'compact: GC_DOLT_HOST=%s is not a local managed Dolt host — skip\n' \
+    printf 'compact: GC_BEADS_HOST=%s is not a local managed Dolt host — skip\n' \
       "$gc_dolt_host_input"
     exit 0
   fi
   managed_port=$(managed_runtime_port "$DOLT_STATE_FILE" "$DOLT_DATA_DIR" || true)
   if [ -z "$managed_port" ] || [ "$gc_dolt_port_input" != "$managed_port" ]; then
-    printf 'compact: GC_DOLT_PORT=%s does not match managed runtime port=%s for data_dir=%s — skip\n' \
+    printf 'compact: GC_BEADS_PORT=%s does not match managed runtime port=%s for data_dir=%s — skip\n' \
       "$gc_dolt_port_input" "${managed_port:-<inactive>}" "$DOLT_DATA_DIR"
     exit 0
   fi
-  GC_DOLT_PORT="$managed_port"
+  GC_BEADS_PORT="$managed_port"
 elif [ -z "$gc_dolt_port_input" ]; then
   managed_port=$(managed_runtime_port "$DOLT_STATE_FILE" "$DOLT_DATA_DIR" || true)
   if [ -z "$managed_port" ]; then
@@ -281,24 +281,24 @@ elif [ -z "$gc_dolt_port_input" ]; then
       "$DOLT_DATA_DIR"
     exit 0
   fi
-  GC_DOLT_PORT="$managed_port"
+  GC_BEADS_PORT="$managed_port"
 fi
 
-: "${GC_DOLT_PORT:?GC_DOLT_PORT must be set}"
-: "${GC_DOLT_USER:=root}"
+: "${GC_BEADS_PORT:?GC_BEADS_PORT must be set}"
+: "${GC_BEADS_USER:=root}"
 
-host="${GC_DOLT_HOST:-127.0.0.1}"
-threshold_commits="${GC_DOLT_COMPACT_THRESHOLD_COMMITS:-2000}"
-call_timeout="${GC_DOLT_COMPACT_CALL_TIMEOUT_SECS:-1800}"
-push_timeout="${GC_DOLT_COMPACT_PUSH_TIMEOUT_SECS:-120}"
-pending_push_max_age_secs="${GC_DOLT_COMPACT_PENDING_PUSH_MAX_AGE_SECS:-172800}"
-compact_remote="${GC_DOLT_COMPACT_REMOTE:-}"
-dry_run="${GC_DOLT_COMPACT_DRY_RUN:-}"
-only_dbs="${GC_DOLT_COMPACT_ONLY_DBS:-}"
-bare_gc_input="${GC_DOLT_COMPACT_BARE_GC:-}"
-skip_fetch_input="${GC_DOLT_COMPACT_SKIP_FETCH:-}"
-skip_fetch_dbs="${GC_DOLT_COMPACT_SKIP_FETCH_DBS:-}"
-compact_alert_to="${GC_DOLT_COMPACT_ALERT_TO:-mayor}"
+host="${GC_BEADS_HOST:-127.0.0.1}"
+threshold_commits="${GC_BEADS_COMPACT_THRESHOLD_COMMITS:-2000}"
+call_timeout="${GC_BEADS_COMPACT_CALL_TIMEOUT_SECS:-1800}"
+push_timeout="${GC_BEADS_COMPACT_PUSH_TIMEOUT_SECS:-120}"
+pending_push_max_age_secs="${GC_BEADS_COMPACT_PENDING_PUSH_MAX_AGE_SECS:-172800}"
+compact_remote="${GC_BEADS_COMPACT_REMOTE:-}"
+dry_run="${GC_BEADS_COMPACT_DRY_RUN:-}"
+only_dbs="${GC_BEADS_COMPACT_ONLY_DBS:-}"
+bare_gc_input="${GC_BEADS_COMPACT_BARE_GC:-}"
+skip_fetch_input="${GC_BEADS_COMPACT_SKIP_FETCH:-}"
+skip_fetch_dbs="${GC_BEADS_COMPACT_SKIP_FETCH_DBS:-}"
+compact_alert_to="${GC_BEADS_COMPACT_ALERT_TO:-mayor}"
 case "$bare_gc_input" in
   ''|0|false|FALSE|no|NO)
     bare_gc=0
@@ -307,7 +307,7 @@ case "$bare_gc_input" in
     bare_gc=1
     ;;
   *)
-    printf 'compact: invalid GC_DOLT_COMPACT_BARE_GC=%s (must be 1/true/yes or 0/false/no)\n' \
+    printf 'compact: invalid GC_BEADS_COMPACT_BARE_GC=%s (must be 1/true/yes or 0/false/no)\n' \
       "$bare_gc_input" >&2
     exit 2
     ;;
@@ -321,20 +321,20 @@ case "$skip_fetch_input" in
     skip_fetch=1
     ;;
   *)
-    printf 'compact: invalid GC_DOLT_COMPACT_SKIP_FETCH=%s (must be 1/true/yes or 0/false/no)\n' \
+    printf 'compact: invalid GC_BEADS_COMPACT_SKIP_FETCH=%s (must be 1/true/yes or 0/false/no)\n' \
       "$skip_fetch_input" >&2
     exit 2
     ;;
 esac
 
 if [ "$gc_only" = "1" ] && [ "$bare_gc" = "1" ]; then
-  printf 'compact: --gc-only cannot be combined with bare GC (GC_DOLT_COMPACT_BARE_GC) — choose one reclaim mode\n' >&2
+  printf 'compact: --gc-only cannot be combined with bare GC (GC_BEADS_COMPACT_BARE_GC) — choose one reclaim mode\n' >&2
   exit 2
 fi
 
 case "$threshold_commits" in
   ''|*[!0-9]*)
-    printf 'compact: invalid GC_DOLT_COMPACT_THRESHOLD_COMMITS=%s (must be a non-negative integer)\n' \
+    printf 'compact: invalid GC_BEADS_COMPACT_THRESHOLD_COMMITS=%s (must be a non-negative integer)\n' \
       "$threshold_commits" >&2
     exit 2
     ;;
@@ -342,7 +342,7 @@ esac
 
 case "$call_timeout" in
   ''|*[!0-9]*|0)
-    printf 'compact: invalid GC_DOLT_COMPACT_CALL_TIMEOUT_SECS=%s (must be a positive integer)\n' \
+    printf 'compact: invalid GC_BEADS_COMPACT_CALL_TIMEOUT_SECS=%s (must be a positive integer)\n' \
       "$call_timeout" >&2
     exit 2
     ;;
@@ -350,23 +350,23 @@ esac
 
 case "$push_timeout" in
   ''|*[!0-9]*|0)
-    printf 'compact: invalid GC_DOLT_COMPACT_PUSH_TIMEOUT_SECS=%s (must be a positive integer)\n' \
+    printf 'compact: invalid GC_BEADS_COMPACT_PUSH_TIMEOUT_SECS=%s (must be a positive integer)\n' \
       "$push_timeout" >&2
     exit 2
     ;;
 esac
 
-case "$GC_DOLT_RIG_LIST_TIMEOUT_SECS" in
+case "$GC_BEADS_RIG_LIST_TIMEOUT_SECS" in
   ''|*[!0-9]*|0)
-    printf 'compact: invalid GC_DOLT_RIG_LIST_TIMEOUT_SECS=%s (must be a positive integer)\n' \
-      "$GC_DOLT_RIG_LIST_TIMEOUT_SECS" >&2
+    printf 'compact: invalid GC_BEADS_RIG_LIST_TIMEOUT_SECS=%s (must be a positive integer)\n' \
+      "$GC_BEADS_RIG_LIST_TIMEOUT_SECS" >&2
     exit 2
     ;;
 esac
 
 case "$pending_push_max_age_secs" in
   ''|*[!0-9]*)
-    printf 'compact: invalid GC_DOLT_COMPACT_PENDING_PUSH_MAX_AGE_SECS=%s (must be a non-negative integer)\n' \
+    printf 'compact: invalid GC_BEADS_COMPACT_PENDING_PUSH_MAX_AGE_SECS=%s (must be a non-negative integer)\n' \
       "$pending_push_max_age_secs" >&2
     exit 2
     ;;
@@ -376,13 +376,13 @@ case "$compact_remote" in
   ''|[A-Za-z0-9_.-]*)
     case "$compact_remote" in
       *[!A-Za-z0-9_.-]*)
-        printf 'compact: invalid GC_DOLT_COMPACT_REMOTE=%s\n' "$compact_remote" >&2
+        printf 'compact: invalid GC_BEADS_COMPACT_REMOTE=%s\n' "$compact_remote" >&2
         exit 2
         ;;
     esac
     ;;
   *)
-    printf 'compact: invalid GC_DOLT_COMPACT_REMOTE=%s\n' "$compact_remote" >&2
+    printf 'compact: invalid GC_BEADS_COMPACT_REMOTE=%s\n' "$compact_remote" >&2
     exit 2
     ;;
 esac
@@ -397,7 +397,7 @@ if compact_dolt_host_is_local "$lock_host"; then
   # safer than allowing two compaction jobs to interleave on one local runtime.
   lock_host="127.0.0.1"
 fi
-lock_key=$(printf '%s-%s' "$lock_host" "$GC_DOLT_PORT" | tr -c 'A-Za-z0-9_.-' '-')
+lock_key=$(printf '%s-%s' "$lock_host" "$GC_BEADS_PORT" | tr -c 'A-Za-z0-9_.-' '-')
 lock_root="/tmp/gc-dolt-compact"
 old_umask=$(umask)
 umask 077
@@ -427,7 +427,7 @@ quarantine_dir="$PACK_STATE_DIR/compact-quarantine"
 # premature timeout silently drops every external rig database from
 # compaction (gascity#2740). The default lives in runtime.sh, shared with
 # the health command.
-rig_list_timeout="$GC_DOLT_RIG_LIST_TIMEOUT_SECS"
+rig_list_timeout="$GC_BEADS_RIG_LIST_TIMEOUT_SECS"
 metadata_files() {
   printf '%s\n' "$GC_CITY_PATH/.beads/metadata.json"
   if command -v gc >/dev/null 2>&1; then
@@ -528,7 +528,7 @@ refspec_env_value() {
   case "$key" in
     *[!A-Z0-9_]*) return 0 ;;
   esac
-  eval "printf '%s' \"\${GC_DOLT_REFSPEC_$key:-}\""
+  eval "printf '%s' \"\${GC_BEADS_REFSPEC_$key:-}\""
 }
 
 refspec_parts() {
@@ -607,10 +607,10 @@ discover_database_names() {
 dolt_query() {
   db="$1"
   query="$2"
-  export DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}"
+  export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
   run_bounded "$call_timeout" \
-    dolt --host "$host" --port "$GC_DOLT_PORT" \
-    --user "$GC_DOLT_USER" --no-tls \
+    dolt --host "$host" --port "$GC_BEADS_PORT" \
+    --user "$GC_BEADS_USER" --no-tls \
     --use-db "$db" \
     sql -r tabular -q "$query"
 }
@@ -846,7 +846,7 @@ select_remote() {
     printf 'origin\n'
     return 0
   fi
-  printf 'compact: db=%s multiple remotes found without origin; set GC_DOLT_COMPACT_REMOTE — fail\n' \
+  printf 'compact: db=%s multiple remotes found without origin; set GC_BEADS_COMPACT_REMOTE — fail\n' \
     "$db" >&2
   return 1
 }
@@ -858,8 +858,8 @@ fetch_remote() {
 }
 
 # skip_fetch_for_db reports whether CALL DOLT_FETCH must be bypassed for the
-# given database. True when the global GC_DOLT_COMPACT_SKIP_FETCH opt-out is set
-# or when <db> appears in the GC_DOLT_COMPACT_SKIP_FETCH_DBS allowlist. The
+# given database. True when the global GC_BEADS_COMPACT_SKIP_FETCH opt-out is set
+# or when <db> appears in the GC_BEADS_COMPACT_SKIP_FETCH_DBS allowlist. The
 # fetch crashes the managed dolt server for uncredentialed remotes (issue
 # #2361), so this opt-out keeps one misconfigured remote from cascading.
 skip_fetch_for_db() {
@@ -903,10 +903,10 @@ push_remote_refspec() {
   else
     refspec_arg="$local_branch:$remote_branch"
   fi
-  export DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}"
+  export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
   run_bounded "$push_timeout" \
-    dolt --host "$host" --port "$GC_DOLT_PORT" \
-    --user "$GC_DOLT_USER" --no-tls \
+    dolt --host "$host" --port "$GC_BEADS_PORT" \
+    --user "$GC_BEADS_USER" --no-tls \
     --use-db "$db" \
     sql -r tabular -q "CALL DOLT_PUSH('--force', '--set-upstream', '$remote', '$refspec_arg')"
 }
@@ -1861,7 +1861,7 @@ flatten_database() {
     case ",$only_dbs," in
       *,"$db",*) ;;
       *)
-        printf 'compact: db=%s not in GC_DOLT_COMPACT_ONLY_DBS — skip\n' "$db"
+        printf 'compact: db=%s not in GC_BEADS_COMPACT_ONLY_DBS — skip\n' "$db"
         return 0
         ;;
     esac
@@ -2551,7 +2551,7 @@ bare_gc_database() {
     case ",$only_dbs," in
       *,"$db",*) ;;
       *)
-        printf 'compact: db=%s not in GC_DOLT_COMPACT_ONLY_DBS — skip\n' "$db"
+        printf 'compact: db=%s not in GC_BEADS_COMPACT_ONLY_DBS — skip\n' "$db"
         return 0
         ;;
     esac
@@ -2598,8 +2598,8 @@ bare_gc_database() {
 # threshold-gated compactor skips it forever and never reclaims the orphaned
 # chunks. Unlike bare-GC (working-set CALL DOLT_GC()), --full rewrites oldgen so
 # the orphaned history is actually reclaimed (see
-# docs/troubleshooting/dolt-bloat-recovery.md). Honors GC_DOLT_COMPACT_ONLY_DBS,
-# GC_DOLT_COMPACT_DRY_RUN, and the per-db quarantine marker; does NOT write
+# docs/troubleshooting/dolt-bloat-recovery.md). Honors GC_BEADS_COMPACT_ONLY_DBS,
+# GC_BEADS_COMPACT_DRY_RUN, and the per-db quarantine marker; does NOT write
 # pending-GC / pending-push markers (those are flatten-remediation state).
 gc_only_database() {
   db="$1"
@@ -2608,7 +2608,7 @@ gc_only_database() {
     case ",$only_dbs," in
       *,"$db",*) ;;
       *)
-        printf 'compact: db=%s not in GC_DOLT_COMPACT_ONLY_DBS — skip\n' "$db"
+        printf 'compact: db=%s not in GC_BEADS_COMPACT_ONLY_DBS — skip\n' "$db"
         return 0
         ;;
     esac
@@ -2778,7 +2778,7 @@ main() {
   # compactor is handling this Dolt server.
   if ! acquire_lock; then
     printf 'compact: another compaction already running for %s:%s — skipping\n' \
-      "$host" "$GC_DOLT_PORT"
+      "$host" "$GC_BEADS_PORT"
     exit 0
   fi
 

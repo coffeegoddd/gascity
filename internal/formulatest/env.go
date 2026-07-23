@@ -20,6 +20,6 @@ func SetupHermeticCookEnv(tb testing.TB, cityDir string) {
 	tb.Setenv("XDG_RUNTIME_DIR", tb.TempDir())
 	tb.Setenv("GC_SESSION", "fake")
 	tb.Setenv("GC_BEADS", "file")
-	tb.Setenv("GC_DOLT", "skip")
+	tb.Setenv("GC_BEADS_SKIP", "skip")
 	tb.Chdir(cityDir)
 }

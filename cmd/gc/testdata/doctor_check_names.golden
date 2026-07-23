@@ -15,8 +15,6 @@ provider-catalog-local-readiness
 expanded-config-load
 implicit-import-cache
 deprecated-attachment-fields
-dolt-topology
-dolt-drift
 config-valid
 legacy-suspended-field
 rollout:beads.conditional_writes
@@ -65,7 +63,7 @@ work-option-metadata-migration
 backlog-depth
 order-tracking-retention
 session-model
-dolt-server
+bd-proxied-server
 fork-rate
 dolt-noms-size
 dolt-journal-size

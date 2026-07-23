@@ -58,8 +58,8 @@ GC_RIG=%%s
 GC_RIG_ROOT=%%s
 GC_PROVIDER=%%s
 BEADS_DIR=%%s
-GC_DOLT_HOST=%%s
-GC_DOLT_PORT=%%s
+GC_BEADS_HOST=%%s
+GC_BEADS_PORT=%%s
 BEADS_POSTGRES_HOST=%%s
 BEADS_POSTGRES_PORT=%%s
 BEADS_POSTGRES_USER=%%s
@@ -67,7 +67,7 @@ BEADS_POSTGRES_DATABASE=%%s
 BEADS_POSTGRES_PASSWORD=%%s
 BD_DOLT_SYNC_CLI_REMOTES=%%s
 BEADS_DOLT_SYNC_CLI_REMOTES=%%s
-'       "${GC_STORE_ROOT:-}" "${GC_STORE_SCOPE:-}" "${GC_BEADS_PREFIX:-}" "${GC_CITY:-}" "${GC_CITY_PATH:-}" "${GC_RIG:-}" "${GC_RIG_ROOT:-}" "${GC_PROVIDER:-}" "${BEADS_DIR:-}" "${GC_DOLT_HOST:-}" "${GC_DOLT_PORT:-}" "${BEADS_POSTGRES_HOST:-}" "${BEADS_POSTGRES_PORT:-}" "${BEADS_POSTGRES_USER:-}" "${BEADS_POSTGRES_DATABASE:-}" "${BEADS_POSTGRES_PASSWORD:-}" "${BD_DOLT_SYNC_CLI_REMOTES:-}" "${BEADS_DOLT_SYNC_CLI_REMOTES:-}" > "$out"
+'       "${GC_STORE_ROOT:-}" "${GC_STORE_SCOPE:-}" "${GC_BEADS_PREFIX:-}" "${GC_CITY:-}" "${GC_CITY_PATH:-}" "${GC_RIG:-}" "${GC_RIG_ROOT:-}" "${GC_PROVIDER:-}" "${BEADS_DIR:-}" "${GC_BEADS_HOST:-}" "${GC_BEADS_PORT:-}" "${BEADS_POSTGRES_HOST:-}" "${BEADS_POSTGRES_PORT:-}" "${BEADS_POSTGRES_USER:-}" "${BEADS_POSTGRES_DATABASE:-}" "${BEADS_POSTGRES_PASSWORD:-}" "${BD_DOLT_SYNC_CLI_REMOTES:-}" "${BEADS_DOLT_SYNC_CLI_REMOTES:-}" > "$out"
     cat >/dev/null
     echo '{"id":"EX-1","title":"captured","status":"open","type":"task","created_at":"2026-02-27T10:00:00Z"}'
     ;;
@@ -372,11 +372,11 @@ func TestGcExecStoreEnvProjectsCityAndRigTargets(t *testing.T) {
 	if got := rigEnv["BEADS_CREDENTIALS_FILE"]; got != "" {
 		t.Fatalf("BEADS_CREDENTIALS_FILE = %q, want empty", got)
 	}
-	if got := rigEnv["GC_DOLT_HOST"]; got != "" {
-		t.Fatalf("GC_DOLT_HOST = %q, want empty", got)
+	if got := rigEnv["GC_BEADS_HOST"]; got != "" {
+		t.Fatalf("GC_BEADS_HOST = %q, want empty", got)
 	}
-	if got := rigEnv["GC_DOLT_PORT"]; got != "" {
-		t.Fatalf("GC_DOLT_PORT = %q, want empty", got)
+	if got := rigEnv["GC_BEADS_PORT"]; got != "" {
+		t.Fatalf("GC_BEADS_PORT = %q, want empty", got)
 	}
 }
 
@@ -398,7 +398,7 @@ func TestOpenStoreAtForCityExecProjectsConfiguredTargets(t *testing.T) {
 	t.Setenv("GC_BEADS", provider)
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("BEADS_DIR", "/tmp/ambient-beads")
-	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
+	t.Setenv("GC_BEADS_HOST", "ambient-dolt")
 	t.Setenv("GC_STORE_ROOT", "/tmp/ambient-store")
 
 	cityStore, err := openStoreAtForCity(cityDir, cityDir)
@@ -442,8 +442,8 @@ func TestOpenStoreAtForCityExecProjectsConfiguredTargets(t *testing.T) {
 	if got := cityEnv["BEADS_DIR"]; got != "" {
 		t.Fatalf("city BEADS_DIR leaked as %q", got)
 	}
-	if got := cityEnv["GC_DOLT_HOST"]; got != "" {
-		t.Fatalf("city GC_DOLT_HOST leaked as %q", got)
+	if got := cityEnv["GC_BEADS_HOST"]; got != "" {
+		t.Fatalf("city GC_BEADS_HOST leaked as %q", got)
 	}
 
 	rigEnv := readExecCaptureEnv(t, filepath.Join(captureDir, "frontend.env"))
@@ -468,8 +468,8 @@ func TestOpenStoreAtForCityExecProjectsConfiguredTargets(t *testing.T) {
 	if got := rigEnv["BEADS_DIR"]; got != "" {
 		t.Fatalf("rig BEADS_DIR leaked as %q", got)
 	}
-	if got := rigEnv["GC_DOLT_HOST"]; got != "" {
-		t.Fatalf("rig GC_DOLT_HOST leaked as %q", got)
+	if got := rigEnv["GC_BEADS_HOST"]; got != "" {
+		t.Fatalf("rig GC_BEADS_HOST leaked as %q", got)
 	}
 }
 
@@ -515,8 +515,8 @@ func TestOpenStoreAtForCityExecBeadsBdProjectsScopedExternalDoltEnv(t *testing.T
 	script := writeNamedExecCaptureScript(t, captureDir, "gc-beads-bd")
 	t.Setenv("GC_BEADS", "exec:"+script)
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
-	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
-	t.Setenv("GC_DOLT_PORT", "9999")
+	t.Setenv("GC_BEADS_HOST", "ambient-dolt")
+	t.Setenv("GC_BEADS_PORT", "9999")
 	t.Setenv("BD_DOLT_SYNC_CLI_REMOTES", "true")
 	t.Setenv("BEADS_DOLT_SYNC_CLI_REMOTES", "true")
 
@@ -536,11 +536,11 @@ func TestOpenStoreAtForCityExecBeadsBdProjectsScopedExternalDoltEnv(t *testing.T
 	if got := rigEnv["GC_STORE_ROOT"]; got != rigDir {
 		t.Fatalf("GC_STORE_ROOT = %q, want %q", got, rigDir)
 	}
-	if got := rigEnv["GC_DOLT_HOST"]; got != "db.example.internal" {
-		t.Fatalf("GC_DOLT_HOST = %q, want db.example.internal", got)
+	if got := rigEnv["GC_BEADS_HOST"]; got != "db.example.internal" {
+		t.Fatalf("GC_BEADS_HOST = %q, want db.example.internal", got)
 	}
-	if got := rigEnv["GC_DOLT_PORT"]; got != "3317" {
-		t.Fatalf("GC_DOLT_PORT = %q, want 3317", got)
+	if got := rigEnv["GC_BEADS_PORT"]; got != "3317" {
+		t.Fatalf("GC_BEADS_PORT = %q, want 3317", got)
 	}
 	if got := rigEnv["BEADS_DIR"]; got != "" {
 		t.Fatalf("BEADS_DIR leaked as %q", got)
@@ -580,7 +580,7 @@ dolt.auto-start: false
 		Path:   "rigs/frontend",
 		Prefix: "fe",
 	}})
-	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
+	t.Setenv("GC_BEADS_HOST", "ambient-dolt")
 	t.Setenv("BEADS_POSTGRES_PASSWORD", "ambient-pg")
 
 	env := gcExecStoreEnv(cityDir, execStoreTarget{
@@ -617,8 +617,8 @@ dolt.auto-start: false
 	if got := env["BEADS_POSTGRES_PASSWORD"]; got != "pgpw" {
 		t.Fatalf("BEADS_POSTGRES_PASSWORD = %q, want pgpw", got)
 	}
-	if got := env["GC_DOLT_HOST"]; got != "" {
-		t.Fatalf("GC_DOLT_HOST = %q, want empty for PG-backed rig", got)
+	if got := env["GC_BEADS_HOST"]; got != "" {
+		t.Fatalf("GC_BEADS_HOST = %q, want empty for PG-backed rig", got)
 	}
 }
 
@@ -630,7 +630,7 @@ func TestControllerStateOpenRigStoreExecProjectsRigTarget(t *testing.T) {
 	provider := "exec:" + script
 
 	t.Setenv("BEADS_DIR", "/tmp/ambient-beads")
-	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
+	t.Setenv("GC_BEADS_HOST", "ambient-dolt")
 
 	cs := &controllerState{cityPath: cityDir}
 	store := cs.openRigStore(provider, "frontend", rigDir, "fe", nil)
@@ -660,43 +660,8 @@ func TestControllerStateOpenRigStoreExecProjectsRigTarget(t *testing.T) {
 	if got := rigEnv["BEADS_DIR"]; got != "" {
 		t.Fatalf("BEADS_DIR leaked as %q", got)
 	}
-	if got := rigEnv["GC_DOLT_HOST"]; got != "" {
-		t.Fatalf("GC_DOLT_HOST leaked as %q", got)
-	}
-}
-
-func TestControllerStateOpenRigStoreExecBdProjectsRigDoltEnv(t *testing.T) {
-	cityDir := t.TempDir()
-	rigDir := t.TempDir()
-	captureDir := t.TempDir()
-	script := writeNamedExecCaptureScript(t, captureDir, "gc-beads-bd.sh")
-	provider := "exec:" + script
-
-	cfg := &config.City{
-		Rigs: []config.Rig{{
-			Name:     "frontend",
-			Path:     rigDir,
-			Prefix:   "fe",
-			DoltHost: "rig-db.example.com",
-			DoltPort: "3308",
-		}},
-	}
-
-	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
-	t.Setenv("GC_DOLT_PORT", "9911")
-
-	cs := &controllerState{cityPath: cityDir, cfg: cfg}
-	store := cs.openRigStore(provider, "frontend", rigDir, "fe", cfg)
-	if _, err := store.Create(beads.Bead{Title: "rig"}); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
-
-	rigEnv := readExecCaptureEnv(t, filepath.Join(captureDir, "frontend.env"))
-	if got := rigEnv["GC_DOLT_HOST"]; got != "rig-db.example.com" {
-		t.Fatalf("GC_DOLT_HOST = %q, want rig-db.example.com", got)
-	}
-	if got := rigEnv["GC_DOLT_PORT"]; got != "3308" {
-		t.Fatalf("GC_DOLT_PORT = %q, want 3308", got)
+	if got := rigEnv["GC_BEADS_HOST"]; got != "" {
+		t.Fatalf("GC_BEADS_HOST leaked as %q", got)
 	}
 }
 
@@ -764,7 +729,7 @@ func TestOpenStoreAtForCityExecUsesUniversalStoreTargetEnv(t *testing.T) {
 	t.Setenv("GC_BEADS", "exec:"+script)
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 	t.Setenv("BEADS_DIR", "/tmp/ambient-beads")
-	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
+	t.Setenv("GC_BEADS_HOST", "ambient-dolt")
 
 	store, err := openStoreAtForCity(rigDir, cityDir)
 	if err != nil {
@@ -790,7 +755,7 @@ func TestOpenStoreAtForCityExecUsesUniversalStoreTargetEnv(t *testing.T) {
 	if got := rigEnv["BEADS_DIR"]; got != "" {
 		t.Fatalf("BEADS_DIR leaked as %q", got)
 	}
-	if got := rigEnv["GC_DOLT_HOST"]; got != "" {
-		t.Fatalf("GC_DOLT_HOST leaked as %q", got)
+	if got := rigEnv["GC_BEADS_HOST"]; got != "" {
+		t.Fatalf("GC_BEADS_HOST leaked as %q", got)
 	}
 }

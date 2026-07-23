@@ -46,7 +46,7 @@ type Deps struct {
 	// InitAndHook is the deferred-fallback deeper store init (cmd/gc
 	// initAndHookDir); its error is intentionally swallowed (reported as
 	// "deferred to controller"). Required — it is reached whenever InitStore
-	// defers and the store is not GC_DOLT=skip, a path a caller cannot predict.
+	// defers and the store is not GC_BEADS_SKIP=1, a path a caller cannot predict.
 	InitAndHook func(cityPath, dir, prefix string) error
 	// ComposePacks resolves the rig's bundled imports and returns a commit closure
 	// that writes packs.lock only AFTER the city.toml append (cmd/gc
@@ -83,7 +83,7 @@ type Deps struct {
 	// seed provider state mid-flow and the flow re-evaluates it after init. nil =
 	// false.
 	StoreContract func(cityPath string) bool
-	// DoltSkip reports GC_DOLT=skip (cmd/gc gcDoltSkip). nil = false.
+	// DoltSkip reports GC_BEADS_SKIP=1 (cmd/gc gcDoltSkip). nil = false.
 	DoltSkip func() bool
 	// PostProvision runs caller-specific side effects after the core writes
 	// succeed (CLI: hooks/formulas/.env/reload; API: the mutateAndPoke config

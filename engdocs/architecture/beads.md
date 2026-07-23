@@ -288,7 +288,7 @@ provider = "bd"        # "bd" (default), "file", or "exec:/path/to/script"
 The `GC_BEADS` environment variable overrides the config file. Related
 env vars:
 
-- `GC_DOLT=skip` -- bypasses dolt server lifecycle in init/start/stop
+- `GC_BEADS_SKIP=1` -- bypasses dolt server lifecycle in init/start/stop
   (used by tests)
 - `GC_LOG_BD_OUTPUT=true` -- includes bd stdout/stderr in telemetry log
   events

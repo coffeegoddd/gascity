@@ -262,7 +262,7 @@ func writeTutorialFormulaCity(t *testing.T, formulaName, formulaBody string) str
 	t.Setenv("XDG_RUNTIME_DIR", t.TempDir())
 	t.Setenv("GC_SESSION", "fake")
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	cityDir := t.TempDir()
 	writeFile := func(rel, body string) {

@@ -111,7 +111,7 @@ func TestSQLScriptForwardsQueryArgs(t *testing.T) {
 	argvFile := writeFakeDolt(t, binDir)
 
 	// Provide a minimal data dir so the embedded branch finds a
-	// dolt-shaped subdirectory and reaches the exec. GC_DOLT_DATA_DIR
+	// dolt-shaped subdirectory and reaches the exec. GC_BEADS_DATA_DIR
 	// overrides runtime.sh's DOLT_DATA_DIR computation directly.
 	cityPath := t.TempDir()
 	dataDir := filepath.Join(cityPath, "data")
@@ -121,26 +121,26 @@ func TestSQLScriptForwardsQueryArgs(t *testing.T) {
 
 	// Strip every Dolt-related env var the script consults so the
 	// branch selection inside the wrapper is determined entirely by
-	// the values set below. An ambient GC_DOLT_HOST in CI or a
+	// the values set below. An ambient GC_BEADS_HOST in CI or a
 	// developer shell would otherwise silently flip the branch and
 	// hide whether the embedded path actually exercised "$@".
-	// Use a non-numeric GC_DOLT_PORT so managed_runtime_tcp_reachable
+	// Use a non-numeric GC_BEADS_PORT so managed_runtime_tcp_reachable
 	// (runtime.sh) takes its `''|*[!0-9]*` early-return path and the
 	// script falls deterministically into the embedded branch. This
 	// avoids the bind-then-close TOCTOU window of an "unused" port.
 	cmd := exec.Command("sh", script, "-q", "SELECT 1")
 	cmd.Env = append(filteredEnv("PATH",
-		"GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER",
-		"GC_DOLT_PASSWORD", "GC_DOLT_DATA_DIR",
+		"GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER",
+		"GC_BEADS_PASSWORD", "GC_BEADS_DATA_DIR",
 		"GC_CITY_PATH", "GC_PACK_DIR",
 	),
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_PORT=unreachable",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_PORT=unreachable",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 
 	out, err := cmd.CombinedOutput()
@@ -183,7 +183,7 @@ func TestSQLScriptForwardsQueryArgs(t *testing.T) {
 }
 
 // TestSQLScriptConnectedBranchExportsPassword pins the connected-branch
-// behavior under test: when GC_DOLT_PASSWORD is
+// behavior under test: when GC_BEADS_PASSWORD is
 // empty (the managed-local-Dolt default — root has no password), the
 // wrapper must still export DOLT_CLI_PASSWORD so dolt's credential
 // parser does not fall back to a TTY password prompt. Without the
@@ -203,24 +203,24 @@ func TestSQLScriptConnectedBranchExportsPassword(t *testing.T) {
 
 	cityPath := t.TempDir()
 
-	// GC_DOLT_HOST forces the wrapper into the remote-probe branch
+	// GC_BEADS_HOST forces the wrapper into the remote-probe branch
 	// where it sets --host/--port and (per the contract under test)
 	// must export DOLT_CLI_PASSWORD before exec. The TCP listener
 	// satisfies the nc -z probe so is_running() returns 0.
 	cmd := exec.Command("sh", script, "-q", "SELECT 1")
 	cmd.Env = append(filteredEnv("PATH",
-		"GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER",
-		"GC_DOLT_PASSWORD", "GC_DOLT_DATA_DIR",
+		"GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER",
+		"GC_BEADS_PASSWORD", "GC_BEADS_DATA_DIR",
 		"DOLT_CLI_PASSWORD",
 		"GC_CITY_PATH", "GC_PACK_DIR",
 	),
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_PORT="+strconv.Itoa(port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_PORT="+strconv.Itoa(port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 
 	out, err := cmd.CombinedOutput()
@@ -259,7 +259,7 @@ func TestSQLScriptConnectedBranchExportsPassword(t *testing.T) {
 
 	if _, err := os.Stat(pwMarker); err != nil {
 		if os.IsNotExist(err) {
-			t.Fatalf("DOLT_CLI_PASSWORD was not exported when GC_DOLT_PASSWORD is empty; dolt would fall back to a TTY password prompt and fail with 'inappropriate ioctl for device'")
+			t.Fatalf("DOLT_CLI_PASSWORD was not exported when GC_BEADS_PASSWORD is empty; dolt would fall back to a TTY password prompt and fail with 'inappropriate ioctl for device'")
 		}
 		t.Fatalf("stat password marker: %v", err)
 	}

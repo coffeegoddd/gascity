@@ -369,9 +369,7 @@ func newRootCmdWithOptions(stdout, stderr io.Writer, options rootCommandOptions)
 		newFormulaCmd(stdout, stderr),
 		newBdCmd(stdout, stderr),
 		newBdStoreBridgeCmd(stdout, stderr),
-		newDoltCleanupCmd(stdout, stderr),
 		newDoltConfigCmd(stdout, stderr),
-		newDoltStateCmd(stdout, stderr),
 		newShellCmd(stdout, stderr),
 		newAnalyzeCmd(stdout, stderr),
 		newCostsCmd(stdout, stderr),
@@ -1384,7 +1382,6 @@ func openStoreResultAtForCityWithAuthority(storePath, cityPath string, modeOverr
 		ScopeRoot:         scopeRoot,
 		CityPath:          runtimeCityPath,
 		Provider:          provider,
-		PreflightChecker:  newBeadsPreflightChecker(runtimeCityPath, provider),
 		Logger:            slog.Default(),
 		ConditionalWrites: mode,
 		OnConditionalWritesDegraded: func() func(beads.ConditionalWritesDegrade) {
@@ -1403,29 +1400,6 @@ func openStoreResultAtForCityWithAuthority(storePath, cityPath string, modeOverr
 		},
 		OpenExecStore: func() (beads.Store, error) {
 			return openExecStoreAtForCity(provider, scopeRoot, runtimeCityPath)
-		},
-		OpenNativeStore: func() (beads.Store, error) {
-			env, err := nativeDoltOpenEnvForScope(runtimeCityPath, nil, scopeRoot)
-			if err != nil {
-				return nil, fmt.Errorf("project native store env %s: %w", scopeRoot, err)
-			}
-			// Reopen hook for the native read-path reconnect: the store's cached
-			// open env pins the managed Dolt port as of open time, which is dead
-			// after a hard-kill/rebind. Re-resolve the CURRENT env on every
-			// reconnect — nativeDoltOpenEnvForScope re-reads the live port and
-			// triggers managed-Dolt recovery/restart when the server is down
-			// (allowRecovery=true), mirroring how each bd subprocess re-resolves
-			// the port per command — then re-open against the live server via the
-			// direct native path (which bypasses the factory preflight/identity
-			// gate, so an absent scope project_id cannot block the reconnect).
-			reopen := func(ctx context.Context) (beads.NativeStorage, error) {
-				freshEnv, rerr := nativeDoltOpenEnvForScopeContext(ctx, runtimeCityPath, nil, scopeRoot)
-				if rerr != nil {
-					return nil, fmt.Errorf("re-resolve native store env %s: %w", scopeRoot, rerr)
-				}
-				return beads.OpenNativeStorage(ctx, scopeRoot, freshEnv)
-			}
-			return beads.OpenNativeDoltStoreAt(context.Background(), scopeRoot, env, beads.WithNativeReopen(reopen))
 		},
 	})
 	if err != nil {

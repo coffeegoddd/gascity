@@ -15,7 +15,7 @@ import "regexp"
 //
 // It does NOT match stable identifiers (formula names, stable graph anchors
 // like gcg-run-root, schema versions, small integers) or the real Dolt
-// "ga-<base36>" ids, which are never minted under GC_DOLT=skip. Callers running
+// "ga-<base36>" ids, which are never minted under GC_BEADS_SKIP=1. Callers running
 // against a real Dolt store add an anchored ga- rule themselves.
 //
 // Deliberately NOT canonicalized (so a golden containing one flakes LOUDLY —

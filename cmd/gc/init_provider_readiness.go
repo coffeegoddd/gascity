@@ -738,42 +738,19 @@ func initScopeNeedsLocalDoltIdentity(cityPath, scopeRoot string, cfg *config.Cit
 	return !initScopeUsesExternalDolt(cityPath, scopeRoot, cfg)
 }
 
-func initScopeUsesExternalDolt(cityPath, scopeRoot string, cfg *config.City) bool {
+func initScopeUsesExternalDolt(cityPath, scopeRoot string, _ *config.City) bool {
+	// A scope is external iff its canonical .beads/config.yaml pins coords; there
+	// is no city.toml [dolt] endpoint mirror any more.
 	if samePath(scopeRoot, cityPath) {
 		if target, ok, err := canonicalScopeDoltTarget(cityPath, cityPath); ok {
-			if err != nil {
-				return false
-			}
-			return target.External
+			return err == nil && target.External
 		}
-		if isExternalDolt(cityPath) {
-			return true
-		}
-		if cfg != nil {
-			host, port := configuredExternalDoltTargetForCity(cfg.Dolt)
-			return host != "" || port != ""
-		}
-		return false
-	}
-
-	target, ok, err := canonicalScopeDoltTarget(cityPath, scopeRoot)
-	if err == nil && ok {
-		return target.External
-	}
-	if cfg == nil {
 		return isExternalDolt(cityPath)
 	}
-	for _, rig := range cfg.Rigs {
-		if samePath(rig.Path, scopeRoot) {
-			host, port := configuredExternalDoltTargetForRig(rig)
-			if host != "" || port != "" {
-				return true
-			}
-			break
-		}
+	if target, ok, err := canonicalScopeDoltTarget(cityPath, scopeRoot); ok {
+		return err == nil && target.External
 	}
-	host, port := configuredExternalDoltTargetForCity(cfg.Dolt)
-	return host != "" || port != "" || isExternalDolt(cityPath)
+	return isExternalDolt(cityPath)
 }
 
 func printDoltAuthorIdentityBlock(stderr io.Writer, commandName string, status doltAuthorIdentityStatus) {

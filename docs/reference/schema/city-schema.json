@@ -1017,7 +1017,7 @@
         },
         "event_hooks": {
           "type": "boolean",
-          "description": "EventHooks controls installation of the bead event-forwarding hooks\n(.beads/hooks/on_create,on_update,on_close) that shell out to\n`gc event emit` on every bead write. Defaults to true. Set to false\nonce the controller's native cache-events already observe bead changes\n(the bd_hooks doctor gate): the lifecycle then removes the event hooks\n(leaving git hooks untouched) and stops reinstalling them, clearing the\nper-write churn and the native-store gate.",
+          "description": "EventHooks controls installation of the bead event-forwarding hooks\n(.beads/hooks/on_create,on_update,on_close) that shell out to\n`gc event emit` on every bead write. Defaults to true. Set to false\nonce the controller's cache-events already observe bead changes: the\nlifecycle then removes the event hooks (leaving git hooks untouched) and\nstops reinstalling them, clearing the per-write churn.",
           "default": true
         },
         "bd_compatibility": {
@@ -1052,6 +1052,10 @@
           },
           "type": "object",
           "description": "Policies defines per-bead-use storage and garbage-collection defaults.\nPolicy names are interpreted by higher-level systems; unknown names are\npreserved so packs can stage future policy classes without breaking load."
+        },
+        "server": {
+          "$ref": "#/$defs/DoltConfig",
+          "description": "Server configures the beads storage server's operational tuning (the\ndolt sql-server bd manages via proxied-server): archive level, auto-GC,\nmax connections, and read/write timeouts. gascity is dolt-agnostic — this\nis the [beads.server] table; the endpoint itself is owned by bd."
         }
       },
       "additionalProperties": false,
@@ -1155,10 +1159,6 @@
         "usage": {
           "$ref": "#/$defs/UsageConfig",
           "description": "Usage configures the usage-fact sink backend."
-        },
-        "dolt": {
-          "$ref": "#/$defs/DoltConfig",
-          "description": "Dolt configures optional dolt server connection overrides."
         },
         "formulas": {
           "$ref": "#/$defs/FormulasConfig",
@@ -1416,16 +1416,6 @@
     },
     "DoltConfig": {
       "properties": {
-        "port": {
-          "type": "integer",
-          "description": "Port is the dolt server port. 0 means use ephemeral port allocation\n(hashed from city path). Set explicitly to override.",
-          "default": 0
-        },
-        "host": {
-          "type": "string",
-          "description": "Host is the dolt server hostname. Defaults to localhost.",
-          "default": "localhost"
-        },
         "archive_level": {
           "type": "integer",
           "description": "ArchiveLevel controls Dolt's auto_gc archive aggressiveness.\n0 disables archive compaction (lower CPU on startup).\n1 enables archive compaction (higher CPU on startup).\nnil (omitted) defaults to 0.",
@@ -1453,7 +1443,7 @@
         },
         "dolt_lock_release_timeout": {
           "type": "string",
-          "description": "DoltLockReleaseTimeout is how long managed-dolt lifecycle operations\nwait for dolt's on-disk exclusive store locks (the root-level\n`\u003cdata_dir\u003e/.dolt/noms/LOCK` and per-database\n`\u003cdata_dir\u003e/\u003cdb\u003e/.dolt/noms/LOCK` forms) to be released by a prior\nserver process before failing closed. The start path refuses to launch a\nsecond `dolt sql-server` against a data_dir whose lock is still held —\na prior instance that is shutting down holds the lock until its chunk\njournal is flushed, and binding before release corrupts the journal\n(see gastownhall/gascity#3174). The stop path uses the same window to\nwait for lock release after process exit before reporting success.\nDuration string (e.g., \"1m\", \"90s\"). Defaults to \"1m\", which covers\nthe flush window of multi-GB journals on commodity SSDs. Set to \"0s\"\nto probe once with no wait (still fail-closed when held). Negative\nvalues are rejected at config load. The managed lifecycle also\nprojects this value into the gc-beads-bd.sh shell fallback as\nGC_DOLT_LOCK_RELEASE_TIMEOUT_MS (milliseconds), so both paths honor\nthe configured window.",
+          "description": "DoltLockReleaseTimeout is how long managed-dolt lifecycle operations\nwait for dolt's on-disk exclusive store locks (the root-level\n`\u003cdata_dir\u003e/.dolt/noms/LOCK` and per-database\n`\u003cdata_dir\u003e/\u003cdb\u003e/.dolt/noms/LOCK` forms) to be released by a prior\nserver process before failing closed. The start path refuses to launch a\nsecond `dolt sql-server` against a data_dir whose lock is still held —\na prior instance that is shutting down holds the lock until its chunk\njournal is flushed, and binding before release corrupts the journal\n(see gastownhall/gascity#3174). The stop path uses the same window to\nwait for lock release after process exit before reporting success.\nDuration string (e.g., \"1m\", \"90s\"). Defaults to \"1m\", which covers\nthe flush window of multi-GB journals on commodity SSDs. Set to \"0s\"\nto probe once with no wait (still fail-closed when held). Negative\nvalues are rejected at config load. The managed lifecycle also\nprojects this value into the gc-beads-bd.sh shell fallback as\nGC_BEADS_LOCK_RELEASE_TIMEOUT_MS (milliseconds), so both paths honor\nthe configured window.",
           "default": "1m"
         }
       },
@@ -2555,14 +2545,6 @@
         "session_sleep": {
           "$ref": "#/$defs/SessionSleepConfig",
           "description": "SessionSleep overrides workspace-level idle sleep defaults for agents in\nthis rig."
-        },
-        "dolt_host": {
-          "type": "string",
-          "description": "DoltHost overrides the city-level Dolt host for this rig's beads.\nUse when the rig's database lives on a different Dolt server (e.g.,\nshared from another city)."
-        },
-        "dolt_port": {
-          "type": "string",
-          "description": "DoltPort overrides the city-level Dolt port for this rig's beads.\nWhen set, controller commands (scale_check, work_query) prefix their\nshell invocations with BEADS_DOLT_SERVER_PORT=\u003cport\u003e so bd connects to the\ncorrect server instead of the city-level default."
         },
         "formula_vars": {
           "additionalProperties": {

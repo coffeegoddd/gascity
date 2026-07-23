@@ -13,8 +13,8 @@
 # the journal on next restart (#1549). The fallback is only taken when the
 # server is provably unreachable AND the operator passes --server-down-ok.
 #
-# Environment: GC_CITY_PATH (also GC_DOLT_PORT, GC_DOLT_HOST, GC_DOLT_USER,
-# GC_DOLT_PASSWORD when probing the running server)
+# Environment: GC_CITY_PATH (also GC_BEADS_PORT, GC_BEADS_HOST, GC_BEADS_USER,
+# GC_BEADS_PASSWORD when probing the running server)
 set -e
 
 force=false
@@ -228,9 +228,9 @@ fi
 #     refuse regardless of --server-down-ok.
 #   * Port unreachable → server is stopped; fall back to rm only when the
 #     operator has acknowledged via --server-down-ok.
-host="${GC_DOLT_HOST:-127.0.0.1}"
-: "${GC_DOLT_USER:=root}"
-export DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}"
+host="${GC_BEADS_HOST:-127.0.0.1}"
+: "${GC_BEADS_USER:=root}"
+export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
 
 # dolt_sql_q TIMEOUT QUERY  — invoke dolt CLI with each arg explicitly quoted
 # so neither host nor user (env-controlled) word-splits into adjacent flags
@@ -238,7 +238,7 @@ export DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}"
 dolt_sql_q() {
   _dolt_sql_q_timeout="$1"; shift
   run_bounded "$_dolt_sql_q_timeout" \
-    dolt --host "$host" --port "$GC_DOLT_PORT" --user "$GC_DOLT_USER" --no-tls \
+    dolt --host "$host" --port "$GC_BEADS_PORT" --user "$GC_BEADS_USER" --no-tls \
     sql -q "$1"
 }
 
@@ -249,9 +249,9 @@ fi
 
 tcp_reachable=false
 if [ "$probe_available" = true ] \
-  && [ -n "$GC_DOLT_PORT" ] \
+  && [ -n "$GC_BEADS_PORT" ] \
   && command -v managed_runtime_tcp_reachable >/dev/null 2>&1 \
-  && managed_runtime_tcp_reachable "$GC_DOLT_PORT"; then
+  && managed_runtime_tcp_reachable "$GC_BEADS_PORT"; then
   tcp_reachable=true
 fi
 
@@ -267,7 +267,7 @@ unset delete_via
 if [ "$sql_works" = true ]; then
   delete_via=sql
 elif [ "$tcp_reachable" = true ]; then
-  echo "gc dolt cleanup: dolt is listening on port $GC_DOLT_PORT but 'SELECT 1' failed;" >&2
+  echo "gc dolt cleanup: dolt is listening on port $GC_BEADS_PORT but 'SELECT 1' failed;" >&2
   echo "  refusing to rm against a potentially-live server (#1549). Fix SQL access or stop dolt and retry." >&2
   exit 1
 elif [ "$probe_available" = false ]; then
@@ -278,7 +278,7 @@ elif [ "$probe_available" = false ]; then
 elif [ "$server_down_ok" = true ]; then
   delete_via=rm
 else
-  echo "gc dolt cleanup: dolt server unreachable on port ${GC_DOLT_PORT:-unset};" >&2
+  echo "gc dolt cleanup: dolt server unreachable on port ${GC_BEADS_PORT:-unset};" >&2
   echo "  rm -rf against per-database dirs while the server is up corrupts NBS state (#1549)." >&2
   echo "  Either start dolt and re-run, or pass --server-down-ok if the server is intentionally stopped." >&2
   exit 1

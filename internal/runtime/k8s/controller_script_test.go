@@ -14,8 +14,8 @@ import (
 func TestControllerScriptDeployProjectsOnlyExplicitCanonicalDoltTarget(t *testing.T) {
 	result := runControllerScriptDeploy(t, controllerScriptDeployOptions{
 		Env: map[string]string{
-			"GC_DOLT_HOST":     "canonical-dolt.example.com",
-			"GC_DOLT_PORT":     "4406",
+			"GC_BEADS_HOST":     "canonical-dolt.example.com",
+			"GC_BEADS_PORT":     "4406",
 			"GC_K8S_DOLT_HOST": "legacy-dolt.example.com",
 			"GC_K8S_DOLT_PORT": "3308",
 		},
@@ -23,11 +23,11 @@ func TestControllerScriptDeployProjectsOnlyExplicitCanonicalDoltTarget(t *testin
 	if result.err != nil {
 		t.Fatalf("gc-controller-k8s deploy error = %v\noutput:\n%s", result.err, result.output)
 	}
-	if got := result.manifestEnv["GC_DOLT_HOST"]; got != "canonical-dolt.example.com" {
-		t.Fatalf("manifest GC_DOLT_HOST = %q, want canonical-dolt.example.com", got)
+	if got := result.manifestEnv["GC_BEADS_HOST"]; got != "canonical-dolt.example.com" {
+		t.Fatalf("manifest GC_BEADS_HOST = %q, want canonical-dolt.example.com", got)
 	}
-	if got := result.manifestEnv["GC_DOLT_PORT"]; got != "4406" {
-		t.Fatalf("manifest GC_DOLT_PORT = %q, want 4406", got)
+	if got := result.manifestEnv["GC_BEADS_PORT"]; got != "4406" {
+		t.Fatalf("manifest GC_BEADS_PORT = %q, want 4406", got)
 	}
 	if strings.Contains(result.callLog, "legacy-dolt.example.com") || strings.Contains(result.callLog, "3308") {
 		t.Fatalf("controller bootstrap leaked deprecated K8s Dolt target into bootstrap path:\n%s", result.callLog)
@@ -47,11 +47,11 @@ func TestControllerScriptDeployDoesNotProjectDeprecatedK8sDoltTarget(t *testing.
 	if result.err != nil {
 		t.Fatalf("gc-controller-k8s deploy error = %v\noutput:\n%s", result.err, result.output)
 	}
-	if _, ok := result.manifestEnv["GC_DOLT_HOST"]; ok {
-		t.Fatalf("manifest projected GC_DOLT_HOST from deprecated compatibility input: %#v", result.manifestEnv)
+	if _, ok := result.manifestEnv["GC_BEADS_HOST"]; ok {
+		t.Fatalf("manifest projected GC_BEADS_HOST from deprecated compatibility input: %#v", result.manifestEnv)
 	}
-	if _, ok := result.manifestEnv["GC_DOLT_PORT"]; ok {
-		t.Fatalf("manifest projected GC_DOLT_PORT from deprecated compatibility input: %#v", result.manifestEnv)
+	if _, ok := result.manifestEnv["GC_BEADS_PORT"]; ok {
+		t.Fatalf("manifest projected GC_BEADS_PORT from deprecated compatibility input: %#v", result.manifestEnv)
 	}
 	if strings.Contains(result.callLog, "legacy-dolt.example.com") || strings.Contains(result.callLog, "3308") {
 		t.Fatalf("controller bootstrap used deprecated K8s Dolt target directly:\n%s", result.callLog)
@@ -64,8 +64,8 @@ func TestControllerScriptDeployUsesResolvedConfigPrefixesForBootstrap(t *testing
 	clearDoltAndCityEnv(t)
 	result := runControllerScriptDeploy(t, controllerScriptDeployOptions{
 		Env: map[string]string{
-			"GC_DOLT_HOST": "canonical-dolt.example.com",
-			"GC_DOLT_PORT": "4406",
+			"GC_BEADS_HOST": "canonical-dolt.example.com",
+			"GC_BEADS_PORT": "4406",
 		},
 		CityToml: `[workspace]
 name = "sample-city"
@@ -189,14 +189,14 @@ func TestControllerScriptDeployRejectsPartialCanonicalDoltTarget(t *testing.T) {
 	clearDoltAndCityEnv(t)
 	result := runControllerScriptDeploy(t, controllerScriptDeployOptions{
 		Env: map[string]string{
-			"GC_DOLT_HOST": "canonical-dolt.example.com",
+			"GC_BEADS_HOST": "canonical-dolt.example.com",
 		},
 	})
 	if result.err == nil {
-		t.Fatalf("gc-controller-k8s deploy error = nil, want partial GC_DOLT_* rejection\noutput:\n%s", result.output)
+		t.Fatalf("gc-controller-k8s deploy error = nil, want partial GC_BEADS_* rejection\noutput:\n%s", result.output)
 	}
-	if !strings.Contains(result.output, "controller bootstrap requires both GC_DOLT_HOST and GC_DOLT_PORT when either is set") {
-		t.Fatalf("partial GC_DOLT_* rejection output = %q", result.output)
+	if !strings.Contains(result.output, "controller bootstrap requires both GC_BEADS_HOST and GC_BEADS_PORT when either is set") {
+		t.Fatalf("partial GC_BEADS_* rejection output = %q", result.output)
 	}
 }
 
@@ -364,8 +364,8 @@ exit 1
 		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
 		"CLAUDE_DIR="+claudeDir,
 		"GC_BIN="+fakeGC,
-		"GC_DOLT_HOST=",
-		"GC_DOLT_PORT=",
+		"GC_BEADS_HOST=",
+		"GC_BEADS_PORT=",
 		"GC_K8S_DOLT_HOST=",
 		"GC_K8S_DOLT_PORT=",
 		"GC_CITY_PATH=",

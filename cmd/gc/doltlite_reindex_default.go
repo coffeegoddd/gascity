@@ -1,18 +1,12 @@
-//go:build !gascity_native_beads
-
 package main
 
 import "errors"
 
-// runDoltliteReindex reports that an in-process DoltLite reindex is unavailable
-// in the default build. The SQLite driver used to REINDEX the physical
-// .beads/doltlite/<db>.db file is linked only under the gascity_native_beads
-// build tag (see internal/beads/doltlite_read_store.go), which the
-// native-dependency-surface guard keeps out of the default binary. Deployments
-// that manage DoltLite stores must build gc with -tags gascity_native_beads for
-// the maintenance reindex (ga-7hei) to run.
+// runDoltliteReindex reports that an in-process DoltLite reindex is unavailable:
+// gc reaches the beads/Dolt store solely through the bd subprocess and links no
+// in-process SQLite driver to REINDEX a physical .beads/doltlite/<db>.db file.
 func runDoltliteReindex(_ string) error {
-	return errors.New("doltlite reindex requires gc built with -tags gascity_native_beads")
+	return errors.New("in-process doltlite reindex is not supported; gc reaches the store through the bd subprocess")
 }
 
 // doltliteReindexSupported reports that this build cannot rebuild DoltLite

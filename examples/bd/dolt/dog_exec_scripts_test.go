@@ -20,11 +20,11 @@ func runDogScriptCommand(t *testing.T, scriptName, binDir, cityPath, dataDir str
 		"PATH",
 		"GC_CITY_PATH",
 		"GC_PACK_DIR",
-		"GC_DOLT_DATA_DIR",
-		"GC_DOLT_PORT",
-		"GC_DOLT_HOST",
-		"GC_DOLT_USER",
-		"GC_DOLT_PASSWORD",
+		"GC_BEADS_DATA_DIR",
+		"GC_BEADS_PORT",
+		"GC_BEADS_HOST",
+		"GC_BEADS_USER",
+		"GC_BEADS_PASSWORD",
 		"GC_BACKUP_DATABASES",
 		"GC_BACKUP_OFFSITE_PATH",
 		"GC_BACKUP_ARTIFACT_DIR",
@@ -39,11 +39,11 @@ func runDogScriptCommand(t *testing.T, scriptName, binDir, cityPath, dataDir str
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_PORT=3307",
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_PORT=3307",
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	cmd.Env = append(cmd.Env, extraEnv...)
 	out, err := cmd.CombinedOutput()
@@ -180,21 +180,21 @@ func (f compactScriptFixture) runWithArgs(t *testing.T, mode string, args []stri
 		"PATH",
 		"GC_CITY_PATH",
 		"GC_PACK_DIR",
-		"GC_DOLT_DATA_DIR",
-		"GC_DOLT_PORT",
-		"GC_DOLT_HOST",
-		"GC_DOLT_USER",
-		"GC_DOLT_PASSWORD",
-		"GC_DOLT_MANAGED_LOCAL",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS",
-		"GC_DOLT_COMPACT_CALL_TIMEOUT_SECS",
-		"GC_DOLT_COMPACT_PUSH_TIMEOUT_SECS",
-		"GC_DOLT_COMPACT_DRY_RUN",
-		"GC_DOLT_COMPACT_ONLY_DBS",
-		"GC_DOLT_COMPACT_REMOTE",
-		"GC_DOLT_COMPACT_BARE_GC",
-		"GC_DOLT_RIG_LIST_TIMEOUT_SECS",
-		"GC_DOLT_COMPACT_ALERT_TO",
+		"GC_BEADS_DATA_DIR",
+		"GC_BEADS_PORT",
+		"GC_BEADS_HOST",
+		"GC_BEADS_USER",
+		"GC_BEADS_PASSWORD",
+		"GC_BEADS_MANAGED_LOCAL",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS",
+		"GC_BEADS_COMPACT_CALL_TIMEOUT_SECS",
+		"GC_BEADS_COMPACT_PUSH_TIMEOUT_SECS",
+		"GC_BEADS_COMPACT_DRY_RUN",
+		"GC_BEADS_COMPACT_ONLY_DBS",
+		"GC_BEADS_COMPACT_REMOTE",
+		"GC_BEADS_COMPACT_BARE_GC",
+		"GC_BEADS_RIG_LIST_TIMEOUT_SECS",
+		"GC_BEADS_COMPACT_ALERT_TO",
 		"GC_FAKE_DOLT_COMPACT_MODE",
 		"GC_FAKE_DOLT_COUNT_FILE",
 		"GC_FAKE_DOLT_STATE_FILE",
@@ -205,14 +205,14 @@ func (f compactScriptFixture) runWithArgs(t *testing.T, mode string, args []stri
 		"PATH="+f.binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+f.cityPath,
 		"GC_PACK_DIR="+f.root,
-		"GC_DOLT_DATA_DIR="+f.dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", f.port),
-		"GC_DOLT_HOST=127.0.0.1",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
-		"GC_DOLT_MANAGED_LOCAL=1",
-		"GC_DOLT_COMPACT_CALL_TIMEOUT_SECS=5",
-		"GC_DOLT_COMPACT_PUSH_TIMEOUT_SECS=5",
+		"GC_BEADS_DATA_DIR="+f.dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", f.port),
+		"GC_BEADS_HOST=127.0.0.1",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
+		"GC_BEADS_MANAGED_LOCAL=1",
+		"GC_BEADS_COMPACT_CALL_TIMEOUT_SECS=5",
+		"GC_BEADS_COMPACT_PUSH_TIMEOUT_SECS=5",
 		"GC_FAKE_DOLT_COMPACT_MODE="+mode,
 		"GC_FAKE_DOLT_COUNT_FILE="+filepath.Join(f.binDir, "row-count-calls"),
 		"GC_FAKE_DOLT_STATE_FILE="+f.stateFile,
@@ -314,7 +314,7 @@ esac
 func runCompactScriptCommand(t *testing.T, mode string) (string, string, error) {
 	t.Helper()
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, mode, "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, mode, "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	return out, fixture.doltLog, err
 }
 
@@ -1010,7 +1010,7 @@ case "$query" in
       printf 'gc exploded\n' >&2
       exit 45
     fi
-    rm -rf -- "${GC_DOLT_DATA_DIR:-}/$db/.dolt/noms/oldgen"
+    rm -rf -- "${GC_BEADS_DATA_DIR:-}/$db/.dolt/noms/oldgen"
     exit 0
     ;;
   *"DOLT_PUSH('--force', '--set-upstream', 'origin', 'main')"*)
@@ -1045,7 +1045,7 @@ exit 64
 
 func TestCompactScriptSkipsBelowThresholdWithoutFlattening(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "below_threshold", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "below_threshold", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact failed: %v\n%s", err, out)
 	}
@@ -1105,7 +1105,7 @@ exit 0
 
 func TestCompactScriptFlattensAndVerifies(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact failed: %v\n%s", err, out)
 	}
@@ -1126,7 +1126,7 @@ func TestCompactScriptFlattensAndVerifies(t *testing.T) {
 
 func TestCompactScriptRefetchesAndForcePushesRemote(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact failed: %v\n%s", err, out)
 	}
@@ -1154,7 +1154,7 @@ func TestCompactScriptRefetchesAndForcePushesRemote(t *testing.T) {
 
 func TestCompactScriptPushesActiveBranchToRemote(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_active_branch", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_active_branch", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact failed: %v\n%s", err, out)
 	}
@@ -1183,8 +1183,8 @@ func TestCompactScriptPushesActiveBranchToRemote(t *testing.T) {
 func TestCompactScriptUsesRefspecEnvOverrideForRemoteBranch(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "remote_active_branch",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_REFSPEC_BEADS=gascity-3:trunk",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_REFSPEC_BEADS=gascity-3:trunk",
 	)
 	if err != nil {
 		t.Fatalf("compact failed with refspec override: %v\n%s", err, out)
@@ -1211,8 +1211,8 @@ func TestCompactScriptUsesRefspecEnvOverrideForRemoteBranch(t *testing.T) {
 func TestCompactScriptRejectsRefspecEnvOverrideForDifferentActiveBranch(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "remote_active_branch",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_REFSPEC_BEADS=main:trunk",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_REFSPEC_BEADS=main:trunk",
 	)
 	if err == nil {
 		t.Fatalf("compact succeeded with mismatched refspec local branch:\n%s", out)
@@ -1235,8 +1235,8 @@ func TestCompactScriptRejectsRefspecEnvOverrideForDifferentActiveBranch(t *testi
 func TestCompactScriptRefspecOptionShapedOverrideFails(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "remote_success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_REFSPEC_BEADS=--force",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_REFSPEC_BEADS=--force",
 	)
 	if err == nil {
 		t.Fatalf("compact succeeded with option-shaped refspec override:\n%s", out)
@@ -1248,7 +1248,7 @@ func TestCompactScriptRefspecOptionShapedOverrideFails(t *testing.T) {
 
 func TestCompactScriptWarnsWhenActiveBranchFallbacksToMain(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_invalid_active_branch", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_invalid_active_branch", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact failed after active-branch fallback: %v\n%s", err, out)
 	}
@@ -1267,7 +1267,7 @@ func TestCompactScriptWarnsWhenActiveBranchFallbacksToMain(t *testing.T) {
 
 func TestCompactScriptPrefersOriginWhenMultipleRemotesExist(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "multiple_remotes_with_origin", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "multiple_remotes_with_origin", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact failed with origin available among multiple remotes: %v\n%s", err, out)
 	}
@@ -1285,7 +1285,7 @@ func TestCompactScriptPrefersOriginWhenMultipleRemotesExist(t *testing.T) {
 
 func TestCompactScriptFailsWhenMultipleRemotesLackOrigin(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "multiple_remotes_no_origin", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "multiple_remotes_no_origin", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite ambiguous remotes:\n%s", out)
 	}
@@ -1305,7 +1305,7 @@ func TestCompactScriptFailsWhenMultipleRemotesLackOrigin(t *testing.T) {
 
 func TestCompactScriptUsesExplicitRemote(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "explicit_backup_remote", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500", "GC_DOLT_COMPACT_REMOTE=backup")
+	out, err := fixture.run(t, "explicit_backup_remote", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500", "GC_BEADS_COMPACT_REMOTE=backup")
 	if err != nil {
 		t.Fatalf("compact failed with explicit remote: %v\n%s", err, out)
 	}
@@ -1329,7 +1329,7 @@ func TestCompactScriptUsesExplicitRemote(t *testing.T) {
 
 func TestCompactScriptRecordsPendingPushWhenRemoteHeadChangesAfterCompaction(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_advances_before_push", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_advances_before_push", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact should keep local compaction successful when remote HEAD changes before push: %v\n%s", err, out)
 	}
@@ -1367,7 +1367,7 @@ func TestCompactScriptRecordsPendingPushWhenRemoteHeadChangesAfterCompaction(t *
 
 func TestCompactScriptPushesWhenPreflightFetchFailsOnceThenRemoteHeadIsLocal(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_fetch_failure_once", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_fetch_failure_once", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact should self-heal when post-compaction fetch recovers to a local remote HEAD: %v\n%s", err, out)
 	}
@@ -1394,7 +1394,7 @@ func TestCompactScriptPushesWhenPreflightFetchFailsOnceThenRemoteHeadIsLocal(t *
 
 func TestCompactScriptCompactsFromLocalSourceOfTruthWhenRemoteAheadIsUnknown(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact should proceed from local source of truth despite unknown remote HEAD: %v\n%s", err, out)
 	}
@@ -1428,12 +1428,12 @@ func TestCompactScriptCompactsFromLocalSourceOfTruthWhenRemoteAheadIsUnknown(t *
 
 func TestCompactScriptFailsRetryWhenPendingPushRemoteHeadRemainsUnverified(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("initial compact should leave unverified remote push pending: %v\n%s", err, firstOut)
 	}
 
-	secondOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("pending-push retry succeeded despite still-unverified remote HEAD:\n%s", secondOut)
 	}
@@ -1456,12 +1456,12 @@ func TestCompactScriptFailsRetryWhenPendingPushRemoteHeadRemainsUnverified(t *te
 
 func TestCompactScriptKeepsRetryDeferredWhenPendingPushAncestryProbeFails(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("initial compact should leave unverified remote push pending: %v\n%s", err, firstOut)
 	}
 
-	secondOut, err := fixture.run(t, "remote_ancestry_probe_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_ancestry_probe_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("pending-push retry should remain deferred when ancestry probe fails: %v\n%s", err, secondOut)
 	}
@@ -1488,7 +1488,7 @@ func TestCompactScriptKeepsRetryDeferredWhenPendingPushAncestryProbeFails(t *tes
 
 func TestCompactScriptRetriesPendingPushWhenRemoteHeadBecomesLocalLogAncestor(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("initial compact should leave unverified remote push pending: %v\n%s", err, firstOut)
 	}
@@ -1497,7 +1497,7 @@ func TestCompactScriptRetriesPendingPushWhenRemoteHeadBecomesLocalLogAncestor(t 
 		t.Fatalf("initial compact should write pending-push marker: %v", err)
 	}
 
-	secondOut, err := fixture.run(t, "remote_ahead_reconciled", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_ahead_reconciled", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("pending-push retry should self-heal once remote HEAD is in local history: %v\n%s", err, secondOut)
 	}
@@ -1513,8 +1513,8 @@ func TestCompactScriptRetriesPendingPushWhenRemoteHeadBecomesLocalLogAncestor(t 
 func TestCompactScriptRetriesPendingPushWithRefspecRemoteBranch(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	firstOut, err := fixture.run(t, "remote_push_failure",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_REFSPEC_BEADS=main:gascity-3",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_REFSPEC_BEADS=main:gascity-3",
 	)
 	if err != nil {
 		t.Fatalf("initial compact should leave refspec remote push pending: %v\n%s", err, firstOut)
@@ -1529,7 +1529,7 @@ func TestCompactScriptRetriesPendingPushWithRefspecRemoteBranch(t *testing.T) {
 		t.Fatalf("pending-push marker should preserve refspec branches:\n%s", marker)
 	}
 
-	secondOut, err := fixture.run(t, "remote_success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("pending-push retry should use marker refspec: %v\n%s", err, secondOut)
 	}
@@ -1551,7 +1551,7 @@ func TestCompactScriptRetriesPendingPushWithRefspecRemoteBranch(t *testing.T) {
 
 func TestCompactScriptAbortsWhenHeadKeepsMovingAcrossPreflightRetries(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "head_changes_before_flatten", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "head_changes_before_flatten", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite HEAD moving across every preflight retry:\n%s", out)
 	}
@@ -1572,7 +1572,7 @@ func TestCompactScriptAbortsWhenHeadKeepsMovingAcrossPreflightRetries(t *testing
 
 func TestCompactScriptRetriesPreflightWhenHeadStabilizes(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "head_changes_once", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "head_changes_once", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact should retry and flatten once HEAD stabilizes: %v\n%s", err, out)
 	}
@@ -1600,7 +1600,7 @@ func TestCompactScriptRetriesPreflightWhenHeadStabilizes(t *testing.T) {
 
 func TestCompactScriptFailsWhenPreflightHeadVerifyProbeFails(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "head_probe_failure_during_preflight_verify", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "head_probe_failure_during_preflight_verify", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite preflight HEAD verify probe failure:\n%s", out)
 	}
@@ -1621,7 +1621,7 @@ func TestCompactScriptFailsWhenPreflightHeadVerifyProbeFails(t *testing.T) {
 
 func TestCompactScriptCompactsFromLocalSourceOfTruthWhenRemoteFetchFails(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_fetch_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_fetch_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact should proceed from local source of truth despite remote fetch failure: %v\n%s", err, out)
 	}
@@ -1656,7 +1656,7 @@ func TestCompactScriptCompactsFromLocalSourceOfTruthWhenRemoteFetchFails(t *test
 
 func TestCompactScriptRetriesPendingPushWhenRemoteHeadEqualsCompactedSource(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_fetch_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_fetch_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("initial compact should leave fetch-failure push pending: %v\n%s", err, firstOut)
 	}
@@ -1672,7 +1672,7 @@ func TestCompactScriptRetriesPendingPushWhenRemoteHeadEqualsCompactedSource(t *t
 		t.Fatalf("initial marker should record compacted source head:\n%s", firstMarker)
 	}
 
-	secondOut, err := fixture.run(t, "remote_success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("pending-push retry should self-heal when remote fetch recovers: %v\n%s", err, secondOut)
 	}
@@ -1695,7 +1695,7 @@ func TestCompactScriptRetriesPendingPushWhenRemoteHeadEqualsCompactedSource(t *t
 
 func TestCompactScriptPreservesPendingPushCreatedAtAcrossUnresolvedRetries(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("initial compact should leave unverified remote push pending: %v\n%s", err, firstOut)
 	}
@@ -1703,7 +1703,7 @@ func TestCompactScriptPreservesPendingPushCreatedAtAcrossUnresolvedRetries(t *te
 	createdAt := compactMarkerValue(t, pendingPush, "created_at")
 
 	time.Sleep(1100 * time.Millisecond)
-	secondOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("second retry should remain manually deferred while remote HEAD is unverified:\n%s", secondOut)
 	}
@@ -1712,7 +1712,7 @@ func TestCompactScriptPreservesPendingPushCreatedAtAcrossUnresolvedRetries(t *te
 	}
 
 	time.Sleep(1100 * time.Millisecond)
-	thirdOut, err := fixture.run(t, "remote_ancestry_probe_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	thirdOut, err := fixture.run(t, "remote_ancestry_probe_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("ancestry-probe failure should keep retry deferred with marker intact: %v\n%s", err, thirdOut)
 	}
@@ -1724,12 +1724,12 @@ func TestCompactScriptPreservesPendingPushCreatedAtAcrossUnresolvedRetries(t *te
 func TestCompactScriptParsesPendingPushCreatedAtWithBSDDateFallback(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	writeBSDOnlyDate(t, fixture.binDir)
-	firstOut, err := fixture.run(t, "remote_fetch_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_fetch_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("initial compact should leave fetch-failure push pending: %v\n%s", err, firstOut)
 	}
 
-	secondOut, err := fixture.run(t, "remote_success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("pending-push retry should parse marker age with BSD date fallback: %v\n%s", err, secondOut)
 	}
@@ -1741,7 +1741,7 @@ func TestCompactScriptParsesPendingPushCreatedAtWithBSDDateFallback(t *testing.T
 
 func TestCompactScriptRecordsUnverifiedPendingPushWhenRemoteHeadIsEmpty(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_empty_head_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_empty_head_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact should keep local compaction successful despite remote push failure: %v\n%s", err, out)
 	}
@@ -1763,7 +1763,7 @@ func TestCompactScriptRecordsUnverifiedPendingPushWhenRemoteHeadIsEmpty(t *testi
 
 func TestCompactScriptRecordsPendingPushWhenRemotePushFails(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "remote_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact should keep local compaction successful despite remote push failure: %v\n%s", err, out)
 	}
@@ -1795,14 +1795,14 @@ func TestCompactScriptRecordsPendingPushWhenRemotePushFails(t *testing.T) {
 
 func TestCompactScriptBlocksStalePendingPushRetryBeforeForcePush(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("first compact should succeed locally despite remote push failure: %v\n%s", err, firstOut)
 	}
 	pendingPush := filepath.Join(fixture.cityPath, ".gc", "runtime", "packs", "dolt", "compact-pending-push", "beads")
 	replaceCompactMarkerCreatedAt(t, pendingPush, "1970-01-01T00:00:00Z")
 
-	secondOut, err := fixture.run(t, "remote_success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("stale pending-push retry succeeded without manual review:\n%s", secondOut)
 	}
@@ -1824,7 +1824,7 @@ func TestCompactScriptBlocksStalePendingPushRetryBeforeForcePush(t *testing.T) {
 
 func TestCompactScriptStalePendingPushMarkerAlertsDefaultMayorBeforeManualReview(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("first compact should succeed locally despite remote push failure: %v\n%s", err, firstOut)
 	}
@@ -1832,7 +1832,7 @@ func TestCompactScriptStalePendingPushMarkerAlertsDefaultMayorBeforeManualReview
 	replaceCompactMarkerCreatedAt(t, pendingPush, "1970-01-01T00:00:00Z")
 	resetCompactGCLog(t, fixture)
 
-	secondOut, err := fixture.run(t, "remote_success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("stale pending-push retry succeeded without manual review:\n%s", secondOut)
 	}
@@ -1845,7 +1845,7 @@ func TestCompactScriptStalePendingPushMarkerAlertsDefaultMayorBeforeManualReview
 
 func TestCompactScriptDryRunReportsStalePendingPushMarker(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("first compact should succeed locally despite remote push failure: %v\n%s", err, firstOut)
 	}
@@ -1853,8 +1853,8 @@ func TestCompactScriptDryRunReportsStalePendingPushMarker(t *testing.T) {
 	replaceCompactMarkerCreatedAt(t, pendingPush, "1970-01-01T00:00:00Z")
 
 	dryRunOut, err := fixture.run(t, "remote_success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_DRY_RUN=1",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_DRY_RUN=1",
 	)
 	if err == nil {
 		t.Fatalf("dry-run stale pending-push retry succeeded without manual review:\n%s", dryRunOut)
@@ -1877,14 +1877,14 @@ func TestCompactScriptDryRunReportsStalePendingPushMarker(t *testing.T) {
 
 func TestCompactScriptRecoversLegacyPendingPushMarkerWhenRemoteHeadIsLocal(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("first compact should succeed locally despite remote push failure: %v\n%s", err, firstOut)
 	}
 	pendingPush := filepath.Join(fixture.cityPath, ".gc", "runtime", "packs", "dolt", "compact-pending-push", "beads")
 	rewriteLegacyPendingPushMarker(t, pendingPush, "1970-01-01T00:00:00Z")
 
-	secondOut, err := fixture.run(t, "remote_ahead_reconciled", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_ahead_reconciled", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("legacy pending-push retry should recover from current remote state: %v\n%s", err, secondOut)
 	}
@@ -1910,14 +1910,14 @@ func TestCompactScriptRecoversLegacyPendingPushMarkerWhenRemoteHeadIsLocal(t *te
 
 func TestCompactScriptLegacyPendingPushMarkerRequiresRemoteHeadInLocalHistory(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("first compact should succeed locally despite remote push failure: %v\n%s", err, firstOut)
 	}
 	pendingPush := filepath.Join(fixture.cityPath, ".gc", "runtime", "packs", "dolt", "compact-pending-push", "beads")
 	rewriteLegacyPendingPushMarker(t, pendingPush, "1970-01-01T00:00:00Z")
 
-	secondOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("legacy pending-push retry succeeded with unverified remote HEAD:\n%s", secondOut)
 	}
@@ -1943,12 +1943,12 @@ func TestCompactScriptLegacyPendingPushMarkerRequiresRemoteHeadInLocalHistory(t 
 
 func TestCompactScriptFailsRetryWhenPendingPushRemoteHeadChangesAgain(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "remote_advances_before_push", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_advances_before_push", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("initial compact should leave changed remote push pending: %v\n%s", err, firstOut)
 	}
 
-	secondOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("pending-push retry succeeded despite still-unverified changed remote HEAD:\n%s", secondOut)
 	}
@@ -1982,7 +1982,7 @@ func TestCompactScriptFailsRetryWhenPendingPushRemoteHeadChangesAgain(t *testing
 func TestCompactScriptRetriesPendingPushBeforeBelowThresholdSkip(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 
-	firstOut, err := fixture.run(t, "remote_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("first compact should succeed locally despite remote push failure: %v\n%s", err, firstOut)
 	}
@@ -2032,7 +2032,7 @@ func TestCompactScriptFailsBeforeFlattenWhenPendingPushMarkerCannotBeWritten(t *
 		t.Fatalf("write marker-dir blocker: %v", err)
 	}
 
-	out, err := fixture.run(t, "remote_push_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "remote_push_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite required pending-push marker write failure:\n%s", out)
 	}
@@ -2068,7 +2068,7 @@ func TestCompactScriptFailsBeforeFlattenWhenPendingGCMarkerCannotBeWritten(t *te
 		t.Fatalf("write marker-dir blocker: %v", err)
 	}
 
-	out, err := fixture.run(t, "gc_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "gc_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite required pending-GC marker write failure:\n%s", out)
 	}
@@ -2094,7 +2094,7 @@ func TestCompactScriptFailsBeforeFlattenWhenQuarantineMarkerCannotBeWritten(t *t
 		t.Fatalf("write marker-dir blocker: %v", err)
 	}
 
-	out, err := fixture.run(t, "row_count_decreases", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "row_count_decreases", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite required quarantine marker write failure:\n%s", out)
 	}
@@ -2152,7 +2152,7 @@ func TestCompactScriptFailsOnCommitCountProbeFailure(t *testing.T) {
 
 func TestCompactScriptAllowsRowCountIncreaseWithStableValueHashes(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "row_count_gain_with_stable_hashes", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "row_count_gain_with_stable_hashes", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact should allow row-count increase with stable value hashes: %v\n%s", err, out)
 	}
@@ -2173,7 +2173,7 @@ func TestCompactScriptAllowsRowCountIncreaseWithStableValueHashes(t *testing.T) 
 
 func TestCompactScriptQuarantinesSameTableRowGainWithValueHashDriftBeforeFullGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "same_table_replacement_with_row_gain", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "same_table_replacement_with_row_gain", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite same-table row-count gain with value-hash drift:\n%s", out)
 	}
@@ -2201,7 +2201,7 @@ func TestCompactScriptQuarantinesSameTableRowGainWithValueHashDriftBeforeFullGC(
 
 func TestCompactScriptQuarantinesMixedRowGainAndSameCountHashDriftBeforeFullGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "mixed_row_count_gain_and_same_count_hash_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "mixed_row_count_gain_and_same_count_hash_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite mixed row gain and same-count hash drift:\n%s", out)
 	}
@@ -2230,7 +2230,7 @@ func TestCompactScriptQuarantinesMixedRowGainAndSameCountHashDriftBeforeFullGC(t
 
 func TestCompactScriptQuarantinesMixedSignalsDespiteWriterRace(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "writer_race_with_mixed_same_count_hash_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "writer_race_with_mixed_same_count_hash_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite proven writer plus same-count hash drift:\n%s", out)
 	}
@@ -2297,7 +2297,7 @@ func assertCompactWriterRaceDeferred(t *testing.T, fixture compactScriptFixture,
 // defers instead of writing the blocking quarantine marker.
 func TestCompactScriptDefersWhenWriterCommitsBeforeFlatten(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "writer_race_before_flatten", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "writer_race_before_flatten", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if !strings.Contains(out, "table=beads gained rows during flatten") ||
 		!strings.Contains(out, "value hash changed with row-count increase") {
 		t.Fatalf("output missing the ambiguous gain+drift signal that the gate downgrades:\n%s", out)
@@ -2313,7 +2313,7 @@ func TestCompactScriptDefersWhenWriterCommitsBeforeFlatten(t *testing.T) {
 // gain+drift quarantine is downgraded to a defer.
 func TestCompactScriptDefersWhenWriterCommitsDuringVerify(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "writer_race_during_verify", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "writer_race_during_verify", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if !strings.Contains(out, "table=beads gained rows during flatten") ||
 		!strings.Contains(out, "value hash changed with row-count increase") {
 		t.Fatalf("output missing the ambiguous gain+drift signal that the gate downgrades:\n%s", out)
@@ -2330,7 +2330,7 @@ func TestCompactScriptDefersWhenWriterCommitsDuringVerify(t *testing.T) {
 // gain+drift quarantine is likewise downgraded to a defer.
 func TestCompactScriptDefersWhenWriterCommitsCausingDatabaseHashDrift(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "writer_race_db_hash_during_verify", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "writer_race_db_hash_during_verify", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if !strings.Contains(out, "database value hash drift with row-count increase") {
 		t.Fatalf("output missing the database-hash writer-race defer:\n%s", out)
 	}
@@ -2342,7 +2342,7 @@ func TestCompactScriptDefersWhenWriterCommitsCausingDatabaseHashDrift(t *testing
 
 func TestCompactScriptDefersWhenWriterCommitsDuringDatabaseHash(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "writer_race_after_postverify_before_db_hash", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "writer_race_after_postverify_before_db_hash", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if !strings.Contains(out, "database value hash drift") {
 		t.Fatalf("output missing database-hash drift evidence:\n%s", out)
 	}
@@ -2354,7 +2354,7 @@ func TestCompactScriptDefersWhenWriterCommitsDuringDatabaseHash(t *testing.T) {
 
 func TestCompactScriptDefersWhenDatabaseHashPreHeadProbeIsEmptyButPostProbeProvesWriter(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "writer_race_db_hash_empty_pre_probe", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "writer_race_db_hash_empty_pre_probe", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if !strings.Contains(out, "database value hash drift") {
 		t.Fatalf("output missing database-hash drift evidence:\n%s", out)
 	}
@@ -2375,7 +2375,7 @@ func TestCompactScriptRetriesPendingGCAfterWriterRaceDefer(t *testing.T) {
 		t.Fatalf("write oldgen fixture: %v", err)
 	}
 
-	firstOut, err := fixture.run(t, "writer_race_during_verify", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "writer_race_during_verify", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	assertCompactWriterRaceDeferred(t, fixture, firstOut, err)
 	pendingGC := filepath.Join(fixture.cityPath, ".gc", "runtime", "packs", "dolt", "compact-pending-gc", "beads")
 	if compactedFrom := compactMarkerValue(t, pendingGC, "compacted_from_head"); compactedFrom != "headcommit" {
@@ -2411,7 +2411,7 @@ func TestCompactScriptRetriesPendingGCAfterWriterRaceDefer(t *testing.T) {
 func TestCompactScriptRetriesRemotePendingGCAfterBeforeFlattenWriterRace(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 
-	firstOut, err := fixture.run(t, "remote_writer_race_before_flatten", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_writer_race_before_flatten", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	assertCompactWriterRaceDeferred(t, fixture, firstOut, err)
 	pendingGC := filepath.Join(fixture.cityPath, ".gc", "runtime", "packs", "dolt", "compact-pending-gc", "beads")
 	marker, err := os.ReadFile(pendingGC)
@@ -2429,7 +2429,7 @@ func TestCompactScriptRetriesRemotePendingGCAfterBeforeFlattenWriterRace(t *test
 		}
 	}
 
-	secondOut, err := fixture.run(t, "remote_writer_race_before_flatten", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_writer_race_before_flatten", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("pending-GC retry should accept remote writer HEAD as compacted source and push: %v\n%s", err, secondOut)
 	}
@@ -2478,7 +2478,7 @@ func TestCompactScriptWriterRaceGateUsesFlagNotReasonText(t *testing.T) {
 // This guards against the writer-race gate weakening real-corruption detection.
 func TestCompactScriptStillQuarantinesGainAndHashDriftWithStableHead(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "same_table_replacement_with_row_gain", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "same_table_replacement_with_row_gain", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("stable-HEAD gain+drift must remain a blocking failure:\n%s", out)
 	}
@@ -2512,7 +2512,7 @@ func TestCompactScriptStillQuarantinesGainAndHashDriftWithStableHead(t *testing.
 // verification set is the tables committed at the stable pre-flight HEAD.
 func TestCompactScriptExcludesUnversionedTableChurnFromVerification(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "ignored_table_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "ignored_table_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("unversioned-table churn must not fail compaction: %v\n%s", err, out)
 	}
@@ -2544,7 +2544,7 @@ func TestCompactScriptExcludesUnversionedTableChurnFromVerification(t *testing.T
 // ignored=1 pattern from flatten integrity verification (#3541).
 func TestCompactScriptExcludesDoltIgnoredCommittedTableFromVerification(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "ignored_committed_table_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "ignored_committed_table_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("dolt_ignored committed table churn must not fail compaction: %v\n%s", err, out)
 	}
@@ -2577,7 +2577,7 @@ func TestCompactScriptExcludesDoltIgnoredCommittedTableFromVerification(t *testi
 // no HEAD movement and quarantines via the same-count db-hash path.
 func TestCompactScriptPinsDatabaseHashToCommittedRoot(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "ignored_table_db_hash_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "ignored_table_db_hash_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("working-set db hash drift must not fail compaction: %v\n%s", err, out)
 	}
@@ -2608,7 +2608,7 @@ func TestCompactScriptPinsDatabaseHashToCommittedRoot(t *testing.T) {
 // state: defer and retry, exactly like the proven writer-race paths.
 func TestCompactScriptDefersAbsorbedWorkingSetDbHashDrift(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "absorbed_ws_db_hash_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "absorbed_ws_db_hash_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("absorbed working-set drift must defer, not fail: %v\n%s", err, out)
 	}
@@ -2639,7 +2639,7 @@ func TestCompactScriptDefersAbsorbedWorkingSetDbHashDrift(t *testing.T) {
 // keeps the fail-closed quarantine.
 func TestCompactScriptStillQuarantinesDbHashDriftBeyondVerifiedTables(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "absorbed_ws_db_hash_drift_system_table", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "absorbed_ws_db_hash_drift_system_table", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("root drift beyond verified tables must remain a blocking failure:\n%s", out)
 	}
@@ -2661,7 +2661,7 @@ func TestCompactScriptStillQuarantinesDbHashDriftBeyondVerifiedTables(t *testing
 
 func TestCompactScriptFailsOnRowCountDecreaseBeforeGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "row_count_decreases", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "row_count_decreases", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite row-count decrease:\n%s", out)
 	}
@@ -2686,7 +2686,7 @@ func TestCompactScriptFailsOnRowCountDecreaseBeforeGC(t *testing.T) {
 
 func TestCompactScriptReportsPostFlattenRowCountProbeFailureSeparately(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "row_count_failure_after_flatten", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "row_count_failure_after_flatten", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite post-flatten row count probe failure:\n%s", out)
 	}
@@ -2704,7 +2704,7 @@ func TestCompactScriptReportsPostFlattenRowCountProbeFailureSeparately(t *testin
 
 func TestCompactScriptQuarantinesPostFlattenTableListDriftBeforeFullGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "post_flatten_table_appears", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "post_flatten_table_appears", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite a new table appearing after preflight:\n%s", out)
 	}
@@ -2727,7 +2727,7 @@ func TestCompactScriptQuarantinesPostFlattenTableListDriftBeforeFullGC(t *testin
 
 func TestCompactScriptReportsPostFlattenTableListProbeFailureSeparately(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "post_flatten_table_list_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "post_flatten_table_list_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite post-flatten table-list probe failure:\n%s", out)
 	}
@@ -2750,7 +2750,7 @@ func TestCompactScriptReportsPostFlattenTableListProbeFailureSeparately(t *testi
 
 func TestCompactScriptQuarantinesPostFlattenInvalidTableNameBeforeFullGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "post_flatten_invalid_table_name", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "post_flatten_invalid_table_name", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite an invalid table name after preflight:\n%s", out)
 	}
@@ -2773,7 +2773,7 @@ func TestCompactScriptQuarantinesPostFlattenInvalidTableNameBeforeFullGC(t *test
 
 func TestCompactScriptPreservesRowGainReasonForDatabaseHashDrift(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "row_count_gain_with_db_hash_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "row_count_gain_with_db_hash_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite database value-hash drift after row-count gain:\n%s", out)
 	}
@@ -2796,7 +2796,7 @@ func TestCompactScriptPreservesRowGainReasonForDatabaseHashDrift(t *testing.T) {
 
 func TestCompactScriptPreservesNoGainReasonForDatabaseHashDrift(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "same_count_db_hash_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "same_count_db_hash_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite database value-hash drift without row-count gain:\n%s", out)
 	}
@@ -2818,7 +2818,7 @@ func TestCompactScriptPreservesNoGainReasonForDatabaseHashDrift(t *testing.T) {
 
 func TestCompactScriptPreservesPrimaryIntegrityReasonBeforeLaterProbeFailure(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "same_count_hash_drift_then_probe_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "same_count_hash_drift_then_probe_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite same-count hash drift and later probe failure:\n%s", out)
 	}
@@ -2836,7 +2836,7 @@ func TestCompactScriptPreservesPrimaryIntegrityReasonBeforeLaterProbeFailure(t *
 
 func TestCompactScriptIntegrityReasonOutranksEarlierProbeFailure(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "probe_failure_then_same_count_hash_drift", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "probe_failure_then_same_count_hash_drift", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite probe failure and later hash drift:\n%s", out)
 	}
@@ -2854,7 +2854,7 @@ func TestCompactScriptIntegrityReasonOutranksEarlierProbeFailure(t *testing.T) {
 
 func TestCompactScriptQuarantinesSameRowCountWriterBeforeFullGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "same_row_count_writer", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "same_row_count_writer", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite same-row-count value-hash drift:\n%s", out)
 	}
@@ -2890,7 +2890,7 @@ func TestCompactScriptQuarantinesSameRowCountWriterBeforeFullGC(t *testing.T) {
 
 func TestCompactScriptFailsOnEmptyPreflightValueHash(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "db_hash_empty", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "db_hash_empty", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite empty preflight value hash:\n%s", out)
 	}
@@ -2908,7 +2908,7 @@ func TestCompactScriptFailsOnEmptyPreflightValueHash(t *testing.T) {
 
 func TestCompactScriptFailsOnEmptyPreflightTableValueHash(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "table_hash_empty", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "table_hash_empty", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite empty preflight table value hash:\n%s", out)
 	}
@@ -2932,7 +2932,7 @@ func TestCompactScriptFailsOnEmptyPreflightTableValueHash(t *testing.T) {
 
 func TestCompactScriptQuarantinesEmptyPostflightValueHashBeforeFullGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "db_hash_empty_after_flatten", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "db_hash_empty_after_flatten", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite empty postflight value hash:\n%s", out)
 	}
@@ -2970,7 +2970,7 @@ func TestCompactScriptDoesNotCarryQuarantineEvidenceAcrossDatabases(t *testing.T
 		t.Fatalf("mkdir second dolt db: %v", err)
 	}
 
-	out, err := fixture.run(t, "second_db_post_flatten_head_empty", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "second_db_post_flatten_head_empty", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite second database HEAD probe failure:\n%s", out)
 	}
@@ -2982,7 +2982,7 @@ func TestCompactScriptDoesNotCarryQuarantineEvidenceAcrossDatabases(t *testing.T
 
 func TestCompactScriptQuarantinesEmptyPostflightTableValueHashBeforeFullGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "table_hash_empty_after_flatten", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "table_hash_empty_after_flatten", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite empty postflight table value hash:\n%s", out)
 	}
@@ -3065,7 +3065,7 @@ func TestCompactScriptFailsOnInvalidTableNameBeforeRowCount(t *testing.T) {
 
 func TestCompactScriptRestoresHeadWhenFlattenCommitFails(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "commit_failure_after_reset", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "commit_failure_after_reset", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite reset-success commit failure:\n%s", out)
 	}
@@ -3097,7 +3097,7 @@ func TestCompactScriptRestoresHeadWhenFlattenCommitFails(t *testing.T) {
 
 func TestCompactScriptRefusesToRestoreOverExternalHeadAdvance(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "commit_failure_after_external_head_advance", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "commit_failure_after_external_head_advance", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite reset-success commit failure after external writer:\n%s", out)
 	}
@@ -3139,7 +3139,7 @@ func TestCompactScriptSurfacesFlattenFailureStderr(t *testing.T) {
 
 func TestCompactScriptSurfacesGCFailureStderr(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "gc_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "gc_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite DOLT_GC failure:\n%s", out)
 	}
@@ -3155,7 +3155,7 @@ func TestCompactScriptSurfacesGCFailureStderr(t *testing.T) {
 func TestCompactScriptRetriesFullGCForBelowThresholdPendingMarker(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 
-	firstOut, err := fixture.run(t, "gc_failure", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "gc_failure", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("first compact succeeded despite DOLT_GC failure:\n%s", firstOut)
 	}
@@ -3195,7 +3195,7 @@ func TestCompactScriptRetriesFullGCForBelowThresholdPendingMarker(t *testing.T) 
 func TestCompactScriptRetriesPendingGCThenPushesRemote(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 
-	firstOut, err := fixture.run(t, "remote_gc_failure_once", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_gc_failure_once", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("first compact succeeded despite one-shot DOLT_GC failure:\n%s", firstOut)
 	}
@@ -3211,7 +3211,7 @@ func TestCompactScriptRetriesPendingGCThenPushesRemote(t *testing.T) {
 		t.Fatalf("pending-GC marker should preserve remote push contract:\n%s", marker)
 	}
 
-	secondOut, err := fixture.run(t, "remote_gc_failure_once", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_gc_failure_once", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("second compact should retry pending-GC path and push remote:\n%s", secondOut)
 	}
@@ -3245,7 +3245,7 @@ func TestCompactScriptRetriesPendingGCThenPushesRemote(t *testing.T) {
 func TestCompactScriptKeepsPendingGCWhenPendingPushHandoffCannotBeWritten(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 
-	firstOut, err := fixture.run(t, "remote_gc_failure_once", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "remote_gc_failure_once", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("first compact should fail after writing pending-GC marker:\n%s", firstOut)
 	}
@@ -3261,7 +3261,7 @@ func TestCompactScriptKeepsPendingGCWhenPendingPushHandoffCannotBeWritten(t *tes
 		t.Fatalf("write pending-push dir blocker: %v", err)
 	}
 
-	secondOut, err := fixture.run(t, "remote_ahead", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	secondOut, err := fixture.run(t, "remote_ahead", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("pending-GC retry should fail when replacement pending-push marker cannot be written:\n%s", secondOut)
 	}
@@ -3301,7 +3301,7 @@ func TestCompactScriptSkipsHealthyBelowThresholdOldgenWithoutPendingMarker(t *te
 
 func TestCompactScriptQuarantineBlocksSecondCycleAfterRowCountDecrease(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	firstOut, err := fixture.run(t, "row_count_decreases", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	firstOut, err := fixture.run(t, "row_count_decreases", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("first compact succeeded despite row-count decrease:\n%s", firstOut)
 	}
@@ -3332,7 +3332,7 @@ func TestCompactScriptQuarantineBlocksSecondCycleAfterRowCountDecrease(t *testin
 
 func TestCompactScriptFreshQuarantineMarkerAlertsDefaultMayor(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "row_count_decreases", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "row_count_decreases", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("compact succeeded despite row-count decrease:\n%s", out)
 	}
@@ -3349,7 +3349,7 @@ func TestCompactScriptExistingQuarantineMarkerAlertsDefaultMayorBeforeFlattenAnd
 		extraEnv []string
 	}{
 		{name: "flatten_database"},
-		{name: "bare_gc_database", extraEnv: []string{"GC_DOLT_COMPACT_BARE_GC=1"}},
+		{name: "bare_gc_database", extraEnv: []string{"GC_BEADS_COMPACT_BARE_GC=1"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := newCompactScriptFixture(t)
@@ -3362,7 +3362,7 @@ func TestCompactScriptExistingQuarantineMarkerAlertsDefaultMayorBeforeFlattenAnd
 				t.Fatalf("write quarantine marker: %v", err)
 			}
 
-			env := append([]string{"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500"}, tc.extraEnv...)
+			env := append([]string{"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500"}, tc.extraEnv...)
 			out, err := fixture.run(t, "success", env...)
 			if err == nil {
 				t.Fatalf("%s must fail when quarantine marker exists:\n%s", tc.name, out)
@@ -3387,8 +3387,8 @@ func TestCompactScriptQuarantineAlertRecipientCanBeOverridden(t *testing.T) {
 	}
 
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_ALERT_TO=gascity/operator",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_ALERT_TO=gascity/operator",
 	)
 	if err == nil {
 		t.Fatalf("compact must fail when quarantine marker exists:\n%s", out)
@@ -3398,7 +3398,7 @@ func TestCompactScriptQuarantineAlertRecipientCanBeOverridden(t *testing.T) {
 
 func TestCompactScriptDryRunSkipsMutations(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500", "GC_DOLT_COMPACT_DRY_RUN=1")
+	out, err := fixture.run(t, "success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500", "GC_BEADS_COMPACT_DRY_RUN=1")
 	if err != nil {
 		t.Fatalf("dry-run compact failed:\n%s", out)
 	}
@@ -3425,12 +3425,12 @@ func TestCompactScriptAllowsExplicitLocalExternalEndpointWithoutManagedState(t *
 	}
 
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_MANAGED_LOCAL=0",
-		"GC_DOLT_HOST=127.0.0.2",
-		"GC_DOLT_DATA_DIR="+externalRoot,
-		"GC_DOLT_STATE_FILE="+filepath.Join(externalRoot, "dolt-state.json"),
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_DRY_RUN=1",
+		"GC_BEADS_MANAGED_LOCAL=0",
+		"GC_BEADS_HOST=127.0.0.2",
+		"GC_BEADS_DATA_DIR="+externalRoot,
+		"GC_BEADS_STATE_FILE="+filepath.Join(externalRoot, "dolt-state.json"),
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_DRY_RUN=1",
 	)
 	if err != nil {
 		t.Fatalf("dry-run compact against explicit local external endpoint failed:\n%s", out)
@@ -3458,16 +3458,16 @@ func TestCompactScriptAllowsExplicitLocalExternalEndpointWithoutManagedState(t *
 func TestCompactScriptSkipsNonLocalExternalEndpoint(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_MANAGED_LOCAL=0",
-		"GC_DOLT_HOST=external.example.internal",
-		"GC_DOLT_PORT=3307",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_DRY_RUN=1",
+		"GC_BEADS_MANAGED_LOCAL=0",
+		"GC_BEADS_HOST=external.example.internal",
+		"GC_BEADS_PORT=3307",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_DRY_RUN=1",
 	)
 	if err != nil {
 		t.Fatalf("non-local external endpoint skip should exit cleanly:\n%s", out)
 	}
-	if !strings.Contains(out, "GC_DOLT_HOST=external.example.internal is not a local Dolt compaction target") {
+	if !strings.Contains(out, "GC_BEADS_HOST=external.example.internal is not a local Dolt compaction target") {
 		t.Fatalf("output missing non-local external skip:\n%s", out)
 	}
 	logData, err := os.ReadFile(fixture.doltLog)
@@ -3490,18 +3490,18 @@ func TestCompactScriptSkipsNonLocalExternalEndpointWithoutPort(t *testing.T) {
 	}
 
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_MANAGED_LOCAL=0",
-		"GC_DOLT_HOST=external.example.internal",
-		"GC_DOLT_PORT=",
-		"GC_DOLT_DATA_DIR="+externalRoot,
-		"GC_DOLT_STATE_FILE="+filepath.Join(externalRoot, "dolt-state.json"),
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_DRY_RUN=1",
+		"GC_BEADS_MANAGED_LOCAL=0",
+		"GC_BEADS_HOST=external.example.internal",
+		"GC_BEADS_PORT=",
+		"GC_BEADS_DATA_DIR="+externalRoot,
+		"GC_BEADS_STATE_FILE="+filepath.Join(externalRoot, "dolt-state.json"),
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_DRY_RUN=1",
 	)
 	if err != nil {
 		t.Fatalf("non-local external endpoint without a port should skip cleanly:\n%s", out)
 	}
-	if !strings.Contains(out, "GC_DOLT_PORT is empty") {
+	if !strings.Contains(out, "GC_BEADS_PORT is empty") {
 		t.Fatalf("output missing empty-port external skip:\n%s", out)
 	}
 	if strings.Contains(out, "cannot resolve runtime port") {
@@ -3524,11 +3524,11 @@ func TestCompactScriptOnlyDBsAllowlistFiltersDatabases(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(fixture.dataDir, "cache", ".dolt"), 0o755); err != nil {
 		t.Fatalf("mkdir cache db: %v", err)
 	}
-	out, err := fixture.run(t, "success", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500", "GC_DOLT_COMPACT_ONLY_DBS=beads")
+	out, err := fixture.run(t, "success", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500", "GC_BEADS_COMPACT_ONLY_DBS=beads")
 	if err != nil {
 		t.Fatalf("allowlisted compact failed:\n%s", out)
 	}
-	if !strings.Contains(out, "db=cache not in GC_DOLT_COMPACT_ONLY_DBS") {
+	if !strings.Contains(out, "db=cache not in GC_BEADS_COMPACT_ONLY_DBS") {
 		t.Fatalf("output missing allowlist skip:\n%s", out)
 	}
 	logData, err := os.ReadFile(fixture.doltLog)
@@ -3547,14 +3547,14 @@ func TestCompactScriptOnlyDBsAllowlistFiltersDatabases(t *testing.T) {
 func TestCompactScriptOnlyDBsCanTargetUndiscoveredDatabase(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_ONLY_DBS=ga",
-		"GC_DOLT_COMPACT_DRY_RUN=1",
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_ONLY_DBS=ga",
+		"GC_BEADS_COMPACT_DRY_RUN=1",
 	)
 	if err != nil {
 		t.Fatalf("explicit allowlisted compact failed:\n%s", out)
 	}
-	if !strings.Contains(out, "db=beads not in GC_DOLT_COMPACT_ONLY_DBS") ||
+	if !strings.Contains(out, "db=beads not in GC_BEADS_COMPACT_ONLY_DBS") ||
 		!strings.Contains(out, "db=ga commits=") ||
 		!strings.Contains(out, "dry-run") {
 		t.Fatalf("output missing explicit allowlist target or discovered-db skip:\n%s", out)
@@ -3574,7 +3574,7 @@ func TestCompactScriptOnlyDBsCanTargetUndiscoveredDatabase(t *testing.T) {
 
 func TestCompactScriptTableNameDoesNotClobberDatabaseName(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "table_name_clobber", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "table_name_clobber", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("compact failed when table name looked like a database: %v\n%s", err, out)
 	}
@@ -3591,7 +3591,7 @@ func TestCompactScriptTableNameDoesNotClobberDatabaseName(t *testing.T) {
 	}
 }
 
-// Bare-GC mode (issue #2615): GC_DOLT_COMPACT_BARE_GC=1 must bypass the
+// Bare-GC mode (issue #2615): GC_BEADS_COMPACT_BARE_GC=1 must bypass the
 // threshold + flatten path and run a single bare CALL DOLT_GC() per
 // discovered database. The full DOLT_GC --full path is the wrong tool for
 // the NBS journal range index — a working-set GC (bare DOLT_GC()) resets
@@ -3600,8 +3600,8 @@ func TestCompactScriptTableNameDoesNotClobberDatabaseName(t *testing.T) {
 func TestCompactScriptBareGCBypassesThresholdAndSkipsFlatten(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "below_threshold",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_BARE_GC=1")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_BARE_GC=1")
 	if err != nil {
 		t.Fatalf("bare-gc compact failed: %v\n%s", err, out)
 	}
@@ -3632,9 +3632,9 @@ func TestCompactScriptBareGCBypassesThresholdAndSkipsFlatten(t *testing.T) {
 func TestCompactScriptBareGCDryRunSkipsMutations(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_BARE_GC=1",
-		"GC_DOLT_COMPACT_DRY_RUN=1")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_BARE_GC=1",
+		"GC_BEADS_COMPACT_DRY_RUN=1")
 	if err != nil {
 		t.Fatalf("bare-gc dry-run failed: %v\n%s", err, out)
 	}
@@ -3656,13 +3656,13 @@ func TestCompactScriptBareGCHonorsOnlyDBsAllowlist(t *testing.T) {
 		t.Fatalf("mkdir cache db: %v", err)
 	}
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_BARE_GC=1",
-		"GC_DOLT_COMPACT_ONLY_DBS=beads")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_BARE_GC=1",
+		"GC_BEADS_COMPACT_ONLY_DBS=beads")
 	if err != nil {
 		t.Fatalf("bare-gc allowlist compact failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "db=cache not in GC_DOLT_COMPACT_ONLY_DBS") {
+	if !strings.Contains(out, "db=cache not in GC_BEADS_COMPACT_ONLY_DBS") {
 		t.Fatalf("bare-gc output missing allowlist skip:\n%s", out)
 	}
 	if !strings.Contains(out, "db=beads bare-gc duration=") {
@@ -3691,8 +3691,8 @@ func TestCompactScriptBareGCRefusesQuarantinedDatabase(t *testing.T) {
 		t.Fatalf("write quarantine marker: %v", err)
 	}
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_BARE_GC=1")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_BARE_GC=1")
 	if err == nil {
 		t.Fatalf("bare-gc must fail when quarantine marker exists:\n%s", out)
 	}
@@ -3716,8 +3716,8 @@ func TestCompactScriptBareGCRefusesQuarantinedDatabase(t *testing.T) {
 func TestCompactScriptBareGCSurfacesDoltGCFailureStderr(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "gc_failure",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_BARE_GC=1")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_BARE_GC=1")
 	if err == nil {
 		t.Fatalf("bare-gc must fail when DOLT_GC fails:\n%s", out)
 	}
@@ -3749,12 +3749,12 @@ func TestCompactScriptBareGCSurfacesDoltGCFailureStderr(t *testing.T) {
 func TestCompactScriptBareGCRejectsInvalidValue(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_BARE_GC=bogus")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_BARE_GC=bogus")
 	if err == nil {
 		t.Fatalf("bare-gc must reject invalid value:\n%s", out)
 	}
-	if !strings.Contains(out, "invalid GC_DOLT_COMPACT_BARE_GC=bogus") {
+	if !strings.Contains(out, "invalid GC_BEADS_COMPACT_BARE_GC=bogus") {
 		t.Fatalf("bare-gc output missing invalid-value diagnostic:\n%s", out)
 	}
 	// Invalid env exits during validation, before any dolt query, so the
@@ -3770,8 +3770,8 @@ func TestCompactScriptBareGCRejectsInvalidValue(t *testing.T) {
 func TestCompactScriptBareGCDisabledWhenEnvFalsy(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "below_threshold",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_BARE_GC=0")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_BARE_GC=0")
 	if err != nil {
 		t.Fatalf("falsy bare-gc compact failed: %v\n%s", err, out)
 	}
@@ -3804,7 +3804,7 @@ func TestCompactScriptBareGCDisabledWhenEnvFalsy(t *testing.T) {
 func TestCompactScriptGCOnlyFlagReclaimsBelowThresholdWithFullGC(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.runWithArgs(t, "below_threshold", []string{"--gc-only"},
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("gc-only reclaim failed: %v\n%s", err, out)
 	}
@@ -3835,11 +3835,11 @@ func TestCompactScriptGCOnlyFlagHonorsOnlyDBFlag(t *testing.T) {
 		t.Fatalf("mkdir cache db: %v", err)
 	}
 	out, err := fixture.runWithArgs(t, "success", []string{"--gc-only", "--only-db", "beads"},
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("gc-only allowlist reclaim failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, "db=cache not in GC_DOLT_COMPACT_ONLY_DBS") {
+	if !strings.Contains(out, "db=cache not in GC_BEADS_COMPACT_ONLY_DBS") {
 		t.Fatalf("gc-only output missing allowlist skip:\n%s", out)
 	}
 	if !strings.Contains(out, "db=beads gc-only reclaim duration=") {
@@ -3861,7 +3861,7 @@ func TestCompactScriptGCOnlyFlagHonorsOnlyDBFlag(t *testing.T) {
 func TestCompactScriptGCOnlyFlagDryRunSkipsMutations(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.runWithArgs(t, "success", []string{"--gc-only", "--dry-run"},
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("gc-only dry-run failed: %v\n%s", err, out)
 	}
@@ -3885,7 +3885,7 @@ func TestCompactScriptGCOnlyFlagRefusesQuarantinedDatabase(t *testing.T) {
 		t.Fatalf("write quarantine marker: %v", err)
 	}
 	out, err := fixture.runWithArgs(t, "success", []string{"--gc-only"},
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("gc-only must fail when quarantine marker exists:\n%s", out)
 	}
@@ -3902,7 +3902,7 @@ func TestCompactScriptGCOnlyFlagRefusesQuarantinedDatabase(t *testing.T) {
 func TestCompactScriptGCOnlyFlagSurfacesDoltGCFailure(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.runWithArgs(t, "gc_failure", []string{"--gc-only"},
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("gc-only must fail when DOLT_GC fails:\n%s", out)
 	}
@@ -3925,8 +3925,8 @@ func TestCompactScriptGCOnlyFlagSurfacesDoltGCFailure(t *testing.T) {
 func TestCompactScriptGCOnlyFlagRejectsBareGCEnvCombination(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.runWithArgs(t, "success", []string{"--gc-only"},
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_BARE_GC=1")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_BARE_GC=1")
 	if err == nil {
 		t.Fatalf("compact must reject --gc-only combined with bare GC:\n%s", out)
 	}
@@ -4247,7 +4247,7 @@ exit 0
 	go func() {
 		secondOut, secondErr = runDogScriptCommand(t, "mol-dog-backup.sh", binDir, cityPath, dataDir,
 			"GC_BACKUP_DATABASES=prod",
-			"GC_DOLT_BACKUP_LOCK_WAIT_SECONDS=0",
+			"GC_BEADS_BACKUP_LOCK_WAIT_SECONDS=0",
 		)
 		close(secondDone)
 	}()
@@ -4935,7 +4935,7 @@ exit 1
 // writer-race defer path fires: exit 0, no quarantine, pending-GC marker written.
 func TestCompactScriptDefersWhenWriterDeletesRows(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
-	out, err := fixture.run(t, "row_count_decreases_with_writer_race", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "row_count_decreases_with_writer_race", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("concurrent-DELETE defer must exit 0 (skip, not failure): %v\n%s", err, out)
 	}
@@ -4969,7 +4969,7 @@ func TestCompactScriptStillQuarantinesRowDecreaseWithStableHead(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	// row_count_decreases_with_hash_change: count drops + hash changes, HEAD stays
 	// at compactcommit (no writer proven) — should quarantine, not defer.
-	out, err := fixture.run(t, "row_count_decreases_with_hash_change", "GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+	out, err := fixture.run(t, "row_count_decreases_with_hash_change", "GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err == nil {
 		t.Fatalf("stable-HEAD row-decrease must remain a blocking failure:\n%s", out)
 	}
@@ -5008,12 +5008,12 @@ func TestCompactScriptSkipFetchFlagBypassesFetch(t *testing.T) {
 		extraEnv []string
 	}{
 		{name: "flag", args: []string{"--skip-fetch"}},
-		{name: "env", extraEnv: []string{"GC_DOLT_COMPACT_SKIP_FETCH=1"}},
+		{name: "env", extraEnv: []string{"GC_BEADS_COMPACT_SKIP_FETCH=1"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			fixture := newCompactScriptFixture(t)
-			env := append([]string{"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500"}, tc.extraEnv...)
+			env := append([]string{"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500"}, tc.extraEnv...)
 			out, err := fixture.runWithArgs(t, "remote_success", tc.args, env...)
 			if err != nil {
 				t.Fatalf("skip-fetch compact should succeed from local source of truth: %v\n%s", err, out)
@@ -5045,8 +5045,8 @@ func TestCompactScriptSkipFetchPerDBList(t *testing.T) {
 	t.Run("listed_db_skips_fetch", func(t *testing.T) {
 		fixture := newCompactScriptFixture(t)
 		out, err := fixture.run(t, "remote_success",
-			"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-			"GC_DOLT_COMPACT_SKIP_FETCH_DBS=beads")
+			"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+			"GC_BEADS_COMPACT_SKIP_FETCH_DBS=beads")
 		if err != nil {
 			t.Fatalf("listed-db skip-fetch compact should succeed: %v\n%s", err, out)
 		}
@@ -5061,8 +5061,8 @@ func TestCompactScriptSkipFetchPerDBList(t *testing.T) {
 	t.Run("unlisted_db_fetches", func(t *testing.T) {
 		fixture := newCompactScriptFixture(t)
 		out, err := fixture.run(t, "remote_success",
-			"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-			"GC_DOLT_COMPACT_SKIP_FETCH_DBS=otherdb")
+			"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+			"GC_BEADS_COMPACT_SKIP_FETCH_DBS=otherdb")
 		if err != nil {
 			t.Fatalf("unlisted-db compact should succeed: %v\n%s", err, out)
 		}
@@ -5082,7 +5082,7 @@ func TestCompactScriptSkipFetchDefersPush(t *testing.T) {
 	// force-pushed blind — remote sync resumes once credentials are wired.
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.runWithArgs(t, "remote_success", []string{"--skip-fetch"},
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500")
 	if err != nil {
 		t.Fatalf("skip-fetch compact should succeed: %v\n%s", err, out)
 	}
@@ -5110,12 +5110,12 @@ func TestCompactScriptSkipFetchDefersPush(t *testing.T) {
 func TestCompactScriptSkipFetchRejectsInvalidValue(t *testing.T) {
 	fixture := newCompactScriptFixture(t)
 	out, err := fixture.run(t, "success",
-		"GC_DOLT_COMPACT_THRESHOLD_COMMITS=500",
-		"GC_DOLT_COMPACT_SKIP_FETCH=bogus")
+		"GC_BEADS_COMPACT_THRESHOLD_COMMITS=500",
+		"GC_BEADS_COMPACT_SKIP_FETCH=bogus")
 	if err == nil {
 		t.Fatalf("skip-fetch must reject invalid value:\n%s", out)
 	}
-	if !strings.Contains(out, "invalid GC_DOLT_COMPACT_SKIP_FETCH=bogus") {
+	if !strings.Contains(out, "invalid GC_BEADS_COMPACT_SKIP_FETCH=bogus") {
 		t.Fatalf("skip-fetch output missing invalid-value diagnostic:\n%s", out)
 	}
 	// Invalid env exits during validation, before any dolt query, so the fake

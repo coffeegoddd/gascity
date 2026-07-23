@@ -51,7 +51,7 @@ recovery_should_skip_due_to_enospc() {
 
 func runRestart(t *testing.T, cityPath, root string, port int) ([]byte, error) {
 	t.Helper()
-	return runRestartWithEnv(t, cityPath, root, []string{fmt.Sprintf("GC_DOLT_PORT=%d", port)})
+	return runRestartWithEnv(t, cityPath, root, []string{fmt.Sprintf("GC_BEADS_PORT=%d", port)})
 }
 
 func runRestartWithEnv(t *testing.T, cityPath, root string, extraEnv []string, args ...string) ([]byte, error) {
@@ -59,16 +59,16 @@ func runRestartWithEnv(t *testing.T, cityPath, root string, extraEnv []string, a
 	script := filepath.Join(root, restartScript)
 	cmd := exec.Command("sh", append([]string{script}, args...)...)
 	cmd.Env = append(filteredEnv(
-		"PATH", "GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER",
-		"GC_DOLT_PASSWORD", "GC_DOLT_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
-		"GC_CITY_RUNTIME_DIR", "GC_PACK_STATE_DIR", "GC_DOLT_LOG_FILE",
+		"PATH", "GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER",
+		"GC_BEADS_PASSWORD", "GC_BEADS_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
+		"GC_CITY_RUNTIME_DIR", "GC_PACK_STATE_DIR", "GC_BEADS_LOG_FILE",
 		"GC_BEADS_BD_SCRIPT",
 	),
 		"PATH="+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	cmd.Env = append(cmd.Env, extraEnv...)
 	return cmd.CombinedOutput()
@@ -219,7 +219,7 @@ func TestRestartRefusesRecentENOSPCUnlessForced(t *testing.T) {
 		t.Fatalf("restart invoked gc-beads-bd despite ENOSPC refusal; ops log:\n%s\noutput:\n%s", data, out)
 	}
 
-	out, err = runRestartWithEnv(t, cityPath, root, []string{fmt.Sprintf("GC_DOLT_PORT=%d", port)}, "--force")
+	out, err = runRestartWithEnv(t, cityPath, root, []string{fmt.Sprintf("GC_BEADS_PORT=%d", port)}, "--force")
 	if err != nil {
 		t.Fatalf("gc dolt restart --force failed despite fake stop/start success: %v\n%s", err, out)
 	}
@@ -237,7 +237,7 @@ func TestRestartRefusesRecentENOSPCUnlessForced(t *testing.T) {
 // host-classification contract: the managed-server bind default is
 // 127.0.0.1, and 0.0.0.0 remains the explicit wildcard opt-out — both must
 // be treated as a GC-managed local server (restart proceeds), exactly like
-// an unset GC_DOLT_HOST. Without 127.0.0.1 in the local set, adopting the
+// an unset GC_BEADS_HOST. Without 127.0.0.1 in the local set, adopting the
 // loopback bind default would break managed-server detection.
 func TestRestartTreatsLoopbackAndWildcardHostsAsLocalManaged(t *testing.T) {
 	root := repoRoot(t)
@@ -251,11 +251,11 @@ func TestRestartTreatsLoopbackAndWildcardHostsAsLocalManaged(t *testing.T) {
 			bdLog := writeFakeBeadsBDForRestart(t, cityPath, map[string]int{"stop": 0, "start": 0})
 
 			out, err := runRestartWithEnv(t, cityPath, root, []string{
-				fmt.Sprintf("GC_DOLT_PORT=%d", port),
-				"GC_DOLT_HOST=" + host,
+				fmt.Sprintf("GC_BEADS_PORT=%d", port),
+				"GC_BEADS_HOST=" + host,
 			})
 			if err != nil {
-				t.Fatalf("gc dolt restart refused GC_DOLT_HOST=%s as if remote: %v\n%s", host, err, out)
+				t.Fatalf("gc dolt restart refused GC_BEADS_HOST=%s as if remote: %v\n%s", host, err, out)
 			}
 
 			data, err := os.ReadFile(bdLog)
@@ -279,8 +279,8 @@ func TestRestartRejectsRemoteHostWithDiagnostic(t *testing.T) {
 	bdLog := writeFakeBeadsBDForRestart(t, cityPath, map[string]int{"stop": 0, "start": 0})
 
 	out, err := runRestartWithEnv(t, cityPath, root, []string{
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_HOST=example.internal",
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_HOST=example.internal",
 	})
 	if err == nil {
 		t.Fatalf("gc dolt restart unexpectedly succeeded for a remote host:\n%s", out)

@@ -170,8 +170,8 @@ func TestConditionEnvEnvironUsesStorePathForBeadsDir(t *testing.T) {
 
 func TestConditionEnvEnvironPreservesDoltConnection(t *testing.T) {
 	t.Setenv("BEADS_DOLT_SERVER_PORT", "33061")
-	t.Setenv("GC_DOLT_HOST", "127.0.0.1")
-	t.Setenv("GC_DOLT_PASSWORD", "secret")
+	t.Setenv("GC_BEADS_HOST", "127.0.0.1")
+	t.Setenv("GC_BEADS_PASSWORD", "secret")
 
 	env := ConditionEnv{
 		BeadID:    "bead-dolt",
@@ -190,8 +190,8 @@ func TestConditionEnvEnvironPreservesDoltConnection(t *testing.T) {
 
 	for key, want := range map[string]string{
 		"BEADS_DOLT_SERVER_PORT": "33061",
-		"GC_DOLT_HOST":           "127.0.0.1",
-		"GC_DOLT_PASSWORD":       "secret",
+		"GC_BEADS_HOST":           "127.0.0.1",
+		"GC_BEADS_PASSWORD":       "secret",
 	} {
 		if got := lookup[key]; got != want {
 			t.Fatalf("%s = %q, want %q", key, got, want)

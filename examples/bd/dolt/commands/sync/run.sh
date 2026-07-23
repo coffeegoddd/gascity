@@ -9,8 +9,8 @@
 # Use --dry-run to preview without pushing.
 #
 # Refspec resolution (per database):
-#   1. GC_DOLT_REFSPEC_<DB_UPPER> env var override, in <local>:<remote> form
-#      (e.g. GC_DOLT_REFSPEC_GA=main:gascity-3). DB name is uppercased with
+#   1. GC_BEADS_REFSPEC_<DB_UPPER> env var override, in <local>:<remote> form
+#      (e.g. GC_BEADS_REFSPEC_GA=main:gascity-3). DB name is uppercased with
 #      '-' replaced by '_' to derive the env var key; database names that
 #      differ only by '-' vs '_' intentionally share the same env var key.
 #   2. Default: the database's active branch is pushed to a same-named branch
@@ -21,10 +21,10 @@
 #
 # Environment:
 #   GC_CITY_PATH                          (required) — city root
-#   GC_DOLT_PORT                          (required) — managed dolt port
-#   GC_DOLT_USER                          (default: root)
-#   GC_DOLT_PASSWORD                      (optional)
-#   GC_DOLT_SYNC_PUSH_TIMEOUT_SECS
+#   GC_BEADS_PORT                          (required) — managed dolt port
+#   GC_BEADS_USER                          (default: root)
+#   GC_BEADS_PASSWORD                      (optional)
+#   GC_BEADS_SYNC_PUSH_TIMEOUT_SECS
 #     (default: 1800) — wall-clock bound for SQL-mode remote push. Increase for
 #                     slow links or large first pushes (a multi-GB first push to
 #                     a fresh remote can exceed the prior fixed 120s ceiling).
@@ -64,8 +64,8 @@ while [ $# -gt 0 ]; do
       echo "  exclude it from sync (reported as 'skipped (.no-sync)')."
       echo ""
       echo "Environment:"
-      echo "  GC_DOLT_SYNC_FETCH_TIMEOUT_SECS  pre-push fetch bound (default 60)"
-      echo "  GC_DOLT_SYNC_PUSH_TIMEOUT_SECS   push bound (default 1800)"
+      echo "  GC_BEADS_SYNC_FETCH_TIMEOUT_SECS  pre-push fetch bound (default 60)"
+      echo "  GC_BEADS_SYNC_PUSH_TIMEOUT_SECS   push bound (default 1800)"
       exit 0
       ;;
     *) echo "gc dolt sync: unknown flag: $1" >&2; exit 1 ;;
@@ -79,7 +79,7 @@ case "$(printf '%s' "$db_filter" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | t
   ;;
 esac
 
-: "${GC_DOLT_USER:=root}"
+: "${GC_BEADS_USER:=root}"
 PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 . "$PACK_DIR/assets/scripts/runtime.sh"
 
@@ -101,14 +101,14 @@ data_dir="$DOLT_DATA_DIR"
 # to prevent. The first arm rejects empty/non-digit input; the second accepts
 # any all-digit string containing a non-zero digit; the default arm rejects the
 # remaining all-digit-but-all-zero forms.
-push_timeout="${GC_DOLT_SYNC_PUSH_TIMEOUT_SECS-1800}"
+push_timeout="${GC_BEADS_SYNC_PUSH_TIMEOUT_SECS-1800}"
 case "$push_timeout" in
   ''|*[!0-9]*) push_timeout_valid=false ;;
   *[1-9]*)     push_timeout_valid=true ;;
   *)           push_timeout_valid=false ;;
 esac
 if [ "$push_timeout_valid" != true ]; then
-  printf 'gc dolt sync: invalid GC_DOLT_SYNC_PUSH_TIMEOUT_SECS=%s (must be a positive integer)\n' \
+  printf 'gc dolt sync: invalid GC_BEADS_SYNC_PUSH_TIMEOUT_SECS=%s (must be a positive integer)\n' \
     "$push_timeout" >&2
   exit 2
 fi
@@ -118,21 +118,21 @@ fi
 # fetch is bounded and a timeout skips that database without pushing. Validated
 # with the same rules as the push timeout (reject empty / non-numeric /
 # all-zero — GNU `timeout 0` disables the timeout, i.e. unbounded).
-fetch_timeout="${GC_DOLT_SYNC_FETCH_TIMEOUT_SECS-60}"
+fetch_timeout="${GC_BEADS_SYNC_FETCH_TIMEOUT_SECS-60}"
 case "$fetch_timeout" in
   ''|*[!0-9]*) fetch_timeout_valid=false ;;
   *[1-9]*)     fetch_timeout_valid=true ;;
   *)           fetch_timeout_valid=false ;;
 esac
 if [ "$fetch_timeout_valid" != true ]; then
-  printf 'gc dolt sync: invalid GC_DOLT_SYNC_FETCH_TIMEOUT_SECS=%s (must be a positive integer)\n' \
+  printf 'gc dolt sync: invalid GC_BEADS_SYNC_FETCH_TIMEOUT_SECS=%s (must be a positive integer)\n' \
     "$fetch_timeout" >&2
   exit 2
 fi
 
 # Check if server is running.
 is_running() {
-  managed_runtime_tcp_reachable "$GC_DOLT_PORT"
+  managed_runtime_tcp_reachable "$GC_BEADS_PORT"
 }
 
 # routes_files — emit one routes.jsonl path per line.
@@ -189,7 +189,7 @@ valid_branch_name() {
   esac
 }
 
-# refspec_env_value <db> — emit the GC_DOLT_REFSPEC_<DB_UPPER> override, if any.
+# refspec_env_value <db> — emit the GC_BEADS_REFSPEC_<DB_UPPER> override, if any.
 # DB name is uppercased and '-' is replaced with '_' to form a valid env key.
 refspec_env_value() {
   db="$1"
@@ -198,7 +198,7 @@ refspec_env_value() {
   case "$key" in
     *[!A-Z0-9_]*) return 0 ;;
   esac
-  eval "printf '%s' \"\${GC_DOLT_REFSPEC_$key:-}\""
+  eval "printf '%s' \"\${GC_BEADS_REFSPEC_$key:-}\""
 }
 
 warn_refspec_fallback() {
@@ -236,9 +236,9 @@ refspec_parts() {
 dolt_sql() {
   query="$1"
   tmo="${2:-120}"
-  host="${GC_DOLT_HOST:-127.0.0.1}"
-  export DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}"
-  run_bounded "$tmo" dolt --host "$host" --port "$GC_DOLT_PORT" --user "$GC_DOLT_USER" --no-tls \
+  host="${GC_BEADS_HOST:-127.0.0.1}"
+  export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
+  run_bounded "$tmo" dolt --host "$host" --port "$GC_BEADS_PORT" --user "$GC_BEADS_USER" --no-tls \
     sql --result-format csv -q "$query"
 }
 
@@ -263,7 +263,7 @@ find_remote_sql() {
 }
 
 # resolve_refspec_sql <db> — emit two lines: local-branch and remote-branch.
-# Honors GC_DOLT_REFSPEC_<DB> first, then falls back to active_branch() over SQL,
+# Honors GC_BEADS_REFSPEC_<DB> first, then falls back to active_branch() over SQL,
 # then to 'main' if both fail.
 resolve_refspec_sql() {
   db="$1"
@@ -497,7 +497,7 @@ sync_database_sql() {
     # SIGKILLed client leaves no stderr; the no-mechanism path leaves the
     # "cannot run bounded command" marker, so the stderr replay below
     # disambiguates the two at zero extra mechanism.
-    echo "  $name: TIMEOUT after ${push_timeout}s — push manually or increase timeout (GC_DOLT_SYNC_PUSH_TIMEOUT_SECS)" >&2
+    echo "  $name: TIMEOUT after ${push_timeout}s — push manually or increase timeout (GC_BEADS_SYNC_PUSH_TIMEOUT_SECS)" >&2
   else
     echo "  $name: ERROR: push failed (exit $push_rc)" >&2
   fi

@@ -16,8 +16,8 @@
 #   GC_K8S_CONTROLLER_IMAGE   — Controller image (default: gc-controller:latest)
 #   GC_K8S_CONTEXT            — kubectl context (default: current)
 #   GC_K8S_IMAGE              — Agent image (passed to controller env)
-#   GC_DOLT_HOST              — Canonical explicit Dolt host override for controller bootstrap
-#   GC_DOLT_PORT              — Canonical explicit Dolt port override for controller bootstrap
+#   GC_BEADS_HOST              — Canonical explicit Dolt host override for controller bootstrap
+#   GC_BEADS_PORT              — Canonical explicit Dolt port override for controller bootstrap
 #
 # Prerequisites:
 #   - kubectl configured with cluster access
@@ -39,8 +39,8 @@ shift || true
 NS="${GC_K8S_NAMESPACE:-gc}"
 CTRL_IMAGE="${GC_K8S_CONTROLLER_IMAGE:-gc-controller:latest}"
 AGENT_IMAGE="${GC_K8S_IMAGE:-gc-agent:latest}"
-EXPLICIT_DOLT_HOST="${GC_DOLT_HOST:-}"
-EXPLICIT_DOLT_PORT="${GC_DOLT_PORT:-}"
+EXPLICIT_DOLT_HOST="${GC_BEADS_HOST:-}"
+EXPLICIT_DOLT_PORT="${GC_BEADS_PORT:-}"
 GC_BIN="${GC_BIN:-gc}"
 POD_NAME="gc-controller"
 SA_NAME="gc-controller"
@@ -60,7 +60,7 @@ KUBECTL+=(-n "$NS")
 
 validate_explicit_dolt_target() {
   if { [ -n "$EXPLICIT_DOLT_HOST" ] && [ -z "$EXPLICIT_DOLT_PORT" ]; } || { [ -z "$EXPLICIT_DOLT_HOST" ] && [ -n "$EXPLICIT_DOLT_PORT" ]; }; then
-    echo "controller bootstrap requires both GC_DOLT_HOST and GC_DOLT_PORT when either is set" >&2
+    echo "controller bootstrap requires both GC_BEADS_HOST and GC_BEADS_PORT when either is set" >&2
     exit 1
   fi
 }
@@ -322,8 +322,8 @@ case "$op" in
                 {name: "GC_MCP_MAIL_URL", value: "http://mcp-mail.gc.svc.cluster.local:8765"},
                 {name: "GC_MCP_MAIL_PROJECT", value: "/workspace"}
               ]
-              + (if $dolt_host != "" then [{name: "GC_DOLT_HOST", value: $dolt_host}] else [] end)
-              + (if $dolt_port != "" then [{name: "GC_DOLT_PORT", value: $dolt_port}] else [] end)
+              + (if $dolt_host != "" then [{name: "GC_BEADS_HOST", value: $dolt_host}] else [] end)
+              + (if $dolt_port != "" then [{name: "GC_BEADS_PORT", value: $dolt_port}] else [] end)
             ),
             securityContext: {
               allowPrivilegeEscalation: false,

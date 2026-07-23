@@ -1,5 +1,5 @@
 #!/bin/sh
-# port_resolve.sh — shared GC_DOLT_PORT discovery helper.
+# port_resolve.sh — shared GC_BEADS_PORT discovery helper.
 #
 # Sourced by:
 #   .gc/system/packs/dolt/assets/scripts/runtime.sh
@@ -35,9 +35,9 @@
 # Behavior:
 #   1. It calls managed_runtime_port "$state_file" "$data_dir" and, on a
 #      non-empty result, echoes the port and returns 0.
-#   2. Otherwise, if provider_state_file was provided and GC_DOLT_STATE_FILE
+#   2. Otherwise, if provider_state_file was provided and GC_BEADS_STATE_FILE
 #      did not force a specific state file, it tries the provider state.
-#   3. Otherwise, if GC_DOLT_PORT is non-empty in the caller's environment,
+#   3. Otherwise, if GC_BEADS_PORT is non-empty in the caller's environment,
 #      the function echoes that value and returns 0 as an operator seed.
 #   4. Otherwise, it writes the §3 error template to stderr and exits 78.
 #
@@ -70,8 +70,8 @@ resolve_dolt_port_or_die() {
         return 0
     fi
 
-    _rdp_consulted="GC_DOLT_PORT (unset), GC_DOLT_STATE_FILE"
-    if [ -n "$_rdp_provider_state_file" ] && [ -z "${GC_DOLT_STATE_FILE:-}" ]; then
+    _rdp_consulted="GC_BEADS_PORT (unset), GC_BEADS_STATE_FILE"
+    if [ -n "$_rdp_provider_state_file" ] && [ -z "${GC_BEADS_STATE_FILE:-}" ]; then
         _rdp_consulted="$_rdp_consulted, dolt-provider-state.json"
         _rdp_resolved=$(managed_runtime_port "$_rdp_provider_state_file" "$_rdp_data_dir" 2>/dev/null)
         if [ -n "$_rdp_resolved" ]; then
@@ -80,8 +80,8 @@ resolve_dolt_port_or_die() {
         fi
     fi
 
-    if [ -n "${GC_DOLT_PORT:-}" ]; then
-        printf '%s\n' "$GC_DOLT_PORT"
+    if [ -n "${GC_BEADS_PORT:-}" ]; then
+        printf '%s\n' "$GC_BEADS_PORT"
         return 0
     fi
 
@@ -95,7 +95,7 @@ resolve_dolt_port_or_die() {
     printf '  city_path:  %s\n' "$_rdp_city_path" >&2
     printf '  consulted:  %s\n' "$_rdp_consulted" >&2
     printf '  remediation: run `gc start` to bring up the city, or set\n' >&2
-    printf '               GC_DOLT_PORT explicitly to an already-running\n' >&2
+    printf '               GC_BEADS_PORT explicitly to an already-running\n' >&2
     printf '               server.\n' >&2
     exit 78
 }

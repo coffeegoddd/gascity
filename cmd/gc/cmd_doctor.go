@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +11,6 @@ import (
 	"time"
 
 	"github.com/gastownhall/gascity/internal/beads"
-	"github.com/gastownhall/gascity/internal/beads/contract"
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/doctor"
 	doctorchecks "github.com/gastownhall/gascity/internal/doctor/checks"
@@ -23,8 +23,6 @@ import (
 )
 
 var (
-	newDoctorDoltServerCheck    = doctor.NewDoltServerCheck
-	newDoctorRigDoltServerCheck = doctor.NewRigDoltServerCheck
 	newDoctorDoltBackupCheck    = doctor.NewDoltBackupCheck
 	newDoctorDoltLocalOnlyCheck = doctor.NewDoltLocalOnlyRemoteCheck
 )
@@ -111,22 +109,6 @@ func doctorSkipsDoltChecks(cityPath string) bool {
 	return !workspaceUsesManagedBdStoreContract(cityPath, cfg.Rigs)
 }
 
-func workspaceNeedsCityDoltCheck(cityPath string, cfg *config.City) bool {
-	if cfg == nil {
-		return false
-	}
-	for _, rig := range cfg.Rigs {
-		if !rigUsesManagedBdStoreContract(cityPath, rig) {
-			continue
-		}
-		explicit, err := contract.ScopeUsesExplicitEndpoint(fsys.OSFS{}, cityPath, rig.Path)
-		if err != nil || !explicit {
-			return true
-		}
-	}
-	return false
-}
-
 func managedDoltOpsCheckSkip(cityPath string, cfg *config.City, cfgErr error) bool {
 	if gcDoltSkip() {
 		return true
@@ -134,44 +116,62 @@ func managedDoltOpsCheckSkip(cityPath string, cfg *config.City, cfgErr error) bo
 	return !doctor.ManagedLocalDoltChecksApplicableForConfig(cityPath, cfg, cfgErr)
 }
 
-type doltTopologyCheck struct {
-	cityPath string
-	cfg      *config.City
+// bdProxiedServerCapability reports whether the bd on PATH supports
+// proxied-server mode, which gascity requires (bd owns the dolt sql-server
+// lifecycle via `bd init --proxied-server`). It probes `bd init --help` for the
+// flag; a missing bd or probe failure returns supported=false.
+var bdProxiedServerCapability = func() (supported bool, bdPresent bool) {
+	bdPath, err := exec.LookPath("bd")
+	if err != nil {
+		return false, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	out, _ := exec.CommandContext(ctx, bdPath, "init", "--help").CombinedOutput() //nolint:errcheck // help exit code varies; scan output only
+	return strings.Contains(string(out), "--proxied-server"), true
 }
 
-func newDoltTopologyCheck(cityPath string, cfg *config.City) *doltTopologyCheck {
-	return &doltTopologyCheck{cityPath: cityPath, cfg: cfg}
-}
+// bdProxiedServerCheck verifies the bd on PATH is a proxied-server-capable build.
+type bdProxiedServerCheck struct{ cityPath string }
 
-func (c *doltTopologyCheck) Name() string { return "dolt-topology" }
+func (c *bdProxiedServerCheck) Name() string { return "bd-proxied-server" }
 
-func (c *doltTopologyCheck) Run(_ *doctor.CheckContext) *doctor.CheckResult {
+func (c *bdProxiedServerCheck) Run(_ *doctor.CheckContext) *doctor.CheckResult {
 	r := &doctor.CheckResult{Name: c.Name()}
-	if c.cfg == nil || !workspaceUsesManagedBdStoreContract(c.cityPath, c.cfg.Rigs) {
+	if doctorSkipsDoltChecks(c.cityPath) {
+		// No managed bd/dolt store here (file/doltlite backend, external
+		// endpoint, or GC_BEADS_SKIP): the proxied-server capability of bd is
+		// not exercised, so do not gate on it.
 		r.Status = doctor.StatusOK
-		r.Message = "not using bd-backed Dolt topology"
+		r.Message = "skipped (file backend, external dolt endpoint, or GC_BEADS_SKIP=1)"
 		return r
 	}
-	if err := validateCanonicalCompatDoltDrift(c.cityPath, c.cfg); err != nil {
-		r.Status = doctor.StatusError
-		r.Message = fmt.Sprintf("canonical/compat Dolt drift: %v", err)
-		r.FixHint = "reconcile canonical .beads config with deprecated city.toml Dolt settings"
+	supported, present := bdProxiedServerCapability()
+	if !present {
+		// The bd-binary check reports absence; nothing to add here.
+		r.Status = doctor.StatusOK
+		r.Message = "skipped (bd not on PATH)"
 		return r
 	}
-	r.Status = doctor.StatusOK
-	r.Message = "canonical and deprecated Dolt endpoint config agree"
+	if supported {
+		r.Status = doctor.StatusOK
+		r.Message = "bd supports proxied-server mode"
+		return r
+	}
+	r.Status = doctor.StatusError
+	r.Message = "bd on PATH does not support --proxied-server; gascity requires a proxied-server-capable bd build"
+	r.FixHint = "install/upgrade bd to a build whose `bd init` accepts --proxied-server"
 	return r
 }
 
-func (c *doltTopologyCheck) CanFix() bool { return false }
+func (c *bdProxiedServerCheck) CanFix() bool { return false }
 
-func (c *doltTopologyCheck) Fix(_ *doctor.CheckContext) error { return nil }
+func (c *bdProxiedServerCheck) Fix(_ *doctor.CheckContext) error { return nil }
 
 type buildDoctorChecksOpts struct {
 	Stderr               io.Writer
 	ControllerRunning    bool
 	SupervisorRunning    bool
-	SkipCityDoltCheck    bool
 	SkipManagedDoltCheck bool
 	// RolloutFlags is the on-disk rollout-gate snapshot doctor renders; RolloutResolveErr
 	// is set when resolving it failed (an out-of-enum config value).
@@ -220,10 +220,6 @@ func buildDoctorChecks(cityPath string, cfg *config.City, cfgErr error, opts bui
 	// fails, the core config check above reports the parse error.
 	if cfgErr == nil && cfg != nil {
 		resolveRigPaths(cityPath, cfg.Rigs)
-		if workspaceUsesManagedBdStoreContract(cityPath, cfg.Rigs) {
-			register(newDoltTopologyCheck(cityPath, cfg))
-			register(newDoltDriftCheck(cityPath, cfg))
-		}
 		register(doctor.NewConfigValidCheck(cfg))
 		register(doctor.NewLegacySuspendedFieldCheck(cfg))
 		// Rollout gates section: one advisory line per registered gate (value +
@@ -319,7 +315,10 @@ func buildDoctorChecks(cityPath string, cfg *config.City, cfgErr error, opts bui
 		register(newOrderTrackingRetentionCheck(cityPath, storeFactory))
 		register(&sessionModelDoctorCheck{cfg: cfg, cityPath: cityPath, newStore: storeFactory})
 	}
-	register(newDoctorDoltServerCheck(cityPath, opts.SkipCityDoltCheck))
+	// bd must be a proxied-server-capable build — gascity delegates the dolt
+	// sql-server lifecycle to `bd init --proxied-server`. Self-skips if bd is
+	// absent (the bd-binary check reports that).
+	register(&bdProxiedServerCheck{cityPath: cityPath})
 	// Host-level fork-rate watch: surfaces the per-command data-plane fork storm
 	// (gc -> bd.real -> dolt) that operators routinely misread as CPU saturation.
 	// Advisory + read-only (/proc/stat); no config needed.
@@ -382,14 +381,13 @@ func buildDoctorChecks(cityPath string, cfg *config.City, cfgErr error, opts bui
 			register(doctor.NewRigRootBranchCheck(rig))
 			register(doctor.NewRigBDSplitStoreCheck(cityPath, rig))
 			register(doctor.NewRigBeadsCheck(cityPath, rig, storeFactory))
-			register(newDoctorRigDoltServerCheck(cityPath, rig, !rigUsesManagedBdStoreContract(cityPath, rig) || gcDoltSkip()))
 			// Custom types check — rig store.
 			register(doctor.NewCustomTypesCheck(rig.Path, rig.Name))
 			register(newHoldLabelConventionsCheck(rig.Path, rig.Name, storeFactory))
 			// Dolt-backup registration catches the silent gap left by
 			// `gc rig add` before the rig is eligible for mol-dog backup
 			// automation. Gated to match the sibling dolt-server check:
-			// skip non-managed-bdstore rigs and GC_DOLT=skip environments.
+			// skip non-managed-bdstore rigs and GC_BEADS_SKIP=1 environments.
 			if rigUsesManagedBdStoreContract(cityPath, rig) && !gcDoltSkip() {
 				register(newDoctorDoltBackupCheck(cityPath, rig, managedDoltDataDir))
 				register(newDoctorDoltLocalOnlyCheck(cityPath, rig, managedDoltDataDir))
@@ -433,7 +431,6 @@ func doDoctor(fix, verbose, jsonOut, explainPostgresAuth bool, checkTimeout time
 	}
 	controllerRunning := doctor.IsControllerRunning(cityPath)
 	supervisorRunning := supervisorAliveHook() != 0
-	skipCityDoltCheck := gcDoltSkip() || (!scopeUsesManagedBdStoreContract(cityPath, cityPath) && !workspaceNeedsCityDoltCheck(cityPath, cfg))
 	skipManagedDoltCheck := managedDoltOpsCheckSkip(cityPath, cfg, cfgErr)
 	// Resolve the rollout-gate snapshot for the doctor section from the on-disk
 	// config plus THIS doctor process's env (Resolve's default LookupEnv); a
@@ -449,7 +446,6 @@ func doDoctor(fix, verbose, jsonOut, explainPostgresAuth bool, checkTimeout time
 		Stderr:               stderr,
 		ControllerRunning:    controllerRunning,
 		SupervisorRunning:    supervisorRunning,
-		SkipCityDoltCheck:    skipCityDoltCheck,
 		SkipManagedDoltCheck: skipManagedDoltCheck,
 		RolloutFlags:         rolloutFlags,
 		RolloutResolveErr:    rolloutResolveErr,

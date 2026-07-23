@@ -154,11 +154,11 @@ func warnExternalBdOverrideDrift(stderr io.Writer, cityPath string, target execS
 		return
 	}
 	var drift []string
-	if host := strings.TrimSpace(os.Getenv("GC_DOLT_HOST")); host != "" && host != strings.TrimSpace(resolved.Host) {
-		drift = append(drift, fmt.Sprintf("GC_DOLT_HOST=%s (canonical %s)", host, strings.TrimSpace(resolved.Host)))
+	if host := strings.TrimSpace(os.Getenv("GC_BEADS_HOST")); host != "" && host != strings.TrimSpace(resolved.Host) {
+		drift = append(drift, fmt.Sprintf("GC_BEADS_HOST=%s (canonical %s)", host, strings.TrimSpace(resolved.Host)))
 	}
-	if port := strings.TrimSpace(os.Getenv("GC_DOLT_PORT")); port != "" && port != strings.TrimSpace(resolved.Port) {
-		drift = append(drift, fmt.Sprintf("GC_DOLT_PORT=%s (canonical %s)", port, strings.TrimSpace(resolved.Port)))
+	if port := strings.TrimSpace(os.Getenv("GC_BEADS_PORT")); port != "" && port != strings.TrimSpace(resolved.Port) {
+		drift = append(drift, fmt.Sprintf("GC_BEADS_PORT=%s (canonical %s)", port, strings.TrimSpace(resolved.Port)))
 	}
 	if len(drift) == 0 {
 		return

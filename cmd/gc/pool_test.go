@@ -1113,41 +1113,6 @@ func TestRunPoolOnBootUsesRigRootForRigScopedPools(t *testing.T) {
 	}
 }
 
-func TestRunPoolOnBootUsesCanonicalRigEnv(t *testing.T) {
-	cityPath, rigDir, cfg := newControllerProbeFixture(t)
-	cfg.Agents[0].MinActiveSessions = intPtr(0)
-	cfg.Agents[0].MaxActiveSessions = intPtr(2)
-
-	var gotDir string
-	var gotPort string
-	var gotPassword string
-	var gotBeadsDir string
-	runner := func(_ string, dir string, env map[string]string) (string, error) {
-		gotDir = dir
-		gotPort = env["GC_DOLT_PORT"]
-		gotPassword = env["GC_DOLT_PASSWORD"]
-		gotBeadsDir = env["BEADS_DIR"]
-		return "", nil
-	}
-
-	var stderr bytes.Buffer
-	runPoolOnBoot(cfg, cityPath, runner, &stderr)
-
-	if gotDir != rigDir {
-		t.Fatalf("on_boot dir = %q, want %q", gotDir, rigDir)
-	}
-	wantPort := currentManagedDoltPort(cityPath)
-	if gotPort != wantPort {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", gotPort, wantPort)
-	}
-	if gotPassword != "city-secret" {
-		t.Fatalf("GC_DOLT_PASSWORD = %q, want %q", gotPassword, "city-secret")
-	}
-	if gotBeadsDir != filepath.Join(rigDir, ".beads") {
-		t.Fatalf("BEADS_DIR = %q, want %q", gotBeadsDir, filepath.Join(rigDir, ".beads"))
-	}
-}
-
 func TestRunPoolOnBootExpandsTemplateCommands(t *testing.T) {
 	var ran []string
 	cityPath := filepath.Join(t.TempDir(), "demo-city")
@@ -1304,12 +1269,10 @@ func TestComputePoolDeathHandlersLogsTemplateExpansionWarning(t *testing.T) {
 func TestComputePoolDeathHandlersUsesCanonicalRigEnv(t *testing.T) {
 	cityPath, rigDir, cfg := newControllerProbeFixture(t)
 	writeCanonicalScopeConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "de",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "3308",
-		DoltUser:       "rig-user",
+		IssuePrefix: "de",
+		DoltHost:    "rig-db.example.com",
+		DoltPort:    "3308",
+		DoltUser:    "rig-user",
 	})
 	writeScopePassword(t, rigDir, "rig-secret")
 	cfg.Workspace.Name = "test"
@@ -1322,14 +1285,14 @@ func TestComputePoolDeathHandlersUsesCanonicalRigEnv(t *testing.T) {
 		t.Fatalf("len(handlers) = %d, want 2", len(handlers))
 	}
 	for sessionName, info := range handlers {
-		if info.Env["GC_DOLT_PORT"] != "3308" {
-			t.Fatalf("handler[%s].Env[GC_DOLT_PORT] = %q, want %q", sessionName, info.Env["GC_DOLT_PORT"], "3308")
+		if info.Env["GC_BEADS_PORT"] != "3308" {
+			t.Fatalf("handler[%s].Env[GC_BEADS_PORT] = %q, want %q", sessionName, info.Env["GC_BEADS_PORT"], "3308")
 		}
-		if info.Env["GC_DOLT_USER"] != "rig-user" {
-			t.Fatalf("handler[%s].Env[GC_DOLT_USER] = %q, want %q", sessionName, info.Env["GC_DOLT_USER"], "rig-user")
+		if info.Env["GC_BEADS_USER"] != "rig-user" {
+			t.Fatalf("handler[%s].Env[GC_BEADS_USER] = %q, want %q", sessionName, info.Env["GC_BEADS_USER"], "rig-user")
 		}
-		if info.Env["GC_DOLT_PASSWORD"] != "rig-secret" {
-			t.Fatalf("handler[%s].Env[GC_DOLT_PASSWORD] = %q, want %q", sessionName, info.Env["GC_DOLT_PASSWORD"], "rig-secret")
+		if info.Env["GC_BEADS_PASSWORD"] != "rig-secret" {
+			t.Fatalf("handler[%s].Env[GC_BEADS_PASSWORD] = %q, want %q", sessionName, info.Env["GC_BEADS_PASSWORD"], "rig-secret")
 		}
 	}
 }

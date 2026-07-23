@@ -3,12 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
-	"time"
 )
 
-// wispQueryIndexes lists the CREATE INDEX statements applied by
+// wispQueryIndexStatements lists the CREATE INDEX statements applied by
 // applyWispQueryIndexes. Each entry is idempotent (IF NOT EXISTS).
 //
 // Background: the beads library's SearchIssuesWithCountsInTx generates SQL
@@ -31,72 +29,30 @@ var wispQueryIndexStatements = []string{
 	"CREATE INDEX IF NOT EXISTS idx_wisps_status_type ON wisps(status, issue_type)",
 }
 
-// applyWispQueryIndexes creates the missing wisp query performance indexes on
-// the managed Dolt server. It is idempotent and fail-open: any error is logged
-// to stderr but never returned, so a degraded Dolt connection at startup does
-// not block the controller. The function picks up the database name from beads
-// metadata (falling back to "hq") and the port from cr.managedDoltPort.
-func (cr *CityRuntime) applyWispQueryIndexes(ctx context.Context) {
+// applyWispQueryIndexes creates the missing wisp query performance indexes
+// through bd (the sole interface to the server in proxied-server mode). It is
+// idempotent and fail-open: any error is logged to stderr but never returned,
+// so a degraded store at startup does not block the controller.
+func (cr *CityRuntime) applyWispQueryIndexes(_ context.Context) {
 	if !cityUsesManagedDoltBeadsLifecycle(cr.cityPath) {
 		return
 	}
-	portFn := cr.managedDoltPort
-	if portFn == nil {
-		portFn = currentResolvableManagedDoltPort
-	}
-	port := portFn(cr.cityPath)
-	if port == "" {
-		return
-	}
-	database := canonicalScopeDoltDatabase(cr.cityPath, cr.cityPath, "hq")
-	if database == "" {
-		database = "hq"
-	}
-	if err := applyWispQueryIndexesToDB(ctx, port, database, cr.stderr); err != nil {
-		fmt.Fprintf(cr.stderr, "%s: wisp-query-index migration: %v\n", cr.logPrefix, err) //nolint:errcheck // best-effort stderr
-	}
-}
-
-// applyWispQueryIndexesToDB is the testable core of applyWispQueryIndexes.
-// It opens a short-lived MySQL connection, applies each index statement, and
-// closes. Errors from individual statements are logged but do not abort the
-// loop so a partial success still improves query performance.
-func applyWispQueryIndexesToDB(ctx context.Context, port, database string, stderr io.Writer) error {
-	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-	defer cancel()
-
-	db, err := managedDoltOpenDatabase("127.0.0.1", port, "root", database)
-	if err != nil {
-		return fmt.Errorf("open dolt connection: %w", err)
-	}
-	defer db.Close() //nolint:errcheck
-
-	if err := db.PingContext(ctx); err != nil {
-		return fmt.Errorf("ping dolt: %w", err)
-	}
-
-	for _, stmt := range wispQueryIndexStatements {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
-			// Non-fatal: log and continue. Some statements may fail if the
-			// table doesn't exist yet (fresh install before first bd init).
-			fmt.Fprintf(stderr, "wisp-query-index: %s: %v\n", stmt, err) //nolint:errcheck // best-effort stderr
-		}
-	}
-
+	run := bdCommandRunnerForCity(cr.cityPath)
+	stmts := append([]string{}, wispQueryIndexStatements...)
 	// Persist the schema change so the indexes survive reset/sync, matching
-	// the schemas/wisps-composite-index migration convention. Fail-open:
-	// "nothing to commit" (idempotent re-run) and any other commit error are
-	// logged, never returned.
-	for _, stmt := range []string{
+	// the schemas/wisps-composite-index migration convention.
+	stmts = append(stmts,
 		"CALL DOLT_ADD('.')",
 		"CALL DOLT_COMMIT('-m', 'gc: add wisp-query performance indexes (gcy-0m1)', '--author', 'gascity-builder <builder@gascity.local>')",
-	} {
-		if _, err := db.ExecContext(ctx, stmt); err != nil {
+	)
+	for _, stmt := range stmts {
+		if _, err := run(cr.cityPath, "bd", "sql", stmt); err != nil {
+			// Non-fatal: some statements fail before first bd init (table
+			// absent) or on an idempotent re-commit ("nothing to commit").
 			if strings.Contains(strings.ToLower(err.Error()), "nothing to commit") {
-				break
+				continue
 			}
-			fmt.Fprintf(stderr, "wisp-query-index commit: %s: %v\n", stmt, err) //nolint:errcheck
+			fmt.Fprintf(cr.stderr, "%s: wisp-query-index: %s: %v\n", cr.logPrefix, stmt, err) //nolint:errcheck // best-effort stderr
 		}
 	}
-	return nil
 }

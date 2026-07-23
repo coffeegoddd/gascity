@@ -335,7 +335,6 @@ func TestWorkOptionMetadataMigrationSkipsEffectivelySuspendedRigs(t *testing.T) 
 func TestBuildDoctorChecksRegistersWorkOptionMetadataMigration(t *testing.T) {
 	checks := buildDoctorChecks(t.TempDir(), &config.City{}, nil, buildDoctorChecksOpts{
 		Stderr:               io.Discard,
-		SkipCityDoltCheck:    true,
 		SkipManagedDoltCheck: true,
 	})
 	for _, check := range checks {

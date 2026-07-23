@@ -10,11 +10,7 @@ func (c *codexHooksDriftCheck) WarmupEligible() bool { return false }
 
 // WarmupEligible returns false; this check is not part of the
 // `gc start` warm-up scan.
-func (c *doltDriftCheck) WarmupEligible() bool { return false }
-
-// WarmupEligible returns false; this check is not part of the
-// `gc start` warm-up scan.
-func (c *doltTopologyCheck) WarmupEligible() bool { return false }
+func (c *bdProxiedServerCheck) WarmupEligible() bool { return false }
 
 // WarmupEligible returns false; this check is not part of the
 // `gc start` warm-up scan.

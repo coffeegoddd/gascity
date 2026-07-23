@@ -22,9 +22,9 @@ PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." 
 . "$PACK_DIR/assets/scripts/advisory_state.sh"
 . "$PACK_DIR/assets/scripts/_notify.sh"
 
-PORT="$GC_DOLT_PORT"
-HOST="${GC_DOLT_HOST:-127.0.0.1}"
-USER="${GC_DOLT_USER:-root}"
+PORT="$GC_BEADS_PORT"
+HOST="${GC_BEADS_HOST:-127.0.0.1}"
+USER="${GC_BEADS_USER:-root}"
 # Latency warn threshold in milliseconds. GC_DOCTOR_LATENCY_WARN_MS takes
 # precedence; otherwise derive from the legacy seconds knob (default 1s ->
 # 1000ms) for backward compatibility.
@@ -38,7 +38,7 @@ BACKUP_ARTIFACT_DIR="${GC_BACKUP_ARTIFACT_DIR:-$GC_CITY_PATH/.dolt-backup}"
 ADVISORY_STATE_FILE="${GC_DOCTOR_ADVISORY_STATE_FILE:-$DOLT_STATE_DIR/doctor-advisory-state}"
 
 dolt_sql() {
-    DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}" \
+    DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}" \
         run_bounded 10 \
         dolt --host "$HOST" --port "$PORT" --user "$USER" --no-tls sql "$@"
 }

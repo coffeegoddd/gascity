@@ -60,7 +60,7 @@ case "$1" in
     ;;
   close)
     issue_id="$2"
-    DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}" dolt --host "$GC_DOLT_HOST" --port "$GC_DOLT_PORT" --user "$GC_DOLT_USER" --no-tls --use-db citydb sql \
+    DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}" dolt --host "$GC_BEADS_HOST" --port "$GC_BEADS_PORT" --user "$GC_BEADS_USER" --no-tls --use-db citydb sql \
       -q "UPDATE issues SET status='closed', closed_at=NOW() WHERE id='${issue_id}'; CALL DOLT_COMMIT('-Am', 'test bd close')"
     ;;
 esac
@@ -79,10 +79,10 @@ exit 0
 		"BD_CALL_LOG":      bdLog,
 		"GC_CITY":          cityDir,
 		"GC_CITY_PATH":     cityDir,
-		"GC_DOLT_HOST":     "127.0.0.1",
-		"GC_DOLT_PORT":     fmt.Sprintf("%d", port),
-		"GC_DOLT_USER":     "root",
-		"GC_DOLT_PASSWORD": "",
+		"GC_BEADS_HOST":     "127.0.0.1",
+		"GC_BEADS_PORT":     fmt.Sprintf("%d", port),
+		"GC_BEADS_USER":     "root",
+		"GC_BEADS_PASSWORD": "",
 		"PATH":             binDir + string(os.PathListSeparator) + os.Getenv("PATH"),
 	}
 	runScript(t, coreScriptPath("reaper.sh"), env)

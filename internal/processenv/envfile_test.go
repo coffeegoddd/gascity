@@ -7,7 +7,7 @@ func TestParseEnvFileParsesCoreSyntax(t *testing.T) {
 ANTHROPIC_AUTH_TOKEN=sk-live-123
 
 export OPENAI_API_KEY=sk-openai-456
-GC_DOLT_PASSWORD = secret with spaces
+GC_BEADS_PASSWORD = secret with spaces
 QUOTED_DOUBLE="value with = and # inside"
 QUOTED_SINGLE='single value'
    # indented comment
@@ -21,7 +21,7 @@ TRAILING_INLINE=keep#notacomment
 	want := map[string]string{
 		"ANTHROPIC_AUTH_TOKEN": "sk-live-123",
 		"OPENAI_API_KEY":       "sk-openai-456",
-		"GC_DOLT_PASSWORD":     "secret with spaces",
+		"GC_BEADS_PASSWORD":     "secret with spaces",
 		"QUOTED_DOUBLE":        "value with = and # inside",
 		"QUOTED_SINGLE":        "single value",
 		"EMPTY_VALUE":          "",

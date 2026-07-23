@@ -11,7 +11,7 @@ import (
 	"github.com/gastownhall/gascity/internal/fsys"
 )
 
-// ensureCanonicalScopeConfigState is the single funnel every managed-scope
+// ensureCanonicalScopeConfig is the single funnel every managed-scope
 // canonical config.yaml write routes through — both the init path
 // (normalizeCanonicalBdScopeFilesForInit / seedDeferredManagedBeadsErr) and the
 // post-init sweep (normalizeScopeDoltConfig). These tests prove Go now owns the
@@ -27,8 +27,8 @@ func scopeConfigPath(dir string) string {
 func TestEnsureCanonicalScopeConfigStateInjectsRequiredCustomTypes(t *testing.T) {
 	dir := t.TempDir()
 
-	if err := ensureCanonicalScopeConfigState(fsys.OSFS{}, dir, contract.ConfigState{IssuePrefix: "gc"}); err != nil {
-		t.Fatalf("ensureCanonicalScopeConfigState() error = %v", err)
+	if err := ensureCanonicalScopeConfig(fsys.OSFS{}, dir, contract.ConfigState{IssuePrefix: "gc"}); err != nil {
+		t.Fatalf("ensureCanonicalScopeConfig() error = %v", err)
 	}
 
 	data, err := os.ReadFile(scopeConfigPath(dir))
@@ -62,8 +62,8 @@ func TestEnsureCanonicalScopeConfigStatePreservesExistingCustomTypes(t *testing.
 		t.Fatal(err)
 	}
 
-	if err := ensureCanonicalScopeConfigState(fsys.OSFS{}, dir, contract.ConfigState{IssuePrefix: "gc"}); err != nil {
-		t.Fatalf("ensureCanonicalScopeConfigState() error = %v", err)
+	if err := ensureCanonicalScopeConfig(fsys.OSFS{}, dir, contract.ConfigState{IssuePrefix: "gc"}); err != nil {
+		t.Fatalf("ensureCanonicalScopeConfig() error = %v", err)
 	}
 
 	data, err := os.ReadFile(scopeConfigPath(dir))

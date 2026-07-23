@@ -2601,10 +2601,10 @@ func TestRunDiscoveredCommand_ProjectsCanonicalExternalDoltEnv(t *testing.T) {
 	}
 	scriptPath := filepath.Join(sourceDir, "run.sh")
 	script := `#!/bin/sh
-echo "managed=$GC_DOLT_MANAGED_LOCAL"
-echo "host=$GC_DOLT_HOST"
-echo "port=$GC_DOLT_PORT"
-echo "user=$GC_DOLT_USER"
+echo "managed=$GC_BEADS_MANAGED_LOCAL"
+echo "host=$GC_BEADS_HOST"
+echo "port=$GC_BEADS_PORT"
+echo "user=$GC_BEADS_USER"
 echo "beadsport=$BEADS_DOLT_SERVER_PORT"
 `
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
@@ -2613,8 +2613,8 @@ echo "beadsport=$BEADS_DOLT_SERVER_PORT"
 
 	// Stale ambient values from a parent session must lose to the city's
 	// canonical endpoint, exactly as they do on the order-dispatch path.
-	t.Setenv("GC_DOLT_PORT", "9999")
-	t.Setenv("GC_DOLT_MANAGED_LOCAL", "1")
+	t.Setenv("GC_BEADS_PORT", "9999")
+	t.Setenv("GC_BEADS_MANAGED_LOCAL", "1")
 	t.Setenv("BEADS_DOLT_SERVER_PORT", "9999")
 
 	entry := config.DiscoveredCommand{
@@ -2655,7 +2655,7 @@ func TestRunDiscoveredCommand_KeepsAmbientDoltEnvWithoutScopeConfig(t *testing.T
 	}
 	scriptPath := filepath.Join(sourceDir, "run.sh")
 	script := `#!/bin/sh
-echo "port=$GC_DOLT_PORT"
+echo "port=$GC_BEADS_PORT"
 `
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
@@ -2663,7 +2663,7 @@ echo "port=$GC_DOLT_PORT"
 
 	// Without an authoritative scope config the operator-seeded ambient
 	// value must pass through untouched.
-	t.Setenv("GC_DOLT_PORT", "7777")
+	t.Setenv("GC_BEADS_PORT", "7777")
 
 	entry := config.DiscoveredCommand{
 		BindingName: "dolt",
@@ -2680,7 +2680,7 @@ echo "port=$GC_DOLT_PORT"
 		t.Fatalf("exit code = %d, want 0; stderr: %s", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "port=7777\n") {
-		t.Fatalf("ambient GC_DOLT_PORT must pass through without scope config, got:\n%s", stdout.String())
+		t.Fatalf("ambient GC_BEADS_PORT must pass through without scope config, got:\n%s", stdout.String())
 	}
 }
 
@@ -2712,7 +2712,7 @@ func TestRunDiscoveredCommand_AmbientBeadsDoltPasswordLosesToCredentialsFile(t *
 	}
 	scriptPath := filepath.Join(sourceDir, "run.sh")
 	script := `#!/bin/sh
-echo "password=$GC_DOLT_PASSWORD"
+echo "password=$GC_BEADS_PASSWORD"
 echo "beadspass=$BEADS_DOLT_PASSWORD"
 `
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
@@ -2722,10 +2722,10 @@ echo "beadspass=$BEADS_DOLT_PASSWORD"
 	// A stale BEADS_DOLT_PASSWORD mirrored into the parent session for a
 	// different scope must not be treated as already-resolved auth for
 	// the city's canonical endpoint; the endpoint's credentials-file
-	// password must win. GC_DOLT_PASSWORD stays neutral so the operator
+	// password must win. GC_BEADS_PASSWORD stays neutral so the operator
 	// override (read via os.Getenv) does not shadow the lookup.
 	t.Setenv("BEADS_DOLT_PASSWORD", "stale-cross-scope-pass")
-	t.Setenv("GC_DOLT_PASSWORD", "")
+	t.Setenv("GC_BEADS_PASSWORD", "")
 	t.Setenv("BEADS_CREDENTIALS_FILE", credentialsPath)
 
 	entry := config.DiscoveredCommand{
@@ -2774,9 +2774,9 @@ func TestRunDiscoveredCommand_RemovesAmbientDoltEnvDeletedByProjection(t *testin
 	// ${VAR+set} distinguishes unset from set-but-empty: the projection
 	// must delete these keys, not blank them.
 	script := `#!/bin/sh
-echo "managed=$GC_DOLT_MANAGED_LOCAL"
-echo "gchost=${GC_DOLT_HOST+set}"
-echo "gcport=${GC_DOLT_PORT+set}"
+echo "managed=$GC_BEADS_MANAGED_LOCAL"
+echo "gchost=${GC_BEADS_HOST+set}"
+echo "gcport=${GC_BEADS_PORT+set}"
 echo "mirrorhost=${BEADS_DOLT_SERVER_HOST+set}"
 `
 	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
@@ -2787,8 +2787,8 @@ echo "mirrorhost=${BEADS_DOLT_SERVER_HOST+set}"
 	// BEADS mirror) instead of projecting a value; stale ambient
 	// entries must be stripped from the child environment, not passed
 	// through.
-	t.Setenv("GC_DOLT_HOST", "stale.example")
-	t.Setenv("GC_DOLT_PORT", "9999")
+	t.Setenv("GC_BEADS_HOST", "stale.example")
+	t.Setenv("GC_BEADS_PORT", "9999")
 	t.Setenv("BEADS_DOLT_SERVER_HOST", "stale.example")
 	t.Setenv("BEADS_CREDENTIALS_FILE", filepath.Join(dir, "no-credentials"))
 

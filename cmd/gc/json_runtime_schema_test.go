@@ -83,11 +83,6 @@ func TestDirectJSONWriterPayloadsValidateDeclaredSchemas(t *testing.T) {
 			args:    []string{"status", "--json"},
 		},
 		{
-			name:    "dolt cleanup",
-			command: []string{"dolt-cleanup"},
-			args:    []string{"dolt-cleanup", "--json", "--max-orphan-dbs", "-1"},
-		},
-		{
 			name:    "converge status",
 			command: []string{"converge", "status"},
 			args:    []string{"converge", "status", loop.ID, "--json"},
@@ -115,7 +110,7 @@ func TestDirectJSONWriterPayloadsValidateDeclaredSchemas(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			var stdout, stderr bytes.Buffer
 			code := run(append([]string{"--city", cityPath}, tc.args...), &stdout, &stderr)
-			if code != 0 && tc.name != "dolt cleanup" {
+			if code != 0 {
 				t.Fatalf("run %v = %d; stderr=%q stdout=%q", tc.args, code, stderr.String(), stdout.String())
 			}
 			if strings.Contains(stdout.String(), "Testing gate:") {

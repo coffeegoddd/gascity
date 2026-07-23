@@ -68,7 +68,7 @@ func stripExecEnvKey(key string) bool {
 	case "GC_BEADS_PREFIX", "GC_CITY", "GC_CITY_PATH", "GC_CITY_ROOT", "GC_CITY_RUNTIME_DIR", "GC_PROVIDER", "GC_RIG", "GC_RIG_ROOT", "GC_STORE_ROOT", "GC_STORE_SCOPE":
 		return true
 	}
-	return strings.HasPrefix(key, "BEADS_") || strings.HasPrefix(key, "GC_DOLT_")
+	return strings.HasPrefix(key, "BEADS_") || strings.HasPrefix(key, "GC_BEADS_")
 }
 
 // run executes the script with the given args, optionally piping stdinData

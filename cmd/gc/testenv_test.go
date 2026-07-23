@@ -42,11 +42,11 @@ var liveTestEnvVars = []string{
 	"GC_BEADS_PREFIX",
 	"GC_CITY_RUNTIME_DIR",
 	"GC_CONTROL_DISPATCHER_TRACE_DEFAULT",
-	"GC_DOLT",
-	"GC_DOLT_HOST",
-	"GC_DOLT_PASSWORD",
-	"GC_DOLT_PORT",
-	"GC_DOLT_USER",
+	"GC_BEADS_SKIP",
+	"GC_BEADS_HOST",
+	"GC_BEADS_PASSWORD",
+	"GC_BEADS_PORT",
+	"GC_BEADS_USER",
 	"GC_HOME",
 	"GC_INSTANCE_TOKEN",
 	"GC_PROVIDER",
@@ -109,7 +109,7 @@ func TestClearProcessLiveEnvForTestsUnsetsInheritedState(t *testing.T) {
 		"GC_BEADS",
 		"GC_BEADS_SCOPE_ROOT",
 		"GC_CITY_PATH",
-		"GC_DOLT_HOST",
+		"GC_BEADS_HOST",
 		"GC_RIG",
 		"GC_RIG_ROOT",
 		"GC_SESSION_NAME",
@@ -189,9 +189,7 @@ func liveEnvKeysForTests() []string {
 func preserveTestControlEnv(key string) bool {
 	return key == "GC_FAST_UNIT" ||
 		key == "GC_REAL_PROCESS_SIGNAL_TESTS" ||
-		key == managedDoltTestModeEnv ||
-		key == managedDoltTestParentPIDEnv ||
-		key == "GC_DOLT_REAL_BINARY" ||
+		key == "GC_BEADS_REAL_BINARY" ||
 		strings.HasPrefix(key, "GC_LIVE_") ||
 		strings.HasPrefix(key, "GC_SESSION_CHAOS_") ||
 		strings.HasPrefix(key, "GC_TEST_")
@@ -225,9 +223,9 @@ func clearInheritedCityRoutingEnv(t *testing.T) {
 
 func disableManagedDoltRecoveryForTest(t *testing.T) {
 	t.Helper()
-	t.Setenv("GC_DOLT", "skip")
-	t.Setenv("GC_DOLT_HOST", "")
-	t.Setenv("GC_DOLT_PORT", "")
+	t.Setenv("GC_BEADS_SKIP", "skip")
+	t.Setenv("GC_BEADS_HOST", "")
+	t.Setenv("GC_BEADS_PORT", "")
 	t.Setenv("BEADS_DOLT_SERVER_HOST", "")
 	t.Setenv("BEADS_DOLT_SERVER_PORT", "")
 }

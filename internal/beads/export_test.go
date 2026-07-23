@@ -1,11 +1,5 @@
 package beads
 
-// NewNativeDoltStoreForConformance returns a NativeDoltStore backed by the
-// in-memory native storage fixture for the external conformance suite.
-func NewNativeDoltStoreForConformance() Store {
-	return newNativeDoltStoreForTest(newNativeDoltMemStorage())
-}
-
 // NotifyChangeForTest drives the real producer (CachingStore.notifyChange) with
 // a caller-supplied bead, bypassing the store-write path that rewrites ids and
 // status. It lets cross-package guardrail tests (e.g. the run-view round-trip)

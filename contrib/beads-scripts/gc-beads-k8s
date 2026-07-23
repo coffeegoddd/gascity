@@ -42,8 +42,8 @@ shift
 
 NS="${GC_K8S_NAMESPACE:-gc}"
 IMAGE="${GC_K8S_IMAGE:-}"
-DOLT_HOST="${GC_DOLT_HOST:-${GC_K8S_DOLT_HOST:-dolt.gc.svc.cluster.local}}"
-DOLT_PORT="${GC_DOLT_PORT:-${GC_K8S_DOLT_PORT:-3307}}"
+DOLT_HOST="${GC_BEADS_HOST:-${GC_K8S_DOLT_HOST:-dolt.gc.svc.cluster.local}}"
+DOLT_PORT="${GC_BEADS_PORT:-${GC_K8S_DOLT_PORT:-3307}}"
 IMAGE_PULL_SECRET="${GC_K8S_IMAGE_PULL_SECRET:-}"
 CUSTOM_TYPES="${GC_K8S_CUSTOM_TYPES:-}"
 
@@ -279,8 +279,8 @@ case "$op" in
     ;;
 
   init)
-    if [ -n "${GC_DOLT_HOST:-}" ] && [ -z "${GC_DOLT_PORT:-}" ]; then
-      echo "init: requires both GC_DOLT_HOST and GC_DOLT_PORT when GC_DOLT_HOST is set" >&2
+    if [ -n "${GC_BEADS_HOST:-}" ] && [ -z "${GC_BEADS_PORT:-}" ]; then
+      echo "init: requires both GC_BEADS_HOST and GC_BEADS_PORT when GC_BEADS_HOST is set" >&2
       exit 1
     fi
     dir="${1:?init: missing dir}"

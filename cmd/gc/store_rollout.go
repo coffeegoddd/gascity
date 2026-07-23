@@ -102,25 +102,17 @@ func openControlBdStoreThroughFactory(scopeRoot, cityPath, provider string, cfg 
 
 // conditionalWritesEventStoreKind maps internal store-kind names onto the
 // beads.conditional_writes.degraded wire vocabulary
-// (bd | native | sqlite-graph | caching | mem | file).
+// (bd | caching | mem | file).
 func conditionalWritesEventStoreKind(kind string) string {
 	switch kind {
 	case beads.BeadsStoreNameBdStore:
 		return "bd"
-	case beads.BeadsStoreNameNativeDoltStore:
-		return "native"
 	case beads.BeadsStoreNameFileStore:
 		return "file"
 	case "MemStore":
 		return "mem"
 	case "CachingStore":
 		return "caching"
-	case "*beads.DoltliteReadStore":
-		// DoltliteReadStore only exists under the gascity_native_beads build
-		// tag, so beads.conditionalStoreKind cannot name it and it arrives as
-		// the %T spelling. It embeds *BdStore and its entire conditional-write
-		// surface IS bd's, so on the wire it is a bd store.
-		return "bd"
 	default:
 		return kind
 	}

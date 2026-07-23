@@ -29,7 +29,7 @@ func TestCustomTypesCheck_MissingTypes(t *testing.T) {
 	// yet added them to its LeakVectorVars scrub list.
 	for _, key := range []string{
 		"BEADS_DIR", "BEADS_ACTOR", "GC_BEADS_SCOPE_ROOT",
-		"GC_BEADS", "BEADS_DOLT_SERVER_PORT", "GC_DOLT_HOST", "GC_DOLT_PORT",
+		"GC_BEADS", "BEADS_DOLT_SERVER_PORT", "GC_BEADS_HOST", "GC_BEADS_PORT",
 		"BEADS_DOLT_SERVER_HOST",
 	} {
 		t.Setenv(key, "")

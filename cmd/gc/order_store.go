@@ -1,13 +1,10 @@
 package main
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/gastownhall/gascity/internal/beads"
@@ -285,258 +282,32 @@ func applyOrderExecCanonicalDoltEnv(cityPath, scopeRoot string, env map[string]s
 		scopeRoot = cityPath
 	}
 	if scopeBackendIsPostgres(cityPath, scopeRoot) {
+		// Postgres env is threaded by the order/exec env builder itself; the dolt
+		// projection has nothing to add for a postgres-backed scope.
 		return
-	}
-	target, ok, err := canonicalScopeDoltTarget(cityPath, scopeRoot)
-	if err != nil {
-		if applyOrderExecManagedDoltFallback(cityPath, scopeRoot, env, err) {
-			return
-		}
-		return
-	}
-	if !ok {
-		return
-	}
-	applyCanonicalDoltTargetEnv(env, target)
-	applyCanonicalDoltAuthEnv(env, cityPath, scopeRoot, target)
-	if target.External {
-		env["GC_DOLT_MANAGED_LOCAL"] = "0"
-		clearManagedDoltRuntimeLayoutEnv(env, cityPath)
-	} else {
-		env["GC_DOLT_MANAGED_LOCAL"] = "1"
-		applyManagedDoltRuntimeLayoutEnv(env, cityPath)
-	}
-	mirrorBeadsDoltScopeEnv(env, target)
-}
-
-func applyOrderExecManagedDoltFallback(cityPath, scopeRoot string, env map[string]string, _ error) bool {
-	if scopeBackendIsPostgres(cityPath, scopeRoot) {
-		return false
 	}
 	resolved, err := contract.ResolveScopeConfigState(fsys.OSFS{}, cityPath, scopeRoot, "")
-	if err != nil || resolved.Kind != contract.ScopeConfigAuthoritative {
-		return false
+	if err != nil || resolved.Kind == contract.ScopeConfigMissing {
+		return
 	}
-	switch resolved.State.EndpointOrigin {
-	case contract.EndpointOriginManagedCity:
-	case contract.EndpointOriginInheritedCity:
-		cityResolved, err := contract.ResolveScopeConfigState(fsys.OSFS{}, cityPath, cityPath, "")
-		if err != nil || cityResolved.Kind != contract.ScopeConfigAuthoritative || cityResolved.State.EndpointOrigin != contract.EndpointOriginManagedCity {
-			return false
-		}
-	default:
-		return false
-	}
-
-	layout, err := resolveManagedDoltOrderRuntimeLayout(cityPath, env)
-	if err != nil {
-		return false
-	}
-	delete(env, "GC_DOLT_HOST")
-	if port := managedDoltPortForLayout(layout); port != "" {
-		env["GC_DOLT_PORT"] = port
-	} else {
-		delete(env, "GC_DOLT_PORT")
-	}
-	env["GC_DOLT_MANAGED_LOCAL"] = "1"
-	applyManagedDoltRuntimeLayoutEnv(env, cityPath)
-	target := contract.DoltConnectionTarget{
-		User:           strings.TrimSpace(resolved.State.DoltUser),
-		EndpointOrigin: resolved.State.EndpointOrigin,
-	}
-	applyCanonicalDoltAuthEnv(env, cityPath, scopeRoot, target)
-	mirrorBeadsDoltEnv(env)
-	return true
-}
-
-func applyManagedDoltRuntimeLayoutEnv(env map[string]string, cityPath string) {
-	layout, err := resolveManagedDoltOrderRuntimeLayout(cityPath, env)
+	target, err := contract.ResolveDoltConnectionTarget(fsys.OSFS{}, cityPath, scopeRoot)
 	if err != nil {
 		return
 	}
-	env["GC_DOLT_DATA_DIR"] = layout.DataDir
-	env["GC_DOLT_LOG_FILE"] = layout.LogFile
-	env["GC_DOLT_STATE_FILE"] = managedDoltOrderStateFile(layout)
-	env["GC_DOLT_PID_FILE"] = layout.PIDFile
-	env["GC_DOLT_LOCK_FILE"] = layout.LockFile
-	env["GC_DOLT_CONFIG_FILE"] = layout.ConfigFile
-}
-
-func clearManagedDoltRuntimeLayoutEnv(env map[string]string, cityPath string) {
-	root := normalizePathForCompare(filepath.Join(managedDoltOrderPackStateDir(cityPath, env), "external-target"))
-	env["GC_DOLT_DATA_DIR"] = root
-	env["GC_DOLT_LOG_FILE"] = filepath.Join(root, "dolt.log")
-	env["GC_DOLT_STATE_FILE"] = filepath.Join(root, "dolt-state.json")
-	env["GC_DOLT_PID_FILE"] = filepath.Join(root, "dolt.pid")
-	env["GC_DOLT_LOCK_FILE"] = filepath.Join(root, "dolt.lock")
-	env["GC_DOLT_CONFIG_FILE"] = filepath.Join(root, "dolt-config.yaml")
-}
-
-func resolveManagedDoltOrderRuntimeLayout(cityPath string, env map[string]string) (managedDoltRuntimeLayout, error) {
-	cityPath = filepath.Clean(strings.TrimSpace(cityPath))
-	if cityPath == "" || cityPath == "." {
-		return managedDoltRuntimeLayout{}, fmt.Errorf("missing --city")
+	if target.External {
+		// External dolt: bd needs the canonical coords AND the resolved
+		// credential to reach the endpoint.
+		applyCanonicalDoltTargetEnv(env, target)
+		mirrorBeadsDoltScopeEnv(env, target)
+		applyCanonicalDoltAuthEnv(env, cityPath, scopeRoot, target)
+		env["GC_BEADS_MANAGED_LOCAL"] = "0"
+		return
 	}
-	cityPath = normalizePathForCompare(cityPath)
-	packStateDir := managedDoltOrderPackStateDir(cityPath, env)
-	layout := managedDoltRuntimeLayout{
-		PackStateDir: packStateDir,
-		DataDir:      normalizePathForCompare(filepath.Join(cityPath, ".beads", "dolt")),
-		LogFile:      normalizePathForCompare(filepath.Join(packStateDir, "dolt.log")),
-		StateFile:    normalizePathForCompare(filepath.Join(packStateDir, "dolt-state.json")),
-		PIDFile:      normalizePathForCompare(filepath.Join(packStateDir, "dolt.pid")),
-		LockFile:     normalizePathForCompare(filepath.Join(packStateDir, "dolt.lock")),
-		ConfigFile:   normalizePathForCompare(filepath.Join(packStateDir, "dolt-config.yaml")),
-	}
-	layout.DataDir = managedDoltOrderDataDir(cityPath, layout.DataDir)
-	return layout, nil
-}
-
-func managedDoltOrderPackStateDir(cityPath string, env map[string]string) string {
-	if runtimeDir := citylayout.TrustedAmbientCityRuntimeDir(cityPath); runtimeDir != "" {
-		return normalizePathForCompare(filepath.Join(runtimeDir, "packs", "dolt"))
-	}
-	if env != nil {
-		if runtimeDir := strings.TrimSpace(env["GC_CITY_RUNTIME_DIR"]); runtimeDir != "" {
-			return normalizePathForCompare(filepath.Join(runtimeDir, "packs", "dolt"))
-		}
-	}
-	return normalizePathForCompare(citylayout.PackStateDir(cityPath, "dolt"))
-}
-
-func managedDoltOrderDataDir(cityPath, fallback string) string {
-	if dataDir := publishedManagedDoltDataDir(cityPath); dataDir != "" {
-		return dataDir
-	}
-	if info, err := os.Stat(fallback); err == nil && info.IsDir() {
-		return fallback
-	}
-	legacy := normalizePathForCompare(filepath.Join(cityPath, ".gc", "dolt-data"))
-	if info, err := os.Stat(legacy); err == nil && info.IsDir() {
-		return legacy
-	}
-	return fallback
-}
-
-func publishedManagedDoltDataDir(cityPath string) string {
-	packStateDir := managedDoltOrderPackStateDir(cityPath, nil)
-	data, err := os.ReadFile(managedDoltOrderStateFile(managedDoltRuntimeLayout{
-		PackStateDir: packStateDir,
-	})) //nolint:gosec // path is derived from managed city layout
-	if err != nil {
-		return ""
-	}
-	var state doltRuntimeState
-	if json.Unmarshal(data, &state) != nil {
-		return ""
-	}
-	dataDir := strings.TrimSpace(state.DataDir)
-	if dataDir == "" {
-		return ""
-	}
-	if info, err := os.Stat(dataDir); err != nil || !info.IsDir() {
-		return ""
-	}
-	if state.Running {
-		if !validPublishedManagedDoltDataDirState(cityPath, state, dataDir) {
-			return ""
-		}
-		return normalizePathForCompare(dataDir)
-	}
-	if !state.Running && managedDoltDefaultDataDirExists(cityPath, dataDir) {
-		return ""
-	}
-	return normalizePathForCompare(dataDir)
-}
-
-func validPublishedManagedDoltDataDirState(cityPath string, state doltRuntimeState, dataDir string) bool {
-	if !state.Running || state.Port <= 0 || state.PID <= 0 {
-		return false
-	}
-	if !samePath(strings.TrimSpace(state.DataDir), dataDir) {
-		return false
-	}
-	if !pidAlive(state.PID) || !doltPortReachable(strconv.Itoa(state.Port)) {
-		return false
-	}
-	holderPID := findPortHolderPID(strconv.Itoa(state.Port))
-	if holderPID > 0 {
-		return holderPID == state.PID
-	}
-	layout := managedDoltOrderRuntimeLayoutForDataDir(cityPath, dataDir)
-	owned, deleted := inspectManagedDoltOwnership(state.PID, layout)
-	return owned && !deleted
-}
-
-func managedDoltOrderRuntimeLayoutForDataDir(cityPath, dataDir string) managedDoltRuntimeLayout {
-	packStateDir := managedDoltOrderPackStateDir(cityPath, nil)
-	return managedDoltRuntimeLayout{
-		PackStateDir: packStateDir,
-		DataDir:      normalizePathForCompare(dataDir),
-		LogFile:      normalizePathForCompare(filepath.Join(packStateDir, "dolt.log")),
-		StateFile:    normalizePathForCompare(filepath.Join(packStateDir, "dolt-state.json")),
-		PIDFile:      normalizePathForCompare(filepath.Join(packStateDir, "dolt.pid")),
-		LockFile:     normalizePathForCompare(filepath.Join(packStateDir, "dolt.lock")),
-		ConfigFile:   normalizePathForCompare(filepath.Join(packStateDir, "dolt-config.yaml")),
-	}
-}
-
-func managedDoltDefaultDataDirExists(cityPath, dataDir string) bool {
-	for _, candidate := range []string{
-		filepath.Join(cityPath, ".beads", "dolt"),
-		filepath.Join(cityPath, ".gc", "dolt-data"),
-	} {
-		if samePath(candidate, dataDir) {
-			continue
-		}
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return true
-		}
-	}
-	return false
-}
-
-func managedDoltOrderStateFile(layout managedDoltRuntimeLayout) string {
-	return filepath.Join(layout.PackStateDir, "dolt-state.json")
-}
-
-func managedDoltPortForLayout(layout managedDoltRuntimeLayout) string {
-	data, err := os.ReadFile(managedDoltOrderStateFile(layout)) //nolint:gosec // path is derived from managed city layout
-	if err != nil {
-		return ""
-	}
-	var state doltRuntimeState
-	if json.Unmarshal(data, &state) != nil {
-		return ""
-	}
-	if !validDoltRuntimeStateForLayout(state, layout) {
-		return ""
-	}
-	return strconv.Itoa(state.Port)
-}
-
-func validDoltRuntimeStateForLayout(state doltRuntimeState, layout managedDoltRuntimeLayout) bool {
-	if !state.Running || state.Port <= 0 || state.PID <= 0 {
-		return false
-	}
-	if !samePath(strings.TrimSpace(state.DataDir), layout.DataDir) {
-		return false
-	}
-	if !pidAlive(state.PID) || !doltPortReachable(strconv.Itoa(state.Port)) {
-		return false
-	}
-	holderPID := findPortHolderPID(strconv.Itoa(state.Port))
-	if holderPID > 0 && holderPID != state.PID {
-		return false
-	}
-	owned, deleted := inspectManagedDoltOwnership(state.PID, layout)
-	if deleted {
-		return false
-	}
-	if holderPID == state.PID {
-		return true
-	}
-	return owned
+	// Local bd-managed dolt scope: bd owns the proxied local server, so strip any
+	// stale ambient endpoint env and mark the scope managed-local so pack
+	// commands can branch on it.
+	clearProjectedDoltEnv(env)
+	env["GC_BEADS_MANAGED_LOCAL"] = "1"
 }
 
 func cachedOrderStoresResolver(cityPath string, cfg *config.City) orderStoresResolver {

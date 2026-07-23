@@ -5,10 +5,10 @@
 # active databases. Falls back to CLI mode only when no server is running.
 # Pulls the configured remote's `main` branch in both SQL and CLI modes.
 #
-# Environment: GC_CITY_PATH, GC_DOLT_PORT, GC_DOLT_USER, GC_DOLT_PASSWORD
+# Environment: GC_CITY_PATH, GC_BEADS_PORT, GC_BEADS_USER, GC_BEADS_PASSWORD
 set -e
 
-: "${GC_DOLT_USER:=root}"
+: "${GC_BEADS_USER:=root}"
 PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 . "$PACK_DIR/assets/scripts/runtime.sh"
 
@@ -39,7 +39,7 @@ case "$(printf '%s' "$db_filter" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | t
 esac
 
 is_running() {
-  managed_runtime_tcp_reachable "$GC_DOLT_PORT"
+  managed_runtime_tcp_reachable "$GC_BEADS_PORT"
 }
 
 valid_database_name() {
@@ -62,9 +62,9 @@ valid_remote_name() {
 
 dolt_sql() {
   query="$1"
-  host="${GC_DOLT_HOST:-127.0.0.1}"
-  export DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}"
-  run_bounded 120 dolt --host "$host" --port "$GC_DOLT_PORT" --user "$GC_DOLT_USER" --no-tls \
+  host="${GC_BEADS_HOST:-127.0.0.1}"
+  export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
+  run_bounded 120 dolt --host "$host" --port "$GC_BEADS_PORT" --user "$GC_BEADS_USER" --no-tls \
     sql --result-format csv -q "$query"
 }
 

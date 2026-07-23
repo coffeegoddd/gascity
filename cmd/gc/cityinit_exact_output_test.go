@@ -35,7 +35,7 @@ func TestCityInitExactOutput_DefaultScaffold(t *testing.T) {
 func TestCityInitExactOutput_CommandProviderSkipReadiness(t *testing.T) {
 	configureIsolatedRuntimeEnv(t)
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	disableBootstrapForTests(t)
 
 	oldRegister := registerCityWithSupervisorTestHook

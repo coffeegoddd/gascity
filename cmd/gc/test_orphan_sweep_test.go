@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -141,6 +142,24 @@ func pidFromPrefixedDirName(name, prefix string) (int, bool) {
 // fallback for legacy dirs without a sentinel. Dirs younger than
 // testOrphanSweepMinAge are never touched, covering the window before a
 // sibling run's sentinel exists.
+// pidAlive reports whether a process with the given PID currently exists on
+// this host. It is a conservative liveness probe (signal 0): a permission
+// error means the process exists but is owned by another user, so it counts
+// as alive. Note this is unreliable across PID namespaces, which is why the
+// sweep prefers the alive sentinel and only falls back to PID liveness for
+// legacy dirs without one.
+func pidAlive(pid int) bool {
+	if pid <= 0 {
+		return false
+	}
+	proc, err := os.FindProcess(pid)
+	if err != nil {
+		return false
+	}
+	err = proc.Signal(syscall.Signal(0))
+	return err == nil || errors.Is(err, syscall.EPERM)
+}
+
 func sweepOrphanPIDPrefixedDirs(root, prefix string) {
 	entries, err := os.ReadDir(root)
 	if err != nil {

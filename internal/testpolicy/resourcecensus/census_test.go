@@ -1581,8 +1581,8 @@ func TestBootstrapPolicyOwnsNetListenDebt(t *testing.T) {
 
 	for _, rows := range [][]Baseline{bootstrapPolicy.Debt, bootstrapPolicy.SmallDebt} {
 		row := findRow(t, rows, ScopeUntagged, ResourceNetListen)
-		if row.BaselineCalls != 92 || row.BaselineFiles != 34 {
-			t.Fatalf("net.Listen baseline = %d/%d, want 92/34", row.BaselineCalls, row.BaselineFiles)
+		if row.BaselineCalls != 59 || row.BaselineFiles != 25 {
+			t.Fatalf("net.Listen baseline = %d/%d, want 59/25", row.BaselineCalls, row.BaselineFiles)
 		}
 		if row.OwnerBead != "ga-80po0c.2.2" || row.MigrationTarget != "P0.4c" {
 			t.Fatalf("net.Listen owner = %q/%q, want ga-80po0c.2.2/P0.4c", row.OwnerBead, row.MigrationTarget)
@@ -1623,8 +1623,8 @@ func TestBootstrapPolicyOwnsSyscallListenDebt(t *testing.T) {
 
 	for _, rows := range [][]Baseline{bootstrapPolicy.Debt, bootstrapPolicy.SmallDebt} {
 		row := findRow(t, rows, ScopeUntagged, ResourceSyscallListen)
-		if row.BaselineCalls != 1 || row.BaselineFiles != 1 {
-			t.Fatalf("syscall.Listen baseline = %d/%d, want 1/1", row.BaselineCalls, row.BaselineFiles)
+		if row.BaselineCalls != 0 || row.BaselineFiles != 0 {
+			t.Fatalf("syscall.Listen baseline = %d/%d, want 0/0", row.BaselineCalls, row.BaselineFiles)
 		}
 		if row.OwnerBead != "ga-80po0c.2.2" || row.MigrationTarget != "P0.4c" {
 			t.Fatalf("syscall.Listen owner = %q/%q, want ga-80po0c.2.2/P0.4c", row.OwnerBead, row.MigrationTarget)

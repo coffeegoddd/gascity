@@ -13,7 +13,7 @@ import (
 
 // TestGcBeadsBdDefaultBindHostIsLoopback runs the DOLT_HOST default
 // assignment from gc-beads-bd.sh and asserts the managed bind default is
-// loopback, with GC_DOLT_HOST still honored as the explicit override.
+// loopback, with GC_BEADS_HOST still honored as the explicit override.
 func TestGcBeadsBdDefaultBindHostIsLoopback(t *testing.T) {
 	t.Parallel()
 
@@ -38,7 +38,7 @@ func TestGcBeadsBdDefaultBindHostIsLoopback(t *testing.T) {
 			cmd := exec.Command("sh", "-c", script)
 			cmd.Env = environWithoutGCDoltHost()
 			if tc.env != "" {
-				cmd.Env = append(cmd.Env, "GC_DOLT_HOST="+tc.env)
+				cmd.Env = append(cmd.Env, "GC_BEADS_HOST="+tc.env)
 			}
 			out, err := cmd.Output()
 			if err != nil {
@@ -90,7 +90,7 @@ func TestGcBeadsBdIsRemoteHostClassification(t *testing.T) {
 			cmd := exec.Command("sh", "-c", fnSrc+"\nis_remote\n")
 			cmd.Env = environWithoutGCDoltHost()
 			if tc.host != "" {
-				cmd.Env = append(cmd.Env, "GC_DOLT_HOST="+tc.host)
+				cmd.Env = append(cmd.Env, "GC_BEADS_HOST="+tc.host)
 			}
 			var stderr bytes.Buffer
 			cmd.Stderr = &stderr
@@ -101,7 +101,7 @@ func TestGcBeadsBdIsRemoteHostClassification(t *testing.T) {
 				t.Fatalf("sh -c failed: %v\nstderr:\n%s", err, stderr.String())
 			}
 			if gotRemote != tc.wantRemote {
-				t.Fatalf("is_remote with GC_DOLT_HOST=%q: remote=%v, want %v\nfunction:\n%s",
+				t.Fatalf("is_remote with GC_BEADS_HOST=%q: remote=%v, want %v\nfunction:\n%s",
 					tc.host, gotRemote, tc.wantRemote, fnSrc)
 			}
 		})
@@ -128,7 +128,7 @@ func environWithoutGCDoltHost() []string {
 	env := os.Environ()
 	filtered := env[:0]
 	for _, kv := range env {
-		if strings.HasPrefix(kv, "GC_DOLT_HOST=") {
+		if strings.HasPrefix(kv, "GC_BEADS_HOST=") {
 			continue
 		}
 		filtered = append(filtered, kv)

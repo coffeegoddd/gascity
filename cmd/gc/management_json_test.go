@@ -13,7 +13,6 @@ import (
 	"testing"
 
 	"github.com/gastownhall/gascity/internal/beads"
-	"github.com/gastownhall/gascity/internal/beads/contract"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
@@ -134,7 +133,7 @@ func TestManagementJSONSuccessPayloadsValidateDeclaredSchemas(t *testing.T) {
 		{
 			name: "rig add",
 			setup: func(t *testing.T) (string, []string) {
-				t.Setenv("GC_DOLT", "skip")
+				t.Setenv("GC_BEADS_SKIP", "skip")
 				t.Setenv("GC_BEADS", "bd")
 				cityPath := t.TempDir()
 				writeManagementJSONTestCity(t, cityPath, "[workspace]\nname = \"test-city\"\n")
@@ -160,18 +159,6 @@ func TestManagementJSONSuccessPayloadsValidateDeclaredSchemas(t *testing.T) {
 			setup: func(t *testing.T) (string, []string) {
 				cityPath := writeManagementJSONRigCity(t)
 				return cityPath, []string{"rig", "remove", "frontend", "--json"}
-			},
-		},
-		{
-			name: "rig set-endpoint",
-			setup: func(t *testing.T) (string, []string) {
-				cityPath := writeManagementJSONRigEndpointCity(t)
-				return cityPath, []string{"rig", "set-endpoint", "frontend", "--self", "--port", "28232", "--force", "--json"}
-			},
-			check: func(t *testing.T, payload map[string]any) {
-				if got, ok := payload["dry_run"].(bool); !ok || got {
-					t.Fatalf("dry_run = %#v, want false", payload["dry_run"])
-				}
 			},
 		},
 		{
@@ -405,33 +392,6 @@ prefix = "fe"
 	return cityPath
 }
 
-func writeManagementJSONRigEndpointCity(t *testing.T) string {
-	t.Helper()
-	t.Setenv("GC_BEADS", "bd")
-	cityPath := t.TempDir()
-	rigPath := filepath.Join(t.TempDir(), "frontend")
-	if err := os.MkdirAll(rigPath, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	writeRigEndpointCityConfig(t, cityPath, rigPath)
-	writePackToml(t, cityPath, "[pack]\nname = \"test-city\"\nschema = 2\n")
-	writeRigEndpointMetadata(t, cityPath, "hq")
-	writeRigEndpointMetadata(t, rigPath, "fe")
-	writeRigEndpointRuntimeState(t, cityPath, 3311)
-	writeRigEndpointCanonicalConfig(t, rigPath, contract.ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: contract.EndpointOriginInheritedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	if err := os.WriteFile(filepath.Join(rigPath, ".beads", "dolt-server.port"), []byte("3311\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	origVerify := verifyRigExternalEndpoint
-	t.Cleanup(func() { verifyRigExternalEndpoint = origVerify })
-	verifyRigExternalEndpoint = func(contract.ConfigState, string, string) error { return nil }
-	return cityPath
-}
-
 func writeManagementJSONWaitCity(t *testing.T, state string) (string, string) {
 	t.Helper()
 	t.Setenv("GC_BEADS", "file")
@@ -499,7 +459,7 @@ contract = "gc.healthz.v1"
 
 func TestRigAddJSONEmitsOnlySummary(t *testing.T) {
 	clearGCEnv(t)
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 	cityPath := t.TempDir()
 	writeManagementJSONTestCity(t, cityPath, "[workspace]\nname = \"test-city\"\n")

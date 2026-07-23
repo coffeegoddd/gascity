@@ -100,7 +100,7 @@ func execCommandRunnerWithEnv(parent context.Context, env map[string]string) Com
 		cmd.Cancel = func() error {
 			return killCommandTree(cmd)
 		}
-		cmd.Env = execEnvFor(name, processEnvSnapshotExcludingNativeDoltOpen(), env)
+		cmd.Env = execEnvFor(name, os.Environ(), env)
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		out, err := cmd.Output()
@@ -430,7 +430,7 @@ func (s *BdStore) Purge(beadsDir string, dryRun bool) (PurgeResult, error) {
 	}
 
 	dir := filepath.Dir(beadsDir)
-	env := envWithout(processEnvSnapshotExcludingNativeDoltOpen(), "BEADS_DIR")
+	env := envWithout(os.Environ(), "BEADS_DIR")
 	env = append(env, "BEADS_DIR="+beadsDir)
 
 	var out []byte

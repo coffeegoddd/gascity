@@ -78,21 +78,13 @@ func TestDoDoctorRegistersLocalOnlyRemoteCheckForActiveManagedRigs(t *testing.T)
 	}
 	doltDataDir := filepath.Join(cityDir, "runtime-dolt")
 	t.Setenv("GC_CITY_PATH", cityDir)
-	t.Setenv("GC_DOLT_DATA_DIR", doltDataDir)
+	t.Setenv("GC_BEADS_DATA_DIR", doltDataDir)
 	oldCityFlag := cityFlag
 	cityFlag = cityDir
 	t.Cleanup(func() { cityFlag = oldCityFlag })
 
-	oldCityCheck := newDoctorDoltServerCheck
-	oldRigCheck := newDoctorRigDoltServerCheck
 	oldBackupCheck := newDoctorDoltBackupCheck
 	oldLocalOnlyCheck := newDoctorDoltLocalOnlyCheck
-	newDoctorDoltServerCheck = func(cityPath string, _ bool) *doctor.DoltServerCheck {
-		return doctor.NewDoltServerCheck(cityPath, true)
-	}
-	newDoctorRigDoltServerCheck = func(cityPath string, rig config.Rig, _ bool) *doctor.RigDoltServerCheck {
-		return doctor.NewRigDoltServerCheck(cityPath, rig, true)
-	}
 	newDoctorDoltBackupCheck = doctor.NewDoltBackupCheck
 	registered := map[string]string{}
 	newDoctorDoltLocalOnlyCheck = func(cityPath string, rig config.Rig, dataDir string) *doctor.DoltLocalOnlyRemoteCheck {
@@ -100,8 +92,6 @@ func TestDoDoctorRegistersLocalOnlyRemoteCheckForActiveManagedRigs(t *testing.T)
 		return doctor.NewDoltLocalOnlyRemoteCheck(cityPath, rig, dataDir)
 	}
 	t.Cleanup(func() {
-		newDoctorDoltServerCheck = oldCityCheck
-		newDoctorRigDoltServerCheck = oldRigCheck
 		newDoctorDoltBackupCheck = oldBackupCheck
 		newDoctorDoltLocalOnlyCheck = oldLocalOnlyCheck
 	})
@@ -124,7 +114,7 @@ func TestDoDoctorRegistersLocalOnlyRemoteCheckForActiveManagedRigs(t *testing.T)
 }
 
 // TestDoDoctorSkipsLocalOnlyCheckWhenGCDoltSkip verifies that the
-// dolt-local-only-remote check is not registered when GC_DOLT=skip, matching
+// dolt-local-only-remote check is not registered when GC_BEADS_SKIP=1, matching
 // the behavior of the existing dolt-backup check.
 func TestDoDoctorSkipsLocalOnlyCheckWhenGCDoltSkip(t *testing.T) {
 	clearInheritedBeadsEnv(t)
@@ -162,30 +152,20 @@ prefix = "ma"
 		t.Fatal(err)
 	}
 	t.Setenv("GC_CITY_PATH", cityDir)
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	oldCityFlag := cityFlag
 	cityFlag = cityDir
 	t.Cleanup(func() { cityFlag = oldCityFlag })
 
-	oldCityCheck := newDoctorDoltServerCheck
-	oldRigCheck := newDoctorRigDoltServerCheck
 	oldBackupCheck := newDoctorDoltBackupCheck
 	oldLocalOnlyCheck := newDoctorDoltLocalOnlyCheck
 	registered := 0
-	newDoctorDoltServerCheck = func(cityPath string, _ bool) *doctor.DoltServerCheck {
-		return doctor.NewDoltServerCheck(cityPath, true)
-	}
-	newDoctorRigDoltServerCheck = func(cityPath string, rig config.Rig, _ bool) *doctor.RigDoltServerCheck {
-		return doctor.NewRigDoltServerCheck(cityPath, rig, true)
-	}
 	newDoctorDoltBackupCheck = doctor.NewDoltBackupCheck
 	newDoctorDoltLocalOnlyCheck = func(cityPath string, rig config.Rig, dataDir string) *doctor.DoltLocalOnlyRemoteCheck {
 		registered++
 		return doctor.NewDoltLocalOnlyRemoteCheck(cityPath, rig, dataDir)
 	}
 	t.Cleanup(func() {
-		newDoctorDoltServerCheck = oldCityCheck
-		newDoctorRigDoltServerCheck = oldRigCheck
 		newDoctorDoltBackupCheck = oldBackupCheck
 		newDoctorDoltLocalOnlyCheck = oldLocalOnlyCheck
 	})
@@ -194,6 +174,6 @@ prefix = "ma"
 	_ = doDoctor(false, false, false, false, 0, &stdout, &stderr)
 
 	if registered != 0 {
-		t.Fatalf("registered %d dolt-local-only checks, want 0 when GC_DOLT=skip", registered)
+		t.Fatalf("registered %d dolt-local-only checks, want 0 when GC_BEADS_SKIP=1", registered)
 	}
 }

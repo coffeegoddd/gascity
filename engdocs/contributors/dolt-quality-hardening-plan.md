@@ -60,7 +60,7 @@ The branch reaches `80+` on all criteria by making these structural changes:
 - Canonical contract writes happen in Go, not in `gc-beads-bd`.
 - `gc-beads-bd` remains the backend bridge for Dolt SQL/server operations
   until a later replacement exists.
-- Ambient `GC_DOLT_*` and `BEADS_*` remain compatibility inputs only; no new
+- Ambient `GC_BEADS_*` and `BEADS_*` remain compatibility inputs only; no new
   code may treat them as authoritative.
 - A task is not complete until it has a failing regression first, code,
   targeted verification, broader verification, and review.
@@ -165,7 +165,7 @@ auth source, and availability state before any caller consumes the result.
 
 **Description:**
 Delete caller-local host/port/user/password assembly where it still exists.
-Require callers to use a single projection path for `GC_STORE_*`, `GC_DOLT_*`,
+Require callers to use a single projection path for `GC_STORE_*`, `GC_BEADS_*`,
 and `BEADS_*` compatibility output.
 
 **Acceptance criteria:**

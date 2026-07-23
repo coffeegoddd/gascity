@@ -162,6 +162,7 @@ func TestBuiltinDatabaseEnumeratorsSkipManagedProbeDatabase(t *testing.T) {
 func TestDoltSyncRejectsManagedProbeDatabaseFilter(t *testing.T) {
 	packDir := bundledPackDirForTest(t, "dolt")
 	script := filepath.Join(packDir, "commands", "sync", "run.sh")
+	const managedDoltProbeDatabase = "__gc_probe"
 	for _, dbName := range []string{
 		managedDoltProbeDatabase,
 		strings.ToUpper(managedDoltProbeDatabase),

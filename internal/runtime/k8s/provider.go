@@ -70,7 +70,7 @@ type schedulingFields struct {
 //   - GC_K8S_CPU_LIMIT, GC_K8S_MEM_LIMIT — resource limits
 //
 // The in-cluster Dolt service alias defaults to the provider defaults
-// (dolt.gc.svc.cluster.local:3307). Pods receive projected GC_DOLT_* env;
+// (dolt.gc.svc.cluster.local:3307). Pods receive projected GC_BEADS_* env;
 // GC_K8S_DOLT_* remains a deprecated compatibility input for the provider-
 // managed in-cluster alias only.
 //
@@ -827,11 +827,11 @@ func initCityInPod(ctx context.Context, ops k8sOps, podName, ctrlCity string) er
 	if err := copyDirToPod(ctx, ops, podName, "agent", ctrlCity, "/tmp/city-src"); err != nil {
 		return err
 	}
-	// Run gc init --from with GC_DOLT=skip so gc init does not attempt to
-	// start a local Dolt server. Pod sessions consume the projected GC_DOLT_*
+	// Run gc init --from with GC_BEADS_SKIP=1 so gc init does not attempt to
+	// start a local Dolt server. Pod sessions consume the projected GC_BEADS_*
 	// connection target through env; they do not rewrite canonical .beads files.
 	_, err := ops.execInPod(ctx, podName, "agent",
-		[]string{"env", "GC_DOLT=skip", "gc", "init", "--from", "/tmp/city-src", "/workspace"}, nil)
+		[]string{"env", "GC_BEADS_SKIP=1", "gc", "init", "--from", "/tmp/city-src", "/workspace"}, nil)
 	if err != nil {
 		return err
 	}
@@ -852,8 +852,8 @@ func initBeadsInPod(ctx context.Context, ops k8sOps, podName string, cfg runtime
 	if len(projected) == 0 {
 		return nil
 	}
-	doltHost := projected["GC_DOLT_HOST"]
-	doltPort := projected["GC_DOLT_PORT"]
+	doltHost := projected["GC_BEADS_HOST"]
+	doltPort := projected["GC_BEADS_PORT"]
 	storeRoot := projectedPodStoreRoot(cfg, workDir)
 	prefix := strings.TrimSpace(cfg.Env["GC_BEADS_PREFIX"])
 	if prefix == "" {
@@ -862,7 +862,7 @@ func initBeadsInPod(ctx context.Context, ops k8sOps, podName string, cfg runtime
 
 	portNum, err := strconv.Atoi(doltPort)
 	if err != nil {
-		return fmt.Errorf("invalid projected GC_DOLT_PORT %q: %w", doltPort, err)
+		return fmt.Errorf("invalid projected GC_BEADS_PORT %q: %w", doltPort, err)
 	}
 	patchJSON, err := json.Marshal(map[string]any{
 		"dolt_server_host": doltHost,

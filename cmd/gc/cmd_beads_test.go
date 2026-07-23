@@ -581,7 +581,7 @@ func TestDoBeadsHealth_BdSkip(t *testing.T) {
 	cityFlag = dir
 	defer func() { cityFlag = "" }()
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	var stdout, stderr bytes.Buffer
 	code := doBeadsHealth(false, false, &stdout, &stderr)
@@ -589,7 +589,7 @@ func TestDoBeadsHealth_BdSkip(t *testing.T) {
 		t.Errorf("exit code = %d, want 0; stderr = %s", code, stderr.String())
 	}
 	if !strings.Contains(stdout.String(), "Beads provider: healthy") {
-		t.Errorf("GC_DOLT=skip should pass: %s", stdout.String())
+		t.Errorf("GC_BEADS_SKIP=1 should pass: %s", stdout.String())
 	}
 }
 

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -7293,8 +7292,8 @@ func TestBuildDesiredState_OnDemandNamedSession_ScaleCheckNonIntegerDoesNotFallT
 
 func TestBuildDesiredState_OnDemandNamedSession_RigWorkQueryDoesNotMaterialize(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT_USER", "")
-	t.Setenv("GC_DOLT_PASSWORD", "")
+	t.Setenv("GC_BEADS_USER", "")
+	t.Setenv("GC_BEADS_PASSWORD", "")
 	t.Setenv("BEADS_CREDENTIALS_FILE", "")
 
 	cityPath := t.TempDir()
@@ -7306,17 +7305,13 @@ func TestBuildDesiredState_OnDemandNamedSession_RigWorkQueryDoesNotMaterialize(t
 		t.Fatal(err)
 	}
 	writeRigEndpointCanonicalConfig(t, cityPath, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
+		IssuePrefix: "gc",
 	})
 	writeRigEndpointCanonicalConfig(t, rigPath, contract.ConfigState{
-		IssuePrefix:    "dm",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "3308",
-		DoltUser:       "rig-user",
+		IssuePrefix: "dm",
+		DoltHost:    "rig-db.example.com",
+		DoltPort:    "3308",
+		DoltUser:    "rig-user",
 	})
 	if err := os.WriteFile(filepath.Join(cityPath, ".beads", ".env"), []byte("BEADS_DOLT_PASSWORD=city-secret\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -9093,95 +9088,10 @@ func TestBuildDesiredState_ZeroScaledPoolSessionKeepsDependencyFloorWhileDrainin
 	}
 }
 
-func TestBuildDesiredState_PoolCheckInjectsDoltPortForRigScopedAgent(t *testing.T) {
-	t.Setenv("GC_BEADS", "bd")
-	cityPath := t.TempDir()
-	rigPath := filepath.Join(cityPath, "myrig")
-	if err := os.MkdirAll(rigPath, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	// The check command outputs "2" only when BEADS_DOLT_SERVER_PORT is set.
-	// If the fix works, buildDesiredState prefixes the command with
-	// BEADS_DOLT_SERVER_PORT=9876, so the inner shell sees the variable.
-	checkCmd := `sh -c 'test -n "$BEADS_DOLT_SERVER_PORT" && printf 2 || printf 0'`
-	cfg := &config.City{
-		Rigs: []config.Rig{{
-			Name:     "myrig",
-			Path:     rigPath,
-			DoltPort: "9876",
-		}},
-		Agents: []config.Agent{
-			{
-				Name:              "worker",
-				Dir:               "myrig",
-				StartCommand:      "true",
-				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(5), ScaleCheck: checkCmd,
-			},
-		},
-	}
-
-	desired := buildDesiredState("test-city", cityPath, time.Now().UTC(), cfg, runtime.NewFake(), nil, io.Discard)
-	workerSlots := 0
-	for _, tp := range desired.State {
-		if tp.TemplateName == "myrig/worker" {
-			workerSlots++
-		}
-	}
-	if workerSlots != 2 {
-		t.Fatalf("worker desired slots = %d, want 2 (BEADS_DOLT_SERVER_PORT injection should make check output 2)", workerSlots)
-	}
-}
-
-func TestBuildDesiredState_PoolCheckUsesCityDoltPortForCityScopedAgent(t *testing.T) {
-	t.Setenv("GC_BEADS", "bd")
-	cityPath := t.TempDir()
-	writeRigEndpointCanonicalConfig(t, cityPath, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	ln := listenOnRandomPort(t)
-	defer func() { _ = ln.Close() }()
-	_, portText, err := net.SplitHostPort(ln.Addr().String())
-	if err != nil {
-		t.Fatalf("SplitHostPort(%q): %v", ln.Addr().String(), err)
-	}
-	port, err := strconv.Atoi(portText)
-	if err != nil {
-		t.Fatalf("Atoi(%q): %v", portText, err)
-	}
-	if err := writeDoltState(cityPath, doltRuntimeState{Running: true, PID: os.Getpid(), Port: port, DataDir: filepath.Join(cityPath, ".beads", "dolt"), StartedAt: time.Now().UTC().Format(time.RFC3339)}); err != nil {
-		t.Fatalf("writeDoltState: %v", err)
-	}
-	// Same check command but for a city-scoped agent (no rig). The canonical
-	// projected Dolt port should still be present, so the check outputs 2.
-	checkCmd := `sh -c 'test -n "$BEADS_DOLT_SERVER_PORT" && printf 2 || printf 0'`
-	cfg := &config.City{
-		Agents: []config.Agent{
-			{
-				Name:              "worker",
-				StartCommand:      "true",
-				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(5), ScaleCheck: checkCmd,
-			},
-		},
-	}
-
-	desired := buildDesiredState("test-city", cityPath, time.Now().UTC(), cfg, runtime.NewFake(), nil, io.Discard)
-	workerSlots := 0
-	for _, tp := range desired.State {
-		if tp.TemplateName == "worker" {
-			workerSlots++
-		}
-	}
-	if workerSlots != 2 {
-		t.Fatalf("worker desired slots = %d, want 2 (projected DoltPort for city-scoped agent)", workerSlots)
-	}
-}
-
 func TestBuildDesiredState_PoolCheckUsesExplicitRigPassword(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT_USER", "")
-	t.Setenv("GC_DOLT_PASSWORD", "")
+	t.Setenv("GC_BEADS_USER", "")
+	t.Setenv("GC_BEADS_PASSWORD", "")
 	t.Setenv("BEADS_CREDENTIALS_FILE", "")
 
 	cityPath := t.TempDir()
@@ -9193,12 +9103,10 @@ func TestBuildDesiredState_PoolCheckUsesExplicitRigPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeRigEndpointCanonicalConfig(t, rigPath, contract.ConfigState{
-		IssuePrefix:    "dm",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "3308",
-		DoltUser:       "rig-user",
+		IssuePrefix: "dm",
+		DoltHost:    "rig-db.example.com",
+		DoltPort:    "3308",
+		DoltUser:    "rig-user",
 	})
 	if err := os.WriteFile(filepath.Join(cityPath, ".beads", ".env"), []byte("BEADS_DOLT_PASSWORD=city-secret\n"), 0o600); err != nil {
 		t.Fatal(err)
@@ -9232,76 +9140,6 @@ func TestBuildDesiredState_PoolCheckUsesExplicitRigPassword(t *testing.T) {
 	}
 	if workerSlots != 2 {
 		t.Fatalf("worker desired slots = %d, want 2 when explicit rig scale_check sees rig-scoped password", workerSlots)
-	}
-}
-
-func TestBuildDesiredState_PoolCheckUsesManagedCityDoltPortWhenRigHasNoOverride(t *testing.T) {
-	skipSlowCmdGCTest(t, "uses a live managed-dolt port probe for scale_check coverage; run make test-cmd-gc-process for full coverage")
-	clearGCEnv(t)
-	t.Setenv("GC_BEADS", "bd")
-	cityPath := t.TempDir()
-	t.Setenv("GC_BEADS_SCOPE_ROOT", cityPath)
-	writeRigEndpointCanonicalConfig(t, cityPath, contract.ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: contract.EndpointOriginManagedCity,
-		EndpointStatus: contract.EndpointStatusVerified,
-	})
-	rigPath := filepath.Join(cityPath, "myrig")
-	if err := os.MkdirAll(rigPath, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	ln := listenOnRandomPort(t)
-	defer func() {
-		if err := ln.Close(); err != nil {
-			t.Fatalf("close listener: %v", err)
-		}
-	}()
-	if err := writeDoltState(cityPath, doltRuntimeState{
-		Running:   true,
-		PID:       os.Getpid(),
-		Port:      ln.Addr().(*net.TCPAddr).Port,
-		DataDir:   filepath.Join(cityPath, ".beads", "dolt"),
-		StartedAt: time.Now().UTC().Format(time.RFC3339),
-	}); err != nil {
-		t.Fatal(err)
-	}
-	checkCmd := `sh -c 'test -n "$BEADS_DOLT_SERVER_PORT" && printf 2 || printf 0'`
-	cfg := &config.City{
-		Rigs: []config.Rig{{
-			Name: "myrig",
-			Path: rigPath,
-		}},
-		Agents: []config.Agent{
-			{
-				Name:              "worker",
-				Dir:               "myrig",
-				StartCommand:      "true",
-				MinActiveSessions: intPtr(0), MaxActiveSessions: intPtr(5), ScaleCheck: checkCmd,
-			},
-		},
-	}
-
-	queryEnv, err := controllerQueryRuntimeEnv(cityPath, cfg, &cfg.Agents[0])
-	if err != nil {
-		t.Fatalf("controllerQueryRuntimeEnv: %v", err)
-	}
-	wantPort := strconv.Itoa(ln.Addr().(*net.TCPAddr).Port)
-	if got := queryEnv["BEADS_DOLT_SERVER_PORT"]; got != wantPort {
-		t.Fatalf("BEADS_DOLT_SERVER_PORT = %q, want %q; GC_DOLT=%q provider=%q scopeProvider=%q cityUses=%v scopeUses=%v current=%q resolvable=%q",
-			got, wantPort, os.Getenv("GC_DOLT"), rawBeadsProvider(cityPath), rawBeadsProviderForScope(rigPath, cityPath),
-			cityUsesBdStoreContract(cityPath), scopeUsesManagedBdStoreContract(cityPath, rigPath),
-			currentManagedDoltPort(cityPath), currentResolvableManagedDoltPort(cityPath))
-	}
-
-	desired := buildDesiredState("test-city", cityPath, time.Now().UTC(), cfg, runtime.NewFake(), nil, io.Discard)
-	workerSlots := 0
-	for _, tp := range desired.State {
-		if tp.TemplateName == "myrig/worker" {
-			workerSlots++
-		}
-	}
-	if workerSlots != 2 {
-		t.Fatalf("worker desired slots = %d, want 2 (managed city dolt port should be injected for rig)", workerSlots)
 	}
 }
 

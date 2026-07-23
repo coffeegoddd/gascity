@@ -26,7 +26,7 @@ func skipSlowCmdGCTest(t *testing.T, reason string) {
 // filtered out, followed by the given extras. Use this to build the
 // `Env` for any exec.Cmd that runs the real gc-beads-bd lifecycle script
 // or gc subcommands — inheriting os.Environ() raw lets GC_CITY_RUNTIME_DIR,
-// GC_PACK_STATE_DIR, GC_DOLT_STATE_FILE, and friends point the child at
+// GC_PACK_STATE_DIR, GC_BEADS_STATE_FILE, and friends point the child at
 // the user's real registered city instead of the test's t.TempDir(),
 // which silently overwrites user state on every run.
 // Regression for gastownhall/gascity#938.
@@ -38,10 +38,6 @@ func sanitizedBaseEnv(extra ...string) []string {
 		}
 		filtered = append(filtered, kv)
 	}
-	filtered = append(filtered,
-		managedDoltTestModeEnv+"=1",
-		managedDoltTestParentPIDEnv+"="+strconv.Itoa(os.Getpid()),
-	)
 	return append(filtered, extra...)
 }
 

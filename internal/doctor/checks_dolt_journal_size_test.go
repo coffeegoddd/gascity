@@ -88,8 +88,8 @@ func TestDoltJournalSizeCheck_ErrorAtThreshold(t *testing.T) {
 }
 
 func TestDoltJournalSizeCheck_EnvThresholdOverride(t *testing.T) {
-	t.Setenv("GC_DOLT_JOURNAL_WARN_BYTES", "1048576")  // override to 1 MB
-	t.Setenv("GC_DOLT_JOURNAL_ERROR_BYTES", "2097152") // override to 2 MB
+	t.Setenv("GC_BEADS_JOURNAL_WARN_BYTES", "1048576")  // override to 1 MB
+	t.Setenv("GC_BEADS_JOURNAL_ERROR_BYTES", "2097152") // override to 2 MB
 	dir := setupManagedDoltCity(t)
 	// 1.5 MB — above overridden warn (1 MB), below overridden error (2 MB).
 	writeFakeFile(t, filepath.Join(dir, ".beads", "dolt", "hq", ".dolt", "noms", "vvvv1.journal"), 1536*1024)

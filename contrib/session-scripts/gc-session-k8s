@@ -121,8 +121,8 @@ case "$op" in
     config=$(cat)
     command=$(echo "$config" | jq -r '.command // ""')
     env_json=$(echo "$config" | jq -c '.env // {}')
-    payload_dolt_host=$(echo "$env_json" | jq -r ".GC_DOLT_HOST // empty")
-    payload_dolt_port=$(echo "$env_json" | jq -r ".GC_DOLT_PORT // empty")
+    payload_dolt_host=$(echo "$env_json" | jq -r ".GC_BEADS_HOST // empty")
+    payload_dolt_port=$(echo "$env_json" | jq -r ".GC_BEADS_PORT // empty")
     emit_dolt_env=false
     dolt_host=""
     dolt_port=""
@@ -132,7 +132,7 @@ case "$op" in
     # means omit pod Dolt env entirely; do not synthesize from ambient process
     # env or deprecated GC_K8S_DOLT_* compatibility inputs.
     if [ -n "$payload_dolt_host" ] && [ -z "$payload_dolt_port" ]; then
-      echo "start: session payload requires GC_DOLT_PORT when GC_DOLT_HOST is set" >&2
+      echo "start: session payload requires GC_BEADS_PORT when GC_BEADS_HOST is set" >&2
       exit 1
     fi
     if [ -n "$payload_dolt_host" ] && [ -n "$payload_dolt_port" ]; then
@@ -248,8 +248,8 @@ case "$op" in
     dolt_env_json=$(jq -n       --arg emit_dolt_env "$emit_dolt_env"       --arg dolt_host "$dolt_host"       --arg dolt_port "$dolt_port" '
       if $emit_dolt_env == "true" then
         {
-          GC_DOLT_HOST: $dolt_host,
-          GC_DOLT_PORT: $dolt_port,
+          GC_BEADS_HOST: $dolt_host,
+          GC_BEADS_PORT: $dolt_port,
           BEADS_DOLT_SERVER_HOST: $dolt_host,
           BEADS_DOLT_SERVER_PORT: $dolt_port
         }
@@ -261,7 +261,7 @@ case "$op" in
     env_array=$(echo "$env_json" | jq       --argjson dolt_env "$dolt_env_json"       --arg mcp_mail_url "http://${MCP_MAIL_HOST}:${MCP_MAIL_PORT}"       --arg mcp_mail_project "$mail_project"       --arg tmux_session "$TMUX_SESSION"       --arg pod_dir "$pod_work_dir" '
       del(.BEADS_DOLT_SERVER_HOST, .BEADS_DOLT_SERVER_PORT,
           .GC_BEADS, .GC_SESSION, .GC_EVENTS,
-          .GC_DOLT_HOST, .GC_DOLT_PORT,
+          .GC_BEADS_HOST, .GC_BEADS_PORT,
           .GC_K8S_DOLT_HOST, .GC_K8S_DOLT_PORT,
           .GC_MAIL, .GC_MCP_MAIL_URL, .GC_MCP_MAIL_PROJECT)
       | .GC_CITY = "/workspace" | .GC_DIR = $pod_dir

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -48,7 +47,7 @@ func TestPreserveHostedBeadsCredentialEnv(t *testing.T) {
 	}
 	// `out` starts as if FilterInherited already stripped the sensitive keys, plus
 	// a caller-supplied override that must win.
-	out := []string{"PATH=/usr/bin", "GC_DOLT_HOST=gw.beads.example"}
+	out := []string{"PATH=/usr/bin", "GC_BEADS_HOST=gw.beads.example"}
 	overrides := map[string]string{"STS_MACHINE_URL": "https://override.example/sts"}
 
 	got := hostedEnvEntriesToMap(preserveHostedBeadsCredentialEnv(out, environ, overrides))
@@ -102,14 +101,14 @@ func TestMergeRuntimeEnvPreservesHostedBeadsCredentialEnv(t *testing.T) {
 		}
 	}
 
-	out := hostedEnvEntriesToMap(mergeRuntimeEnv(environ, map[string]string{"GC_DOLT_HOST": "gw.beads.example"}))
+	out := hostedEnvEntriesToMap(mergeRuntimeEnv(environ, map[string]string{"GC_BEADS_HOST": "gw.beads.example"}))
 
 	for key, want := range map[string]string{
 		"BEADS_DOLT_CREDENTIAL_COMMAND": "eia-helper --audience beads",
 		"STS_TOKEN_URL":                 "https://id.example/sts/v0/token",
 		"BEADS_DOLT_SERVER_TLS":         "/etc/gc/ca.crt",
 		"EIA_AUDIENCE":                  "beads",
-		"GC_DOLT_HOST":                  "gw.beads.example",
+		"GC_BEADS_HOST":                 "gw.beads.example",
 	} {
 		if out[key] != want {
 			t.Errorf("mergeRuntimeEnv() %s = %q, want %q", key, out[key], want)
@@ -127,89 +126,30 @@ func TestOverlayEnvEntriesPreservesHostedBeadsCredentialEnv(t *testing.T) {
 		"BEADS_DOLT_CREDENTIAL_COMMAND=eia-helper",
 		"PATH=/usr/bin",
 	}
-	out := hostedEnvEntriesToMap(overlayEnvEntries(environ, map[string]string{"GC_DOLT_HOST": "gw"}))
+	out := hostedEnvEntriesToMap(overlayEnvEntries(environ, map[string]string{"GC_BEADS_HOST": "gw"}))
 	if got := out["BEADS_DOLT_CREDENTIAL_COMMAND"]; got != "eia-helper" {
 		t.Fatalf("overlayEnvEntries() BEADS_DOLT_CREDENTIAL_COMMAND = %q, want preserved", got)
-	}
-}
-
-// TestVerifyManagedDoltDatabaseExistsAfterInitSkipsExternalDolt verifies the
-// post-init catalog check short-circuits for an external/hosted dolt endpoint.
-// A per-tenant beads-gateway scopes each connection to its own project DB and
-// denies the SHOW DATABASES listing this guard relies on, so the managed-catalog
-// lister must never run. The test plants a resolvable managed port so that,
-// without the external short-circuit, verify would reach (and fail at) the
-// lister — making the assertion bite if the guard regresses.
-func TestVerifyManagedDoltDatabaseExistsAfterInitSkipsExternalDolt(t *testing.T) {
-	t.Setenv("GC_BEADS", "bd")
-	for _, k := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER", "GC_DOLT_PASSWORD"} {
-		t.Setenv(k, "")
-		_ = os.Unsetenv(k)
-	}
-
-	cityPath := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityPath, ".beads", "config.yaml"), []byte(`issue_prefix: e2e
-gc.endpoint_origin: city_canonical
-gc.endpoint_status: verified
-dolt.auto-start: false
-dolt.host: gw.beads.example.com
-dolt.port: 3306
-dolt.user: orchestrator
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	// Make currentResolvableManagedDoltPort resolve a real port via the provider
-	// managed-dolt state fallback.
-	writeReachableProviderManagedDoltState(t, cityPath)
-
-	if !isExternalDolt(cityPath) {
-		t.Fatalf("precondition: expected isExternalDolt(cityPath)=true for a canonical external config")
-	}
-	if !cityUsesBdStoreContract(cityPath) {
-		t.Fatalf("precondition: expected cityUsesBdStoreContract(cityPath)=true for the default bd provider")
-	}
-	if port := currentResolvableManagedDoltPort(cityPath); port == "" {
-		t.Fatalf("precondition: expected a resolvable managed port so the guard regression would be observable")
-	}
-
-	orig := managedDoltListUserDatabasesAfterInit
-	t.Cleanup(func() { managedDoltListUserDatabasesAfterInit = orig })
-	called := false
-	managedDoltListUserDatabasesAfterInit = func(string) ([]string, error) {
-		called = true
-		return nil, fmt.Errorf("managed-catalog lister must not run for an external dolt endpoint")
-	}
-
-	if err := verifyManagedDoltDatabaseExistsAfterInit(cityPath, cityPath, "bd_prj_47890a40d5bee1d9"); err != nil {
-		t.Fatalf("verifyManagedDoltDatabaseExistsAfterInit() for external dolt = %v, want nil", err)
-	}
-	if called {
-		t.Fatalf("managed-catalog lister was called for an external dolt endpoint; the SHOW DATABASES guard must be skipped")
 	}
 }
 
 // TestCityRuntimeProcessEnvProjectsHostedBeadsCredentialCommand pins the
 // exec-provider / city process-env projection path. mirrorBeadsDoltEnv derives
 // BEADS_DOLT_CREDENTIAL_COMMAND for a controller that exports only the
-// non-sensitive GC_DOLT_CRED_CMD, but cityRuntimeProcessEnvWithError copies the
+// non-sensitive GC_BEADS_CRED_CMD, but cityRuntimeProcessEnvWithError copies the
 // resolved source map through a backend-key whitelist. That whitelist
 // (execProjectedBackendEnvKeys) omits the credential command because it is a
 // preserve-from-ambient passthrough key, not a strip-and-reproject projectedDolt
-// key — so before execProjectedBackendCopyKeys carried it, a GC_DOLT_CRED_CMD-only
+// key — so before execProjectedBackendCopyKeys carried it, a GC_BEADS_CRED_CMD-only
 // controller silently dropped the helper on the projected process env and bd fell
 // back to the root user (gateway Error 1045). The ambient BEADS_DOLT_CREDENTIAL_COMMAND
 // is left unset here so preserveHostedBeadsCredentialEnv has nothing to fall back
 // on: the projection is the only channel that can carry the derived value.
 func TestCityRuntimeProcessEnvProjectsHostedBeadsCredentialCommand(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT_CRED_CMD", "/usr/local/bin/eia-helper")
+	t.Setenv("GC_BEADS_CRED_CMD", "/usr/local/bin/eia-helper")
 	t.Setenv("BEADS_DOLT_CREDENTIAL_COMMAND", "")
 	_ = os.Unsetenv("BEADS_DOLT_CREDENTIAL_COMMAND")
-	for _, k := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER", "GC_DOLT_PASSWORD"} {
+	for _, k := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER", "GC_BEADS_PASSWORD"} {
 		t.Setenv(k, "")
 		_ = os.Unsetenv(k)
 	}
@@ -238,6 +178,6 @@ dolt.user: orchestrator
 		t.Fatalf("cityRuntimeProcessEnvWithError() error = %v", err)
 	}
 	if got := hostedEnvEntriesToMap(env)["BEADS_DOLT_CREDENTIAL_COMMAND"]; got != "/usr/local/bin/eia-helper" {
-		t.Fatalf("BEADS_DOLT_CREDENTIAL_COMMAND = %q, want %q (projected from ambient GC_DOLT_CRED_CMD)", got, "/usr/local/bin/eia-helper")
+		t.Fatalf("BEADS_DOLT_CREDENTIAL_COMMAND = %q, want %q (projected from ambient GC_BEADS_CRED_CMD)", got, "/usr/local/bin/eia-helper")
 	}
 }

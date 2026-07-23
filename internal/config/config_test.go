@@ -198,7 +198,7 @@ func TestParseDoltManagedListenerOverrides(t *testing.T) {
 [workspace]
 name = "bright-lights"
 
-[dolt]
+[beads.server]
 read_timeout_millis = 300000
 write_timeout_millis = 600000
 max_connections = 1024
@@ -206,14 +206,14 @@ max_connections = 1024
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if cfg.Dolt.ReadTimeoutMillis != 300000 {
-		t.Fatalf("Dolt.ReadTimeoutMillis = %d, want 300000", cfg.Dolt.ReadTimeoutMillis)
+	if cfg.Beads.Server.ReadTimeoutMillis != 300000 {
+		t.Fatalf("Dolt.ReadTimeoutMillis = %d, want 300000", cfg.Beads.Server.ReadTimeoutMillis)
 	}
-	if cfg.Dolt.WriteTimeoutMillis != 600000 {
-		t.Fatalf("Dolt.WriteTimeoutMillis = %d, want 600000", cfg.Dolt.WriteTimeoutMillis)
+	if cfg.Beads.Server.WriteTimeoutMillis != 600000 {
+		t.Fatalf("Dolt.WriteTimeoutMillis = %d, want 600000", cfg.Beads.Server.WriteTimeoutMillis)
 	}
-	if cfg.Dolt.MaxConnections != 1024 {
-		t.Fatalf("Dolt.MaxConnections = %d, want 1024", cfg.Dolt.MaxConnections)
+	if cfg.Beads.Server.MaxConnections != 1024 {
+		t.Fatalf("Dolt.MaxConnections = %d, want 1024", cfg.Beads.Server.MaxConnections)
 	}
 }
 
@@ -224,7 +224,7 @@ func TestLoadRejectsNegativeDoltManagedListenerOverride(t *testing.T) {
 [workspace]
 name = "bright-lights"
 
-[dolt]
+[beads.server]
 read_timeout_millis = -1
 `), 0o644); err != nil {
 		t.Fatal(err)
@@ -233,7 +233,7 @@ read_timeout_millis = -1
 	if err == nil {
 		t.Fatal("Load() error = nil, want negative read_timeout_millis rejection")
 	}
-	if got := err.Error(); !strings.Contains(got, "[dolt] read_timeout_millis must not be negative") {
+	if got := err.Error(); !strings.Contains(got, "[beads.server] read_timeout_millis must not be negative") {
 		t.Fatalf("Load() error = %q, want read_timeout_millis rejection", got)
 	}
 }
@@ -3962,7 +3962,7 @@ func TestParseDoltLockReleaseTimeout(t *testing.T) {
 [workspace]
 name = "test"
 
-[dolt]
+[beads.server]
 dolt_lock_release_timeout = "2m"
 
 [[agent]]
@@ -3972,10 +3972,10 @@ name = "mayor"
 	if err != nil {
 		t.Fatalf("Parse: %v", err)
 	}
-	if cfg.Dolt.DoltLockReleaseTimeout != "2m" {
-		t.Errorf("Dolt.DoltLockReleaseTimeout = %q, want %q", cfg.Dolt.DoltLockReleaseTimeout, "2m")
+	if cfg.Beads.Server.DoltLockReleaseTimeout != "2m" {
+		t.Errorf("Dolt.DoltLockReleaseTimeout = %q, want %q", cfg.Beads.Server.DoltLockReleaseTimeout, "2m")
 	}
-	got := cfg.Dolt.DoltLockReleaseTimeoutDuration()
+	got := cfg.Beads.Server.DoltLockReleaseTimeoutDuration()
 	if got != 2*time.Minute {
 		t.Errorf("DoltLockReleaseTimeoutDuration() = %v, want 2m", got)
 	}
@@ -3983,7 +3983,7 @@ name = "mayor"
 
 func TestValidateNonNegativeDurationsRejectsNegativeDoltLockReleaseTimeout(t *testing.T) {
 	cfg := &City{}
-	cfg.Dolt.DoltLockReleaseTimeout = "-1s"
+	cfg.Beads.Server.DoltLockReleaseTimeout = "-1s"
 	err := ValidateNonNegativeDurations(cfg, "city.toml")
 	if err == nil {
 		t.Fatal("ValidateNonNegativeDurations() = nil, want error for negative dolt_lock_release_timeout")

@@ -100,14 +100,7 @@ func rigAddJSONSummary(rigPath string, rig config.Rig) managementActionResult {
 
 func rigEndpointJSONFromOptions(opts rigEndpointOptions) *rigEndpointJSON {
 	endpoint := &rigEndpointJSON{AdoptUnverified: opts.AdoptUnverified}
-	switch {
-	case opts.Inherit:
-		endpoint.Mode = "inherit"
-	case opts.Self:
-		endpoint.Mode = "self"
-		endpoint.Host = "127.0.0.1"
-		endpoint.Port = strings.TrimSpace(opts.Port)
-	case opts.External:
+	if opts.External {
 		endpoint.Mode = "external"
 		endpoint.Host = strings.TrimSpace(opts.Host)
 		endpoint.Port = strings.TrimSpace(opts.Port)

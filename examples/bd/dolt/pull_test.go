@@ -30,16 +30,16 @@ func TestPullUsesLiveSQLWhenManagedServerReachable(t *testing.T) {
 
 	cmd := exec.Command("sh", script, "--db", "app")
 	cmd.Env = append(filteredEnv(
-		"PATH", "GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER",
-		"GC_DOLT_PASSWORD", "GC_DOLT_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
+		"PATH", "GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER",
+		"GC_BEADS_PASSWORD", "GC_BEADS_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
 	),
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -84,16 +84,16 @@ func TestPullReportsLiveSQLRemoteLookupFailure(t *testing.T) {
 
 	cmd := exec.Command("sh", script, "--db", "app")
 	cmd.Env = append(filteredEnv(
-		"PATH", "GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER",
-		"GC_DOLT_PASSWORD", "GC_DOLT_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
+		"PATH", "GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER",
+		"GC_BEADS_PASSWORD", "GC_BEADS_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
 	),
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {

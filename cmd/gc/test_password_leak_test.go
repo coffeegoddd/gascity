@@ -8,7 +8,7 @@ import (
 
 func TestBdRuntimeEnvDoesNotTreatCityEnvPasswordAsCanonicalAuth(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT_PASSWORD", "")
+	t.Setenv("GC_BEADS_PASSWORD", "")
 	t.Setenv("BEADS_DOLT_PASSWORD", "")
 
 	cityPath := t.TempDir()
@@ -20,7 +20,7 @@ func TestBdRuntimeEnvDoesNotTreatCityEnvPasswordAsCanonicalAuth(t *testing.T) {
 	}
 	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte(`
 [workspace.env]
-GC_DOLT_PASSWORD = "secret_from_toml"
+GC_BEADS_PASSWORD = "secret_from_toml"
 BEADS_DOLT_PASSWORD = "beads_secret_from_toml"
 `), 0o644); err != nil {
 		t.Fatal(err)
@@ -40,8 +40,8 @@ dolt.user: agent
 	if err != nil {
 		t.Fatalf("bdRuntimeEnvWithError() error = %v", err)
 	}
-	if got := env["GC_DOLT_PASSWORD"]; got != "" {
-		t.Fatalf("GC_DOLT_PASSWORD = %q, want empty when only city.toml workspace env supplies auth", got)
+	if got := env["GC_BEADS_PASSWORD"]; got != "" {
+		t.Fatalf("GC_BEADS_PASSWORD = %q, want empty when only city.toml workspace env supplies auth", got)
 	}
 	if got := env["BEADS_DOLT_PASSWORD"]; got != "" {
 		t.Fatalf("BEADS_DOLT_PASSWORD = %q, want empty when only city.toml workspace env supplies auth", got)

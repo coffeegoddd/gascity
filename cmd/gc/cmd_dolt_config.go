@@ -34,10 +34,7 @@ func newDoltConfigCmd(_ io.Writer, stderr io.Writer) *cobra.Command {
 		maxConns     int
 		readTimeout  int
 		writeTimeout int
-		cityPath     string
 		scopeDir     string
-		issuePrefix  string
-		doltDatabase string
 	)
 
 	writeManaged := &cobra.Command{
@@ -76,43 +73,11 @@ func newDoltConfigCmd(_ io.Writer, stderr io.Writer) *cobra.Command {
 	_ = writeManaged.MarkFlagRequired("data-dir")
 	cmd.AddCommand(writeManaged)
 
-	normalizeScope := &cobra.Command{
-		Use:    "normalize-scope",
-		Short:  "Normalize canonical bd scope files after backend init",
-		Hidden: true,
-		Args:   cobra.NoArgs,
-		RunE: func(_ *cobra.Command, _ []string) error {
-			if cityPath == "" {
-				fmt.Fprintln(stderr, "gc dolt-config normalize-scope: missing --city") //nolint:errcheck
-				return errExit
-			}
-			if scopeDir == "" {
-				fmt.Fprintln(stderr, "gc dolt-config normalize-scope: missing --dir") //nolint:errcheck
-				return errExit
-			}
-			if issuePrefix == "" {
-				fmt.Fprintln(stderr, "gc dolt-config normalize-scope: missing --prefix") //nolint:errcheck
-				return errExit
-			}
-			if err := normalizeCanonicalBdScopeFilesForInit(cityPath, scopeDir, issuePrefix, doltDatabase); err != nil {
-				fmt.Fprintf(stderr, "gc dolt-config normalize-scope: %v\n", err) //nolint:errcheck
-				return errExit
-			}
-			if err := removeScopeLocalDoltServerArtifacts(scopeDir); err != nil {
-				fmt.Fprintf(stderr, "gc dolt-config normalize-scope: %v\n", err) //nolint:errcheck
-				return errExit
-			}
-			return nil
-		},
-	}
-	normalizeScope.Flags().StringVar(&cityPath, "city", "", "city root")
-	normalizeScope.Flags().StringVar(&scopeDir, "dir", "", "scope root to normalize")
-	normalizeScope.Flags().StringVar(&issuePrefix, "prefix", "", "scope issue prefix")
-	normalizeScope.Flags().StringVar(&doltDatabase, "dolt-database", "", "pinned Dolt database")
-	_ = normalizeScope.MarkFlagRequired("city")
-	_ = normalizeScope.MarkFlagRequired("dir")
-	_ = normalizeScope.MarkFlagRequired("prefix")
-	cmd.AddCommand(normalizeScope)
+	// gascity never selectively prunes files inside a .beads directory — bd owns
+	// that canonical state, so gascity either wholly deletes .beads or leaves it
+	// alone. The former `normalize-scope` subcommand pruned stale managed-server
+	// artifacts from .beads; it was removed rather than left as a boundary
+	// violation. bd's proxied-server init owns metadata.json/config.yaml.
 
 	var reindexCheck bool
 	reindex := &cobra.Command{
@@ -127,7 +92,7 @@ func newDoltConfigCmd(_ io.Writer, stderr io.Writer) *cobra.Command {
 			// index corruption a non-native build cannot heal (ga-7hei).
 			if reindexCheck {
 				if !doltliteReindexSupported() {
-					fmt.Fprintln(stderr, "gc dolt-config doltlite-reindex: in-process reindex unavailable in this build (needs -tags gascity_native_beads)") //nolint:errcheck
+					fmt.Fprintln(stderr, "gc dolt-config doltlite-reindex: in-process reindex is not supported; gc reaches the store through the bd subprocess") //nolint:errcheck
 					return errExit
 				}
 				return nil
@@ -183,7 +148,7 @@ func writeManagedDoltConfigFile(path, host, port, dataDir, logLevel string, dolt
 	content := fmt.Sprintf(`# Dolt SQL server configuration — managed by gc-beads-bd
 # Do not edit manually; changes are overwritten on each server start.
 # To customize, set environment variables:
-#   GC_DOLT_PORT, GC_DOLT_HOST, GC_DOLT_USER, GC_DOLT_PASSWORD, GC_DOLT_LOGLEVEL
+#   GC_BEADS_PORT, GC_BEADS_HOST, GC_BEADS_USER, GC_BEADS_PASSWORD, GC_BEADS_LOGLEVEL
 
 log_level: %s
 
@@ -211,7 +176,7 @@ data_dir: %q
 # that never fired); fixed upstream in dolt 2.0.3 and the managed floor is
 # 2.1.0+. Scheduled compaction (gc dolt compact) still handles history
 # flattening — see #1918, #1200 for that lineage. Override via city.toml
-# [dolt] auto_gc_enabled or GC_DOLT_AUTO_GC_ENABLED.
+# [dolt] auto_gc_enabled or GC_BEADS_AUTO_GC_ENABLED.
 behavior:
   auto_gc_behavior:
     enable: %t
@@ -237,7 +202,7 @@ system_variables:
 
 func managedDoltWaitTimeout() int {
 	const defaultWaitTimeout = 30
-	raw := os.Getenv("GC_DOLT_WAIT_TIMEOUT")
+	raw := os.Getenv("GC_BEADS_WAIT_TIMEOUT")
 	if raw == "" {
 		return defaultWaitTimeout
 	}

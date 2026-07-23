@@ -76,10 +76,10 @@ func TestRigAddLocalAndAPIProduceIdenticalArtifacts(t *testing.T) {
 func assertRigAddArtifactsIdentical(t *testing.T, cityToml string, wantPacksLock bool, gitBranch string) {
 	t.Helper()
 	// The exact env the existing controller CreateRig tests run under: file
-	// provider (no managed-Dolt lifecycle) + GC_DOLT=skip guarding the
+	// provider (no managed-Dolt lifecycle) + GC_BEADS_SKIP=1 guarding the
 	// contract-city branch, so no bd/Dolt process spawns.
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
 
 	// City A — CLI path.

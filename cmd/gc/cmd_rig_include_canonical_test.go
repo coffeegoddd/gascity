@@ -35,7 +35,7 @@ func TestRigAddIncludeCanonicalizesBuiltinPackSource(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer
@@ -112,7 +112,7 @@ func TestRigAddDefaultRigImportsPersistPinnedBundledVersion(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer
@@ -293,7 +293,7 @@ func TestRigAddIncludePrefersConfiguredPackOverBuiltin(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer

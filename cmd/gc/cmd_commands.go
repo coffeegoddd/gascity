@@ -353,7 +353,7 @@ func pinInvokingGCBinary(env []string, executable string) []string {
 // dispatch does (applyOrderExecCanonicalDoltEnv), so a directly invoked
 // pack command (e.g. `gc dolt compact`) targets the same server as its
 // scheduled order. Without this, a city configured with an external
-// Dolt endpoint runs pack scripts against stale ambient GC_DOLT_* values
+// Dolt endpoint runs pack scripts against stale ambient GC_BEADS_* values
 // or the inactive managed runtime. When the city has no authoritative
 // scope config the environment is returned unchanged and pack scripts
 // keep resolving the managed runtime themselves.
@@ -372,7 +372,7 @@ func pinInvokingGCBinary(env []string, executable string) []string {
 // resolution input, gated on the same authoritativeness check the
 // projection itself applies so the non-authoritative pass-through stays
 // a strict no-op. The operator overrides are unaffected: doltauth reads
-// GC_DOLT_PASSWORD via os.Getenv, not from the resolution map.
+// GC_BEADS_PASSWORD via os.Getenv, not from the resolution map.
 func mergeCanonicalScopeDoltEnv(environ []string, cityPath string) []string {
 	resolved := make(map[string]string, len(environ))
 	for _, entry := range environ {
@@ -383,9 +383,6 @@ func mergeCanonicalScopeDoltEnv(environ []string, cityPath string) []string {
 	before := make(map[string]string, len(resolved))
 	for key, value := range resolved {
 		before[key] = value
-	}
-	if canonicalScopeDoltProjectionAuthoritative(cityPath) {
-		clearProjectedDoltPasswordEnv(resolved)
 	}
 	applyOrderExecCanonicalDoltEnv(cityPath, cityPath, resolved)
 

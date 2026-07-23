@@ -3859,15 +3859,15 @@ func TestBdStoreDepListEmpty(t *testing.T) {
 
 func TestExecCommandRunnerWithEnvOverridesInheritedValues(t *testing.T) {
 	t.Setenv("GC_CITY_PATH", "/wrong")
-	t.Setenv("GC_DOLT_PORT", "9999")
+	t.Setenv("GC_BEADS_PORT", "9999")
 
 	dir := t.TempDir()
 	runner := beads.ExecCommandRunnerWithEnv(map[string]string{
 		"GC_CITY_PATH": "/city",
-		"GC_DOLT_PORT": "31364",
+		"GC_BEADS_PORT": "31364",
 	})
 
-	out, err := runner(dir, "sh", "-c", `printf '%s\n%s\n' "$GC_CITY_PATH" "$GC_DOLT_PORT"`)
+	out, err := runner(dir, "sh", "-c", `printf '%s\n%s\n' "$GC_CITY_PATH" "$GC_BEADS_PORT"`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -3880,7 +3880,7 @@ func TestExecCommandRunnerWithEnvOverridesInheritedValues(t *testing.T) {
 		t.Fatalf("GC_CITY_PATH = %q, want %q", lines[0], "/city")
 	}
 	if lines[1] != "31364" {
-		t.Fatalf("GC_DOLT_PORT = %q, want %q", lines[1], "31364")
+		t.Fatalf("GC_BEADS_PORT = %q, want %q", lines[1], "31364")
 	}
 	if _, err := os.Stat(dir); err != nil {
 		t.Fatalf("runner should preserve working dir usability: %v", err)

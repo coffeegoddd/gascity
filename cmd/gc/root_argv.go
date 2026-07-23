@@ -29,7 +29,7 @@ func rootCommandOptionsForArgs(args []string) rootCommandOptions {
 // native-only and can never resolve to a pack binding.
 func rootCommandSkipsPackDiscovery(command string) bool {
 	switch command {
-	case "metrics", "git-credential", "dolt-state", "dolt-config", "bd-store-bridge":
+	case "metrics", "git-credential", "dolt-config", "bd-store-bridge":
 		return true
 	default:
 		return false

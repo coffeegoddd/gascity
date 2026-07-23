@@ -66,10 +66,10 @@ func TestPassthroughEnvPicksUpGCBeads(t *testing.T) {
 }
 
 func TestPassthroughEnvOmitsUnset(t *testing.T) {
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 	got := passthroughEnv()
-	if _, ok := got["GC_DOLT"]; ok {
-		t.Error("passthroughEnv() should omit empty GC_DOLT")
+	if _, ok := got["GC_BEADS_SKIP"]; ok {
+		t.Error("passthroughEnv() should omit empty GC_BEADS_SKIP")
 	}
 }
 
@@ -716,35 +716,35 @@ func TestMergeEnvAllNil(t *testing.T) {
 }
 
 func TestPassthroughEnvDoltConnectionVars(t *testing.T) {
-	t.Setenv("GC_DOLT_HOST", "dolt.gc.svc.cluster.local")
-	t.Setenv("GC_DOLT_PORT", "3307")
-	t.Setenv("GC_DOLT_USER", "agent")
-	t.Setenv("GC_DOLT_PASSWORD", "s3cret")
+	t.Setenv("GC_BEADS_HOST", "dolt.gc.svc.cluster.local")
+	t.Setenv("GC_BEADS_PORT", "3307")
+	t.Setenv("GC_BEADS_USER", "agent")
+	t.Setenv("GC_BEADS_PASSWORD", "s3cret")
 
 	got := passthroughEnv()
 
-	for _, key := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER", "GC_DOLT_PASSWORD"} {
+	for _, key := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER", "GC_BEADS_PASSWORD"} {
 		if _, ok := got[key]; !ok {
 			t.Errorf("passthroughEnv() missing %s", key)
 		}
 	}
-	if got["GC_DOLT_HOST"] != "dolt.gc.svc.cluster.local" {
-		t.Errorf("GC_DOLT_HOST = %q, want %q", got["GC_DOLT_HOST"], "dolt.gc.svc.cluster.local")
+	if got["GC_BEADS_HOST"] != "dolt.gc.svc.cluster.local" {
+		t.Errorf("GC_BEADS_HOST = %q, want %q", got["GC_BEADS_HOST"], "dolt.gc.svc.cluster.local")
 	}
-	if got["GC_DOLT_PORT"] != "3307" {
-		t.Errorf("GC_DOLT_PORT = %q, want %q", got["GC_DOLT_PORT"], "3307")
+	if got["GC_BEADS_PORT"] != "3307" {
+		t.Errorf("GC_BEADS_PORT = %q, want %q", got["GC_BEADS_PORT"], "3307")
 	}
 }
 
 func TestPassthroughEnvOmitsUnsetDoltVars(t *testing.T) {
 	// Ensure the vars are NOT set.
-	for _, key := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER", "GC_DOLT_PASSWORD"} {
+	for _, key := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER", "GC_BEADS_PASSWORD"} {
 		t.Setenv(key, "")
 	}
 
 	got := passthroughEnv()
 
-	for _, key := range []string{"GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER", "GC_DOLT_PASSWORD"} {
+	for _, key := range []string{"GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER", "GC_BEADS_PASSWORD"} {
 		if _, ok := got[key]; ok {
 			t.Errorf("passthroughEnv() should omit empty %s", key)
 		}
@@ -1953,7 +1953,7 @@ func TestResolveTemplateFPExtra_NotEmptyForPoolAgent(t *testing.T) {
 // restart and then fails with the flag error, an avoidable footgun.
 func TestDoStart_FlagValidationRunsBeforeDriftCheck(t *testing.T) {
 	t.Setenv("GC_HOME", t.TempDir())
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 
 	// Bootstrap a minimal city directory so requireBootstrappedCity
 	// returns successfully and execution reaches the flag check.
@@ -2001,4 +2001,54 @@ func TestDoStart_FlagValidationRunsBeforeDriftCheck(t *testing.T) {
 	if strings.Contains(stdout.String(), "Restarting supervisor") {
 		t.Errorf("supervisor restart attempted despite flag rejection:\n%s", stdout.String())
 	}
+}
+
+// TestBdProxiedServerStartError is the gc start half of the bd-capability guard:
+// a bd-managed dolt city must refuse to start against a bd that cannot run
+// proxied-server mode, while non-bd/doltlite/skip scopes and an absent bd (owned
+// by the hard-dependency check) pass through.
+func TestBdProxiedServerStartError(t *testing.T) {
+	orig := bdProxiedServerCapability
+	t.Cleanup(func() { bdProxiedServerCapability = orig })
+
+	bdCity := t.TempDir()
+	writeFile(t, filepath.Join(bdCity, "city.toml"), "[workspace]\nname = \"demo\"\n\n[beads]\nprovider = \"bd\"\n")
+	fileCity := t.TempDir()
+	writeFile(t, filepath.Join(fileCity, "city.toml"), "[workspace]\nname = \"demo\"\n\n[beads]\nprovider = \"file\"\n")
+
+	t.Run("proxied-incapable bd blocks a bd-managed city", func(t *testing.T) {
+		t.Setenv("GC_BEADS_SKIP", "")
+		bdProxiedServerCapability = func() (bool, bool) { return false, true }
+		if msg := bdProxiedServerStartError(bdCity); msg == "" {
+			t.Fatal("want non-empty error for a proxied-incapable bd on a bd-managed city")
+		}
+	})
+	t.Run("proxied-capable bd passes", func(t *testing.T) {
+		t.Setenv("GC_BEADS_SKIP", "")
+		bdProxiedServerCapability = func() (bool, bool) { return true, true }
+		if msg := bdProxiedServerStartError(bdCity); msg != "" {
+			t.Fatalf("want no error for a proxied-capable bd, got %q", msg)
+		}
+	})
+	t.Run("absent bd is left to the hard-dependency check", func(t *testing.T) {
+		t.Setenv("GC_BEADS_SKIP", "")
+		bdProxiedServerCapability = func() (bool, bool) { return false, false }
+		if msg := bdProxiedServerStartError(bdCity); msg != "" {
+			t.Fatalf("want no error when bd is absent, got %q", msg)
+		}
+	})
+	t.Run("file backend is not gated", func(t *testing.T) {
+		t.Setenv("GC_BEADS_SKIP", "")
+		bdProxiedServerCapability = func() (bool, bool) { return false, true }
+		if msg := bdProxiedServerStartError(fileCity); msg != "" {
+			t.Fatalf("want no error for a file-backed city, got %q", msg)
+		}
+	})
+	t.Run("GC_BEADS_SKIP bypasses the guard", func(t *testing.T) {
+		t.Setenv("GC_BEADS_SKIP", "skip")
+		bdProxiedServerCapability = func() (bool, bool) { return false, true }
+		if msg := bdProxiedServerStartError(bdCity); msg != "" {
+			t.Fatalf("want no error when GC_BEADS_SKIP is set, got %q", msg)
+		}
+	})
 }

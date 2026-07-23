@@ -929,8 +929,8 @@ func TestComputeWorkSet_RuntimeOnlySuspendUnderForeignCwd(t *testing.T) {
 
 func TestComputeWorkSet_ExplicitRigWorkQueryUsesRigPassword(t *testing.T) {
 	t.Setenv("GC_BEADS", "bd")
-	t.Setenv("GC_DOLT_USER", "")
-	t.Setenv("GC_DOLT_PASSWORD", "")
+	t.Setenv("GC_BEADS_USER", "")
+	t.Setenv("GC_BEADS_PASSWORD", "")
 	t.Setenv("BEADS_CREDENTIALS_FILE", "")
 
 	cityDir := t.TempDir()
@@ -945,12 +945,10 @@ func TestComputeWorkSet_ExplicitRigWorkQueryUsesRigPassword(t *testing.T) {
 		t.Fatal(err)
 	}
 	writeRigEndpointCanonicalConfig(t, rigDir, contract.ConfigState{
-		IssuePrefix:    "dm",
-		EndpointOrigin: contract.EndpointOriginExplicit,
-		EndpointStatus: contract.EndpointStatusVerified,
-		DoltHost:       "rig-db.example.com",
-		DoltPort:       "3308",
-		DoltUser:       "rig-user",
+		IssuePrefix: "dm",
+		DoltHost:    "rig-db.example.com",
+		DoltPort:    "3308",
+		DoltUser:    "rig-user",
 	})
 	if err := os.WriteFile(filepath.Join(rigDir, ".beads", ".env"), []byte("BEADS_DOLT_PASSWORD=rig-secret\n"), 0o600); err != nil {
 		t.Fatal(err)

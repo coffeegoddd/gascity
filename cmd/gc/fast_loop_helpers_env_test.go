@@ -22,7 +22,7 @@ import (
 
 func TestSanitizedBaseEnv_StripsGCPrefixed(t *testing.T) {
 	t.Setenv("GC_CITY_RUNTIME_DIR", "/pretend/real/city/.gc/runtime")
-	t.Setenv("GC_DOLT_STATE_FILE", "/pretend/real/city/.gc/runtime/packs/dolt/dolt-provider-state.json")
+	t.Setenv("GC_BEADS_STATE_FILE", "/pretend/real/city/.gc/runtime/packs/dolt/dolt-provider-state.json")
 	t.Setenv("GC_PACK_STATE_DIR", "/pretend/real/city/.gc/runtime/packs/dolt")
 
 	env := sanitizedBaseEnv()
@@ -175,25 +175,6 @@ func TestSanitizedBaseEnv_MatchesExactlyGCAndBEADSPrefixes(t *testing.T) {
 	}
 }
 
-func TestSanitizedBaseEnv_AddsManagedDoltTestControl(t *testing.T) {
-	env := sanitizedBaseEnv()
-	values := map[string]string{}
-	for _, kv := range env {
-		key, value, ok := strings.Cut(kv, "=")
-		if ok {
-			values[key] = value
-		}
-	}
-
-	if got := values[managedDoltTestModeEnv]; got != "1" {
-		t.Fatalf("%s = %q, want 1", managedDoltTestModeEnv, got)
-	}
-	if got := values[managedDoltTestParentPIDEnv]; got == "" {
-		t.Fatalf("%s missing from sanitizedBaseEnv", managedDoltTestParentPIDEnv)
-	}
-}
-
-func isSanitizedBaseEnvTestControl(kv string) bool {
-	return strings.HasPrefix(kv, managedDoltTestModeEnv+"=") ||
-		strings.HasPrefix(kv, managedDoltTestParentPIDEnv+"=")
+func isSanitizedBaseEnvTestControl(string) bool {
+	return false
 }

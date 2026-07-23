@@ -19,7 +19,6 @@ func TestConfigHasEndpointAuthority(t *testing.T) {
 		want bool
 	}{
 		{name: "empty", cfg: ConfigState{}, want: false},
-		{name: "origin only", cfg: ConfigState{EndpointOrigin: EndpointOriginManagedCity}, want: true},
 		{name: "host only", cfg: ConfigState{DoltHost: "db.example.com"}, want: true},
 		{name: "port only", cfg: ConfigState{DoltPort: "3307"}, want: true},
 		{name: "user only", cfg: ConfigState{DoltUser: "root"}, want: false},
@@ -33,38 +32,6 @@ func TestConfigHasEndpointAuthority(t *testing.T) {
 	}
 }
 
-func TestScopeHasEndpointAuthority(t *testing.T) {
-	fs := fsys.OSFS{}
-	scope := t.TempDir()
-	if ScopeHasEndpointAuthority(fs, scope) {
-		t.Fatal("ScopeHasEndpointAuthority(missing) = true, want false")
-	}
-	if err := fs.WriteFile(filepath.Join(scope, ".beads", "config.yaml"), []byte(`issue_prefix: gc
-`), 0o644); err == nil {
-		t.Fatal("write should fail without .beads dir")
-	}
-	if err := fs.MkdirAll(filepath.Join(scope, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := fs.WriteFile(filepath.Join(scope, ".beads", "config.yaml"), []byte(`issue_prefix: gc
-dolt.auto-start: false
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if ScopeHasEndpointAuthority(fs, scope) {
-		t.Fatal("ScopeHasEndpointAuthority(legacy-minimal) = true, want false")
-	}
-	if err := fs.WriteFile(filepath.Join(scope, ".beads", "config.yaml"), []byte(`issue_prefix: gc
-gc.endpoint_origin: managed_city
-dolt.auto-start: false
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if !ScopeHasEndpointAuthority(fs, scope) {
-		t.Fatal("ScopeHasEndpointAuthority(authoritative) = false, want true")
-	}
-}
-
 func TestIsLegacyMinimalEndpointConfig(t *testing.T) {
 	if !IsLegacyMinimalEndpointConfig(ConfigState{}) {
 		t.Fatal("IsLegacyMinimalEndpointConfig(empty) = false, want true")
@@ -73,8 +40,6 @@ func TestIsLegacyMinimalEndpointConfig(t *testing.T) {
 		name string
 		cfg  ConfigState
 	}{
-		{name: "origin", cfg: ConfigState{EndpointOrigin: EndpointOriginManagedCity}},
-		{name: "status", cfg: ConfigState{EndpointStatus: EndpointStatusVerified}},
 		{name: "host", cfg: ConfigState{DoltHost: "db.example.com"}},
 		{name: "port", cfg: ConfigState{DoltPort: "3307"}},
 		{name: "user", cfg: ConfigState{DoltUser: "root"}},
@@ -84,57 +49,6 @@ func TestIsLegacyMinimalEndpointConfig(t *testing.T) {
 				t.Fatalf("IsLegacyMinimalEndpointConfig(%s) = true, want false", tc.name)
 			}
 		})
-	}
-}
-
-func TestEnsureCanonicalConfigCreatesManagedShape(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-
-	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
-	})
-	if err != nil {
-		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
-	}
-	if !changed {
-		t.Fatal("EnsureCanonicalConfig() should report changes for new file")
-	}
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, needle := range []string{
-		"issue_prefix: gc",
-		"issue-prefix: gc",
-		"dolt.auto-start: false",
-		"export.auto: false",
-		"backup.enabled: false",
-		"dolt:",
-		"disable-event-flush: true",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-	} {
-		if !strings.Contains(text, needle) {
-			t.Fatalf("config missing %q:\n%s", needle, text)
-		}
-	}
-	dolt, ok, err := ReadDoltConfig(fs, path)
-	if err != nil {
-		t.Fatalf("ReadDoltConfig() error = %v", err)
-	}
-	if !ok || dolt.DisableEventFlush == nil || !*dolt.DisableEventFlush {
-		t.Fatalf("ReadDoltConfig() = (%+v, %v), want disable-event-flush true", dolt, ok)
-	}
-	for _, forbidden := range []string{"dolt.host:", "dolt.port:", "dolt.user:"} {
-		if strings.Contains(text, forbidden) {
-			t.Fatalf("config should not contain %q:\n%s", forbidden, text)
-		}
 	}
 }
 
@@ -156,9 +70,7 @@ func TestEnsureCanonicalConfigPreservesUnknownKeysAndScrubsDeprecatedOnes(t *tes
 	}
 
 	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
+		IssuePrefix: "gc",
 	})
 	if err != nil {
 		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
@@ -185,68 +97,6 @@ func TestEnsureCanonicalConfigPreservesUnknownKeysAndScrubsDeprecatedOnes(t *tes
 	}
 }
 
-func TestEnsureCanonicalConfigCollapsesDuplicateManagedKeys(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	input := strings.Join([]string{
-		"issue_prefix: old",
-		"issue_prefix: stale",
-		"issue-prefix: old",
-		"issue-prefix: stale",
-		"gc.endpoint_origin: explicit",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: unverified",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: true",
-		"dolt.auto-start: true",
-		"",
-	}, "\n")
-	if err := fs.WriteFile(path, []byte(input), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
-	})
-	if err != nil {
-		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
-	}
-	if !changed {
-		t.Fatal("EnsureCanonicalConfig() should report duplicate cleanup changes")
-	}
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, needle := range []string{
-		"issue_prefix: gc",
-		"issue-prefix: gc",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		"dolt.auto-start: false",
-	} {
-		if count := countLineOccurrences(text, needle); count != 1 {
-			t.Fatalf("config should contain exactly one %q, found %d:%c%s", needle, count, 10, text)
-		}
-	}
-	for _, forbidden := range []string{
-		"issue_prefix: stale",
-		"issue-prefix: stale",
-		"gc.endpoint_origin: explicit",
-		"gc.endpoint_status: unverified",
-		"dolt.auto-start: true",
-	} {
-		if strings.Contains(text, forbidden) {
-			t.Fatalf("config should scrub stale duplicate %q:%c%s", forbidden, 10, text)
-		}
-	}
-}
-
 func TestEnsureCanonicalConfigForcesAutoExportOff(t *testing.T) {
 	// bd's export.auto defaults to true and triggers a full-file import-then-export
 	// cycle on every write. Managed cities never consume issues.jsonl (Dolt is the
@@ -267,9 +117,7 @@ func TestEnsureCanonicalConfigForcesAutoExportOff(t *testing.T) {
 		}
 
 		if _, err := EnsureCanonicalConfig(fs, path, ConfigState{
-			IssuePrefix:    "gc",
-			EndpointOrigin: EndpointOriginManagedCity,
-			EndpointStatus: EndpointStatusVerified,
+			IssuePrefix: "gc",
 		}); err != nil {
 			t.Fatalf("EnsureCanonicalConfig() error = %v", err)
 		}
@@ -297,9 +145,7 @@ func TestEnsureCanonicalConfigForcesAutoExportOff(t *testing.T) {
 		}
 
 		if _, err := EnsureCanonicalConfig(fs, path, ConfigState{
-			IssuePrefix:    "gc",
-			EndpointOrigin: EndpointOriginManagedCity,
-			EndpointStatus: EndpointStatusVerified,
+			IssuePrefix: "gc",
 		}); err != nil {
 			t.Fatalf("EnsureCanonicalConfig() error = %v", err)
 		}
@@ -340,9 +186,7 @@ func TestEnsureCanonicalConfigForcesAutoBackupOff(t *testing.T) {
 		}
 
 		if _, err := EnsureCanonicalConfig(fs, path, ConfigState{
-			IssuePrefix:    "gc",
-			EndpointOrigin: EndpointOriginManagedCity,
-			EndpointStatus: EndpointStatusVerified,
+			IssuePrefix: "gc",
 		}); err != nil {
 			t.Fatalf("EnsureCanonicalConfig() error = %v", err)
 		}
@@ -370,9 +214,7 @@ func TestEnsureCanonicalConfigForcesAutoBackupOff(t *testing.T) {
 		}
 
 		if _, err := EnsureCanonicalConfig(fs, path, ConfigState{
-			IssuePrefix:    "gc",
-			EndpointOrigin: EndpointOriginManagedCity,
-			EndpointStatus: EndpointStatusVerified,
+			IssuePrefix: "gc",
 		}); err != nil {
 			t.Fatalf("EnsureCanonicalConfig() error = %v", err)
 		}
@@ -391,53 +233,6 @@ func TestEnsureCanonicalConfigForcesAutoBackupOff(t *testing.T) {
 	})
 }
 
-func TestEnsureCanonicalConfigPreservesDoltDisableEventFlushOptOut(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	input := strings.Join([]string{
-		"issue-prefix: gc",
-		"dolt:",
-		"  disable-event-flush: false",
-		"",
-	}, "\n")
-	if err := fs.WriteFile(path, []byte(input), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
-	})
-	if err != nil {
-		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
-	}
-	if !changed {
-		t.Fatal("EnsureCanonicalConfig() should report changes for endpoint normalization")
-	}
-
-	dolt, ok, err := ReadDoltConfig(fs, path)
-	if err != nil {
-		t.Fatalf("ReadDoltConfig() error = %v", err)
-	}
-	if !ok || dolt.DisableEventFlush == nil || *dolt.DisableEventFlush {
-		t.Fatalf("ReadDoltConfig() = (%+v, %v), want explicit disable-event-flush false", dolt, ok)
-	}
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	if !strings.Contains(text, "dolt:\n  disable-event-flush: false") {
-		t.Fatalf("config should preserve nested Dolt opt-out:\n%s", text)
-	}
-	if strings.Contains(text, "dolt.disable-event-flush") {
-		t.Fatalf("config should not write flat Dolt telemetry key:\n%s", text)
-	}
-}
-
 func TestEnsureCanonicalConfigCanonicalizesFlatDoltDisableEventFlush(t *testing.T) {
 	fs := fsys.OSFS{}
 	dir := t.TempDir()
@@ -452,9 +247,7 @@ func TestEnsureCanonicalConfigCanonicalizesFlatDoltDisableEventFlush(t *testing.
 	}
 
 	if _, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
+		IssuePrefix: "gc",
 	}); err != nil {
 		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
 	}
@@ -472,101 +265,12 @@ func TestEnsureCanonicalConfigCanonicalizesFlatDoltDisableEventFlush(t *testing.
 	}
 }
 
-func TestEnsureCanonicalConfigFallbackPreservesFlatDoltDisableEventFlushOptOutInExistingDoltBlock(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	input := strings.Join([]string{
-		"issue-prefix: gc",
-		"dolt:",
-		"  host: 127.0.0.1",
-		"dolt.disable-event-flush: false",
-		": not yaml",
-		"",
-	}, "\n")
-	if err := fs.WriteFile(path, []byte(input), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
-	})
-	if err != nil {
-		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
-	}
-	if !changed {
-		t.Fatal("EnsureCanonicalConfig() should report changes")
-	}
-
-	dolt, ok, err := ReadDoltConfig(fs, path)
-	if err != nil {
-		t.Fatalf("ReadDoltConfig() error = %v", err)
-	}
-	if !ok || dolt.DisableEventFlush == nil || *dolt.DisableEventFlush {
-		t.Fatalf("ReadDoltConfig() = (%+v, %v), want explicit disable-event-flush false", dolt, ok)
-	}
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	if !strings.Contains(text, "dolt:\n  host: 127.0.0.1\n  disable-event-flush: false") {
-		t.Fatalf("config should insert nested Dolt opt-out into existing block:\n%s", text)
-	}
-	if strings.Contains(text, "dolt.disable-event-flush") {
-		t.Fatalf("config should scrub flat Dolt telemetry setting:\n%s", text)
-	}
-}
-
-func TestEnsureCanonicalConfigWritesExternalFields(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-
-	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "fe",
-		EndpointOrigin: EndpointOriginExplicit,
-		EndpointStatus: EndpointStatusUnverified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "3307",
-		DoltUser:       "agent",
-	})
-	if err != nil {
-		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
-	}
-	if !changed {
-		t.Fatal("EnsureCanonicalConfig() should report changes")
-	}
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, needle := range []string{
-		"gc.endpoint_origin: explicit",
-		"gc.endpoint_status: unverified",
-		"dolt.host: db.example.com",
-		"dolt.port: 3307",
-		"dolt.user: agent",
-	} {
-		if !strings.Contains(text, needle) {
-			t.Fatalf("config missing %q:\n%s", needle, text)
-		}
-	}
-}
-
 func TestEnsureCanonicalConfigIsIdempotent(t *testing.T) {
 	fs := fsys.OSFS{}
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.yaml")
 	state := ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
+		IssuePrefix: "gc",
 	}
 
 	changed, err := EnsureCanonicalConfig(fs, path, state)
@@ -583,82 +287,6 @@ func TestEnsureCanonicalConfigIsIdempotent(t *testing.T) {
 	}
 	if changed {
 		t.Fatal("second EnsureCanonicalConfig() should be idempotent")
-	}
-}
-
-// TestEnsureCanonicalConfigRepairsGluedSyncRemoteLine guards against the
-// ga-um7 reproducer: `bd init` against a git repo with a remote can leave
-// `.beads/config.yaml` with the `sync.remote:` line lacking a trailing
-// newline, so the next emitted key gets glued onto its value. The next
-// EnsureCanonicalConfig call must restructure the file into valid YAML
-// rather than silently passing the corrupt line through.
-func TestEnsureCanonicalConfigRepairsGluedSyncRemoteLine(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	input := strings.Join([]string{
-		"issue_prefix: si",
-		"issue-prefix: si",
-		"dolt.auto-start: false",
-		"export.auto: false",
-		"gc.endpoint_origin: inherited_city",
-		"gc.endpoint_status: verified",
-		"",
-		`sync.remote: "git+ssh://git@example.com/foo/service-inventory.git"  types.custom: molecule,convoy,message,event,gate,merge-request,agent,role,rig,session,spec,convergence,step`,
-		"types.custom: molecule,convoy,message,event,gate,merge-request,agent,role,rig,session,spec,convergence,step",
-		"",
-	}, "\n")
-	if err := fs.WriteFile(path, []byte(input), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "si",
-		EndpointOrigin: EndpointOriginInheritedCity,
-		EndpointStatus: EndpointStatusVerified,
-	})
-	if err != nil {
-		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
-	}
-	if !changed {
-		t.Fatal("EnsureCanonicalConfig() should report changes when repairing glued line")
-	}
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-
-	// The repaired file must parse as YAML.
-	if _, err := readConfigDoc(fs, path); err != nil {
-		t.Fatalf("repaired config must parse as YAML, got error %v\n%s", err, text)
-	}
-
-	// sync.remote line must be a standalone key/value, not glued to anything.
-	if !strings.Contains(text, `sync.remote: "git+ssh://git@example.com/foo/service-inventory.git"`+"\n") &&
-		!strings.Contains(text, "sync.remote: git+ssh://git@example.com/foo/service-inventory.git\n") {
-		t.Fatalf("sync.remote line must be standalone, got:\n%s", text)
-	}
-	if strings.Contains(text, `"types.custom`) {
-		t.Fatalf("types.custom must not be glued to a quoted value:\n%s", text)
-	}
-
-	// types.custom must appear at most once.
-	if got := countLineOccurrences(text, "types.custom: molecule,convoy,message,event,gate,merge-request,agent,role,rig,session,spec,convergence,step"); got != 1 {
-		t.Fatalf("types.custom should appear exactly once, found %d:\n%s", got, text)
-	}
-
-	changed, err = EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "si",
-		EndpointOrigin: EndpointOriginInheritedCity,
-		EndpointStatus: EndpointStatusVerified,
-	})
-	if err != nil {
-		t.Fatalf("second EnsureCanonicalConfig() error = %v", err)
-	}
-	if changed {
-		t.Fatalf("second EnsureCanonicalConfig() should be idempotent:\n%s", text)
 	}
 }
 
@@ -683,9 +311,7 @@ func TestEnsureCanonicalConfigDedupsUnmanagedKeysOnMalformedRepair(t *testing.T)
 	}
 
 	if _, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
+		IssuePrefix: "gc",
 	}); err != nil {
 		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
 	}
@@ -718,9 +344,7 @@ func TestEnsureCanonicalConfigFallbackPreservesEmptyKeyMalformedLines(t *testing
 	}
 
 	if _, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
+		IssuePrefix: "gc",
 	}); err != nil {
 		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
 	}
@@ -734,119 +358,6 @@ func TestEnsureCanonicalConfigFallbackPreservesEmptyKeyMalformedLines(t *testing
 		if got := countLineOccurrences(text, needle); got != 1 {
 			t.Fatalf("expected malformed line %q to be preserved once, found %d:\n%s", needle, got, text)
 		}
-	}
-}
-
-func TestSplitGluedConfigLine(t *testing.T) {
-	cases := []struct {
-		name string
-		line string
-		want []string
-	}{
-		{
-			name: "adjacent key",
-			line: `sync.remote: "git+ssh://git@example.com/foo.git"types.custom: molecule`,
-			want: []string{
-				`sync.remote: "git+ssh://git@example.com/foo.git"`,
-				"types.custom: molecule",
-			},
-		},
-		{
-			name: "horizontal whitespace before glued key",
-			line: `sync.remote: "git+ssh://git@example.com/foo.git"  types.custom: molecule`,
-			want: []string{
-				`sync.remote: "git+ssh://git@example.com/foo.git"`,
-				"types.custom: molecule",
-			},
-		},
-		{
-			name: "recursive chain",
-			line: `sync.remote: "git+ssh://git@example.com/foo.git"types.custom: "molecule"gc.endpoint_origin: managed_city`,
-			want: []string{
-				`sync.remote: "git+ssh://git@example.com/foo.git"`,
-				`types.custom: "molecule"`,
-				"gc.endpoint_origin: managed_city",
-			},
-		},
-		{
-			name: "comment line",
-			line: `# sync.remote: "git+ssh://git@example.com/foo.git"types.custom: molecule`,
-			want: []string{`# sync.remote: "git+ssh://git@example.com/foo.git"types.custom: molecule`},
-		},
-		{
-			name: "indented line",
-			line: `  sync.remote: "git+ssh://git@example.com/foo.git"types.custom: molecule`,
-			want: []string{`  sync.remote: "git+ssh://git@example.com/foo.git"types.custom: molecule`},
-		},
-		{
-			name: "unbalanced quote",
-			line: `sync.remote: "git+ssh://git@example.com/foo.gittypes.custom: molecule`,
-			want: []string{`sync.remote: "git+ssh://git@example.com/foo.gittypes.custom: molecule`},
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := splitGluedConfigLine(tc.line)
-			if len(got) != len(tc.want) {
-				t.Fatalf("splitGluedConfigLine() = %#v, want %#v", got, tc.want)
-			}
-			for i := range got {
-				if got[i] != tc.want[i] {
-					t.Fatalf("splitGluedConfigLine()[%d] = %q, want %q; all got %#v", i, got[i], tc.want[i], got)
-				}
-			}
-		})
-	}
-}
-
-func TestEnsureCanonicalConfigFallsBackToLineRewriteOnMalformedYAML(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	input := strings.Join([]string{
-		"issue-prefix: stale",
-		"dolt.auto-start: true",
-		"dolt_server_port: 3307",
-		"dolt.password: should-not-stay",
-		": not yaml",
-		"",
-	}, "\n")
-	if err := fs.WriteFile(path, []byte(input), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginManagedCity,
-		EndpointStatus: EndpointStatusVerified,
-	})
-	if err != nil {
-		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
-	}
-	if !changed {
-		t.Fatal("EnsureCanonicalConfig() should report changes for malformed YAML")
-	}
-
-	data, err := fs.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	text := string(data)
-	for _, needle := range []string{
-		"issue_prefix: gc",
-		"issue-prefix: gc",
-		"dolt.auto-start: false",
-		"gc.endpoint_origin: managed_city",
-		"gc.endpoint_status: verified",
-		": not yaml",
-	} {
-		if !strings.Contains(text, needle) {
-			t.Fatalf("config missing %q after malformed fallback:\n%s", needle, text)
-		}
-	}
-	if strings.Contains(text, "dolt_server_port") {
-		t.Fatalf("config should scrub deprecated port key after malformed fallback:\n%s", text)
 	}
 }
 
@@ -866,11 +377,9 @@ func TestEnsureCanonicalConfigFallbackIgnoresNestedManagedKeys(t *testing.T) {
 	}
 
 	changed, err := EnsureCanonicalConfig(fs, path, ConfigState{
-		IssuePrefix:    "gc",
-		EndpointOrigin: EndpointOriginExplicit,
-		EndpointStatus: EndpointStatusUnverified,
-		DoltHost:       "db.example.com",
-		DoltPort:       "4406",
+		IssuePrefix: "gc",
+		DoltHost:    "db.example.com",
+		DoltPort:    "4406",
 	})
 	if err != nil {
 		t.Fatalf("EnsureCanonicalConfig() error = %v", err)
@@ -1086,113 +595,6 @@ func TestReadExportAutoOnMissingFileReturnsAbsent(t *testing.T) {
 	}
 	if gotValue {
 		t.Errorf("ReadExportAuto() value = true, want false for missing file")
-	}
-}
-
-func TestReadDoltConfig(t *testing.T) {
-	tests := []struct {
-		name      string
-		yaml      string
-		wantValue bool
-		wantOK    bool
-	}{
-		{
-			name:      "nested explicit false",
-			yaml:      "issue_prefix: zz\ndolt:\n  disable-event-flush: false\n",
-			wantValue: false,
-			wantOK:    true,
-		},
-		{
-			name:      "nested explicit true",
-			yaml:      "issue_prefix: zz\ndolt:\n  disable-event-flush: true\n",
-			wantValue: true,
-			wantOK:    true,
-		},
-		{
-			name:      "flat compatibility false",
-			yaml:      "issue_prefix: zz\ndolt.disable-event-flush: false\n",
-			wantValue: false,
-			wantOK:    true,
-		},
-		{
-			name:      "absent",
-			yaml:      "issue_prefix: zz\n",
-			wantValue: true,
-			wantOK:    false,
-		},
-		{
-			name:      "garbage value returns absent",
-			yaml:      "issue_prefix: zz\ndolt:\n  disable-event-flush: maybe\n",
-			wantValue: true,
-			wantOK:    false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			fs := fsys.OSFS{}
-			dir := t.TempDir()
-			path := filepath.Join(dir, "config.yaml")
-			if err := fs.WriteFile(path, []byte(tt.yaml), 0o644); err != nil {
-				t.Fatal(err)
-			}
-
-			got, _, err := ReadDoltConfig(fs, path)
-			if err != nil {
-				t.Fatalf("ReadDoltConfig() error = %v", err)
-			}
-			gotOK := got.DisableEventFlush != nil
-			if gotOK != tt.wantOK {
-				t.Errorf("ReadDoltConfig().DisableEventFlush present = %v, want %v", gotOK, tt.wantOK)
-			}
-			if got.DisableEventFlushEnabled() != tt.wantValue {
-				t.Errorf("ReadDoltConfig().DisableEventFlushEnabled() = %v, want %v", got.DisableEventFlushEnabled(), tt.wantValue)
-			}
-		})
-	}
-}
-
-func TestReadDoltConfigFallsBackToNestedDisableEventFlushOnMalformedYAML(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "config.yaml")
-	input := strings.Join([]string{
-		"issue_prefix: zz",
-		"dolt:",
-		"  disable-event-flush: false",
-		": not yaml",
-		"",
-	}, "\n")
-	if err := fs.WriteFile(path, []byte(input), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	got, ok, err := ReadDoltConfig(fs, path)
-	if err != nil {
-		t.Fatalf("ReadDoltConfig() error = %v", err)
-	}
-	if !ok {
-		t.Fatal("ReadDoltConfig() ok = false, want true")
-	}
-	if got.DisableEventFlush == nil || *got.DisableEventFlush {
-		t.Fatalf("ReadDoltConfig().DisableEventFlush = %v, want explicit false", got.DisableEventFlush)
-	}
-}
-
-func TestReadDoltConfigDefaultsDisableEventFlushOnMissingFile(t *testing.T) {
-	fs := fsys.OSFS{}
-	dir := t.TempDir()
-	path := filepath.Join(dir, "missing.yaml")
-
-	got, ok, err := ReadDoltConfig(fs, path)
-	if err != nil {
-		t.Fatalf("ReadDoltConfig() error = %v, want nil for missing file", err)
-	}
-	if ok {
-		t.Errorf("ReadDoltConfig() ok = true, want false for missing file")
-	}
-	if !got.DisableEventFlushEnabled() {
-		t.Errorf("ReadDoltConfig().DisableEventFlushEnabled() = false, want default true")
 	}
 }
 

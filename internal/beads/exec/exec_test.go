@@ -1314,7 +1314,7 @@ func TestRunSanitizesAmbientLegacyAndStoreTargetEnv(t *testing.T) {
 	outFile := filepath.Join(dir, "env.txt")
 
 	t.Setenv("BEADS_DIR", "/ambient/.beads")
-	t.Setenv("GC_DOLT_HOST", "ambient-dolt")
+	t.Setenv("GC_BEADS_HOST", "ambient-dolt")
 	t.Setenv("GC_STORE_ROOT", "/ambient/root")
 	t.Setenv("GC_STORE_SCOPE", "city")
 	t.Setenv("GC_BEADS_PREFIX", "ambient")
@@ -1323,8 +1323,8 @@ func TestRunSanitizesAmbientLegacyAndStoreTargetEnv(t *testing.T) {
 	script := writeScript(t, dir, `
 case "$1" in
   create)
-    printf 'BEADS_DIR=%s\nGC_DOLT_HOST=%s\nGC_STORE_ROOT=%s\nGC_STORE_SCOPE=%s\nGC_BEADS_PREFIX=%s\nGC_PROVIDER=%s\nGC_RIG=%s\nGC_RIG_ROOT=%s\n' \
-      "${BEADS_DIR:-}" "${GC_DOLT_HOST:-}" "${GC_STORE_ROOT:-}" "${GC_STORE_SCOPE:-}" "${GC_BEADS_PREFIX:-}" "${GC_PROVIDER:-}" "${GC_RIG:-}" "${GC_RIG_ROOT:-}" > "`+outFile+`"
+    printf 'BEADS_DIR=%s\nGC_BEADS_HOST=%s\nGC_STORE_ROOT=%s\nGC_STORE_SCOPE=%s\nGC_BEADS_PREFIX=%s\nGC_PROVIDER=%s\nGC_RIG=%s\nGC_RIG_ROOT=%s\n' \
+      "${BEADS_DIR:-}" "${GC_BEADS_HOST:-}" "${GC_STORE_ROOT:-}" "${GC_STORE_SCOPE:-}" "${GC_BEADS_PREFIX:-}" "${GC_PROVIDER:-}" "${GC_RIG:-}" "${GC_RIG_ROOT:-}" > "`+outFile+`"
     cat >/dev/null
     echo '{"id":"EX-1","title":"test","status":"open","type":"task","created_at":"2026-02-27T10:00:00Z"}'
     ;;
@@ -1352,7 +1352,7 @@ esac
 	got := string(data)
 	for _, want := range []string{
 		"BEADS_DIR=\n",
-		"GC_DOLT_HOST=\n",
+		"GC_BEADS_HOST=\n",
 		"GC_STORE_ROOT=/scope/root\n",
 		"GC_STORE_SCOPE=rig\n",
 		"GC_BEADS_PREFIX=fe\n",

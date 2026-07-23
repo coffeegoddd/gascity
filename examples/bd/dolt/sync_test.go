@@ -15,8 +15,8 @@ import (
 const syncScript = "commands/sync/run.sh"
 
 // syncFilteredEnv returns os.Environ() with every env var the sync script reads
-// stripped, so a test's GC_DOLT_* config is exactly what the test sets and never
-// what the developer/CI happens to export. GC_DOLT_SYNC_PUSH_TIMEOUT_SECS is in
+// stripped, so a test's GC_BEADS_* config is exactly what the test sets and never
+// what the developer/CI happens to export. GC_BEADS_SYNC_PUSH_TIMEOUT_SECS is in
 // the set because its validator (run.sh) now runs unconditionally on every
 // invocation and exits 2 on any invalid value — an ambient invalid value would
 // otherwise flip success-path tests red and make the refspec-failure tests pass
@@ -25,9 +25,9 @@ const syncScript = "commands/sync/run.sh"
 // per call site.
 func syncFilteredEnv() []string {
 	return filteredEnv(
-		"PATH", "GC_DOLT_HOST", "GC_DOLT_PORT", "GC_DOLT_USER",
-		"GC_DOLT_PASSWORD", "GC_DOLT_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
-		"GC_DOLT_SYNC_PUSH_TIMEOUT_SECS", "GC_DOLT_SYNC_FETCH_TIMEOUT_SECS",
+		"PATH", "GC_BEADS_HOST", "GC_BEADS_PORT", "GC_BEADS_USER",
+		"GC_BEADS_PASSWORD", "GC_BEADS_DATA_DIR", "GC_CITY_PATH", "GC_PACK_DIR",
+		"GC_BEADS_SYNC_PUSH_TIMEOUT_SECS", "GC_BEADS_SYNC_FETCH_TIMEOUT_SECS",
 	)
 }
 
@@ -372,10 +372,10 @@ func TestSyncUsesLiveSQLWhenManagedServerReachable(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -437,10 +437,10 @@ func TestSyncForceUsesSetUpstreamWithLiveSQL(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -480,10 +480,10 @@ func TestSyncForceUsesResolvedActiveBranchWithLiveSQL(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -523,11 +523,11 @@ func TestSyncForceUsesRefspecEnvOverrideWithLiveSQL(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
-		"GC_DOLT_REFSPEC_APP=main:gascity-3",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
+		"GC_BEADS_REFSPEC_APP=main:gascity-3",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -567,10 +567,10 @@ func TestSyncDryRunShowsResolvedActiveBranch(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -608,10 +608,10 @@ func TestSyncSkipsDatabasesWithNoSyncMarker(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -648,10 +648,10 @@ func TestSyncReportsLiveSQLRemoteLookupFailure(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -701,10 +701,10 @@ func TestSyncCLIFallbackPushesOriginMain(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_PORT=1",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_PORT=1",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -746,10 +746,10 @@ func TestSyncPushesActiveBranchWhenSet(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -769,7 +769,7 @@ func TestSyncPushesActiveBranchWhenSet(t *testing.T) {
 	}
 }
 
-// TestSyncRefspecEnvOverride verifies that GC_DOLT_REFSPEC_<DB> overrides the
+// TestSyncRefspecEnvOverride verifies that GC_BEADS_REFSPEC_<DB> overrides the
 // active-branch default with a <local>:<remote> mapping.
 func TestSyncRefspecEnvOverride(t *testing.T) {
 	root := repoRoot(t)
@@ -795,11 +795,11 @@ func TestSyncRefspecEnvOverride(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
-		"GC_DOLT_REFSPEC_APP=main:gascity-3",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
+		"GC_BEADS_REFSPEC_APP=main:gascity-3",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -818,7 +818,7 @@ func TestSyncRefspecEnvOverride(t *testing.T) {
 
 // TestSyncRefspecEnvOverrideHyphenInDBName verifies that DB names containing
 // hyphens are correctly translated to env-var keys (hyphens -> underscores,
-// lowercase -> uppercase). The DB "my-app" expects GC_DOLT_REFSPEC_MY_APP.
+// lowercase -> uppercase). The DB "my-app" expects GC_BEADS_REFSPEC_MY_APP.
 func TestSyncRefspecEnvOverrideHyphenInDBName(t *testing.T) {
 	root := repoRoot(t)
 	script := filepath.Join(root, syncScript)
@@ -841,11 +841,11 @@ func TestSyncRefspecEnvOverrideHyphenInDBName(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
-		"GC_DOLT_REFSPEC_MY_APP=feat-x:trunk",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
+		"GC_BEADS_REFSPEC_MY_APP=feat-x:trunk",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -893,10 +893,10 @@ func TestSyncCLIFallbackReadsRepoStateForActiveBranch(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_PORT=1",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_PORT=1",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -946,10 +946,10 @@ func TestSyncCLIFallbackIgnoresNestedRepoStateHead(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_PORT=1",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_PORT=1",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -970,7 +970,7 @@ func TestSyncCLIFallbackIgnoresNestedRepoStateHead(t *testing.T) {
 }
 
 // TestSyncRefspecInvalidOverrideFails ensures that a malformed
-// GC_DOLT_REFSPEC_<DB> value (e.g. with shell-unsafe characters) causes sync
+// GC_BEADS_REFSPEC_<DB> value (e.g. with shell-unsafe characters) causes sync
 // to fail loudly rather than silently fall back.
 func TestSyncRefspecInvalidOverrideFails(t *testing.T) {
 	root := repoRoot(t)
@@ -994,11 +994,11 @@ func TestSyncRefspecInvalidOverrideFails(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
-		"GC_DOLT_REFSPEC_APP=main:bad branch", // space is invalid in branch name
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
+		"GC_BEADS_REFSPEC_APP=main:bad branch", // space is invalid in branch name
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1031,11 +1031,11 @@ func TestSyncRefspecOptionShapedOverrideFails(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
-		"GC_DOLT_REFSPEC_APP=--force",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
+		"GC_BEADS_REFSPEC_APP=--force",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1068,10 +1068,10 @@ func TestSyncWarnsWhenActiveBranchFallbacksToMain(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -1115,10 +1115,10 @@ func TestSyncSQLPushTimeoutReportsTimeout(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1127,7 +1127,7 @@ func TestSyncSQLPushTimeoutReportsTimeout(t *testing.T) {
 	if !strings.Contains(string(out), "TIMEOUT after 1800s") {
 		t.Fatalf("expected TIMEOUT message naming the 1800s ceiling, got:\n%s", out)
 	}
-	if !strings.Contains(string(out), "GC_DOLT_SYNC_PUSH_TIMEOUT_SECS") {
+	if !strings.Contains(string(out), "GC_BEADS_SYNC_PUSH_TIMEOUT_SECS") {
 		t.Fatalf("expected TIMEOUT message to name the env var, got:\n%s", out)
 	}
 	if strings.Contains(string(out), "ERROR: push failed (exit") {
@@ -1159,10 +1159,10 @@ func TestSyncSQLPushReportsExitCode(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1201,10 +1201,10 @@ func TestSyncSQLPushReplaysStderr(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1246,10 +1246,10 @@ func TestSyncSQLPushReplaysStderrFinalLineWithoutTrailingNewline(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1290,10 +1290,10 @@ func TestSyncSQLPushEmptyStderrNoBlankLines(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1331,11 +1331,11 @@ func TestSyncSQLPushTimeoutHonorsConfiguredCeiling(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
-		"GC_DOLT_SYNC_PUSH_TIMEOUT_SECS=3600",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
+		"GC_BEADS_SYNC_PUSH_TIMEOUT_SECS=3600",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1380,10 +1380,10 @@ func TestSyncSQLPushReplayDoesNotLeakPassword(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD="+secret,
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD="+secret,
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1433,10 +1433,10 @@ func TestSyncSQLPushTimeoutReplaysNoMechanismMarker(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1479,10 +1479,10 @@ func TestSyncSQLPushTempFileFailureDegradesPerDb(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1494,7 +1494,7 @@ func TestSyncSQLPushTempFileFailureDegradesPerDb(t *testing.T) {
 }
 
 // assertSyncRejectsInvalidPushTimeout drives one invalid-timeout scenario: it
-// runs sync with GC_DOLT_SYNC_PUSH_TIMEOUT_SECS=bad and asserts the script
+// runs sync with GC_BEADS_SYNC_PUSH_TIMEOUT_SECS=bad and asserts the script
 // aborts with exit 2 and a stderr diagnostic before any database is touched —
 // dolt is never invoked (R5 input validation). Parameterized by the bad value
 // so each scenario keeps its own standalone test func (no table-driven block).
@@ -1521,11 +1521,11 @@ func assertSyncRejectsInvalidPushTimeout(t *testing.T, bad string) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		fmt.Sprintf("GC_DOLT_PORT=%d", port),
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
-		"GC_DOLT_SYNC_PUSH_TIMEOUT_SECS="+bad,
+		"GC_BEADS_DATA_DIR="+dataDir,
+		fmt.Sprintf("GC_BEADS_PORT=%d", port),
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
+		"GC_BEADS_SYNC_PUSH_TIMEOUT_SECS="+bad,
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1535,7 +1535,7 @@ func assertSyncRejectsInvalidPushTimeout(t *testing.T, bad string) {
 	if !errors.As(err, &ee) || ee.ExitCode() != 2 {
 		t.Fatalf("expected exit code 2 for invalid timeout %q, got %v:\n%s", bad, err, out)
 	}
-	if !strings.Contains(string(out), "invalid GC_DOLT_SYNC_PUSH_TIMEOUT_SECS") {
+	if !strings.Contains(string(out), "invalid GC_BEADS_SYNC_PUSH_TIMEOUT_SECS") {
 		t.Fatalf("expected validation diagnostic for %q, got:\n%s", bad, out)
 	}
 	if data, rerr := os.ReadFile(doltLog); rerr == nil && strings.TrimSpace(string(data)) != "" {
@@ -1544,19 +1544,19 @@ func assertSyncRejectsInvalidPushTimeout(t *testing.T, bad string) {
 }
 
 // TestSyncRejectsNonNumericPushTimeout verifies a non-numeric
-// GC_DOLT_SYNC_PUSH_TIMEOUT_SECS is rejected with exit 2 (R5 input validation).
+// GC_BEADS_SYNC_PUSH_TIMEOUT_SECS is rejected with exit 2 (R5 input validation).
 func TestSyncRejectsNonNumericPushTimeout(t *testing.T) {
 	assertSyncRejectsInvalidPushTimeout(t, "abc")
 }
 
-// TestSyncRejectsZeroPushTimeout verifies a zero GC_DOLT_SYNC_PUSH_TIMEOUT_SECS
+// TestSyncRejectsZeroPushTimeout verifies a zero GC_BEADS_SYNC_PUSH_TIMEOUT_SECS
 // is rejected with exit 2 — a 0s ceiling would SIGKILL the push immediately and
 // emit a misleading TIMEOUT message (R5 input validation).
 func TestSyncRejectsZeroPushTimeout(t *testing.T) {
 	assertSyncRejectsInvalidPushTimeout(t, "0")
 }
 
-// TestSyncRejectsEmptyPushTimeout verifies an empty GC_DOLT_SYNC_PUSH_TIMEOUT_SECS
+// TestSyncRejectsEmptyPushTimeout verifies an empty GC_BEADS_SYNC_PUSH_TIMEOUT_SECS
 // is rejected with exit 2 (R5 input validation).
 func TestSyncRejectsEmptyPushTimeout(t *testing.T) {
 	assertSyncRejectsInvalidPushTimeout(t, "")
@@ -1604,10 +1604,10 @@ func TestSyncCLIPushReportsExitCode(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_PORT=1",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_PORT=1",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {
@@ -1645,10 +1645,10 @@ func TestSyncCLIForcePushReportsExitCode(t *testing.T) {
 		"PATH="+binDir+":"+os.Getenv("PATH"),
 		"GC_CITY_PATH="+cityPath,
 		"GC_PACK_DIR="+root,
-		"GC_DOLT_DATA_DIR="+dataDir,
-		"GC_DOLT_PORT=1",
-		"GC_DOLT_USER=root",
-		"GC_DOLT_PASSWORD=",
+		"GC_BEADS_DATA_DIR="+dataDir,
+		"GC_BEADS_PORT=1",
+		"GC_BEADS_USER=root",
+		"GC_BEADS_PASSWORD=",
 	)
 	out, err := cmd.CombinedOutput()
 	if err == nil {

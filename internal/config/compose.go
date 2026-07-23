@@ -1044,9 +1044,6 @@ func mergeFragment(base, fragment *City, fragMeta toml.MetaData, fragPath string
 			base.Beads.GuardedRelease = guardedRelease
 		}
 	}
-	if fragMeta.IsDefined("dolt") {
-		base.Dolt = fragment.Dolt
-	}
 	if fragMeta.IsDefined("formulas") {
 		base.Formulas = fragment.Formulas
 	}

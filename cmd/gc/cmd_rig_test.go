@@ -79,7 +79,7 @@ func TestDoRigAdd_Basic(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer
@@ -126,7 +126,7 @@ source = ".gc/system/packs/core"
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer
@@ -147,94 +147,6 @@ source = ".gc/system/packs/core"
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("city.toml missing %q:\n%s", want, got)
-		}
-	}
-}
-
-func TestDoRigAddSqliteCityCreatesBdBackedRig(t *testing.T) {
-	cityPath := t.TempDir()
-	rigPath := filepath.Join(t.TempDir(), "tincan")
-	if err := os.MkdirAll(filepath.Join(cityPath, ".gc"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte(`[workspace]
-name = "sqlite-city"
-prefix = "ga"
-
-[beads]
-provider = "sqlite"
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	logFile := filepath.Join(t.TempDir(), "bd.log")
-	binDir := t.TempDir()
-	bdPath := filepath.Join(binDir, "bd")
-	script := fmt.Sprintf(`#!/bin/sh
-printf 'pwd=%%s BEADS_DIR=%%s args=%%s\n' "$PWD" "${BEADS_DIR:-}" "$*" >> %q
-case "$1" in
-  init)
-    mkdir -p "${BEADS_DIR:-$PWD/.beads}"
-    exit 0
-    ;;
-  list)
-    printf '[]\n'
-    exit 0
-    ;;
-  update)
-    exit 0
-    ;;
-  *)
-    exit 0
-    ;;
-esac
-`, logFile)
-	if err := os.WriteFile(bdPath, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
-
-	var stdout, stderr bytes.Buffer
-	code := doRigAdd(fsys.OSFS{}, cityPath, rigPath, nil, "", "tc", "", false, false, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("doRigAdd = %d, want 0; stdout: %s stderr: %s", code, stdout.String(), stderr.String())
-	}
-	if got := rawBeadsProviderForScope(rigPath, cityPath); got != "bd" {
-		t.Fatalf("rawBeadsProviderForScope(rig) = %q, want bd", got)
-	}
-	if got := rawBeadsProviderForScope(cityPath, cityPath); got != "sqlite" {
-		t.Fatalf("rawBeadsProviderForScope(city) = %q, want sqlite", got)
-	}
-	metaData, err := os.ReadFile(filepath.Join(rigPath, ".beads", "metadata.json"))
-	if err != nil {
-		t.Fatalf("ReadFile(metadata): %v", err)
-	}
-	var meta map[string]any
-	if err := json.Unmarshal(metaData, &meta); err != nil {
-		t.Fatalf("Unmarshal(metadata): %v", err)
-	}
-	if got := strings.TrimSpace(fmt.Sprint(meta["dolt_mode"])); got != "server" {
-		t.Fatalf("metadata dolt_mode = %q, want server", got)
-	}
-
-	store, err := openStoreAtForCity(rigPath, cityPath)
-	if err != nil {
-		t.Fatalf("openStoreAtForCity(rig): %v", err)
-	}
-	if err := store.SetMetadata("tc-1", "gc.routed_to", "sample/session-a"); err != nil {
-		t.Fatalf("SetMetadata through rig store: %v", err)
-	}
-	logData, err := os.ReadFile(logFile)
-	if err != nil {
-		t.Fatalf("read bd log: %v", err)
-	}
-	log := string(logData)
-	for _, want := range []string{
-		"init --server -p tc --skip-hooks --database tc",
-		"update --json tc-1 --set-metadata gc.routed_to=sample/session-a",
-	} {
-		if !strings.Contains(log, want) {
-			t.Fatalf("bd log missing %q:\n%s", want, log)
 		}
 	}
 }
@@ -274,7 +186,7 @@ func TestDoRigAdd_DetectsDefaultBranchFromOriginHEAD(t *testing.T) {
 
 	rigPath := makeMasterRig(t)
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer
@@ -302,7 +214,7 @@ func TestDoRigAdd_DefaultBranchFlagOverridesProbe(t *testing.T) {
 
 	rigPath := makeMasterRig(t)
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer
@@ -335,7 +247,7 @@ func TestDoRigAdd_BackfillsExistingRigDefaultBranch(t *testing.T) {
 		fmt.Sprintf("workspace_name = \"test-city\"\n\n[[rig]]\nname = \"master-rig\"\npath = %q\n", rigPath),
 	)
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer
@@ -362,7 +274,7 @@ func TestDoRigAdd_NonGitDirOmitsDefaultBranch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "bd")
 
 	var stdout, stderr bytes.Buffer
@@ -437,7 +349,7 @@ func TestDoRigAddWritesSiteBindingInsteadOfPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -484,7 +396,7 @@ func TestDoRigAddRouteFailureRollsBackConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -527,7 +439,7 @@ func TestDoRigAdd_DuplicateNameDifferentPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -567,7 +479,7 @@ func TestDoRigAdd_IdempotentSameNameSamePath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -621,7 +533,7 @@ func TestDoRigAdd_DoesNotWritePortFileForFileBackedExternalRig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -653,7 +565,7 @@ func TestDoRigAdd_ReAddUsesExistingPrefix(t *testing.T) {
 		fmt.Sprintf("workspace_name = \"test-city\"\n\n[[rig]]\nname = \"my-frontend\"\npath = %q\n", rigPath),
 	)
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -688,7 +600,7 @@ func TestDoRigAdd_ReAddMissingPathUsesCandidateConfig(t *testing.T) {
 		"workspace_name = \"test-city\"\n",
 	)
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -719,7 +631,7 @@ func TestDoRigAdd_ReAddWarnsDifferingFlags(t *testing.T) {
 		fmt.Sprintf("workspace_name = \"test-city\"\n\n[[rig]]\nname = \"my-frontend\"\npath = %q\n", rigPath),
 	)
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	// Re-add with --start-suspended=true (differs from existing).
@@ -758,7 +670,7 @@ func TestDoRigAdd_ReAddNoSpuriousWarning(t *testing.T) {
 		fmt.Sprintf("workspace_name = \"test-city\"\n\n[[rig]]\nname = \"my-frontend\"\npath = %q\n", rigPath),
 	)
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	// Re-add with default flags (no --start-suspended, no --include).
@@ -797,7 +709,7 @@ func TestDoRigAdd_RoutesGenerated(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -861,7 +773,7 @@ func TestDoRigAdd_RootPackDefaultRigImportsErrorDoesNotMutateRig(t *testing.T) {
 	originalToml := string(f.Files[filepath.Join(cityPath, "city.toml")])
 	f.Errors[filepath.Join(cityPath, "pack.toml")] = errors.New("read denied")
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -898,7 +810,7 @@ func TestDoRigAdd_ExplicitIncludeSkipsUnusedDefaultRigImportErrors(t *testing.T)
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -927,7 +839,7 @@ func TestDoRigAdd_CandidateValidationErrorDoesNotCreateMissingRig(t *testing.T) 
 
 	rigPath := filepath.Join(t.TempDir(), "my-project")
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -960,7 +872,7 @@ func TestDoRigAdd_CreateMissingRigDirectoryError(t *testing.T) {
 
 	f := mkdirAllErrorFS{FS: base, path: rigPath, err: mkdirErr}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1338,7 +1250,7 @@ func TestDoRigAdd_WithPack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1397,7 +1309,7 @@ ref = "v1.2.3"
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1429,7 +1341,7 @@ func TestDoRigAdd_WithMultiplePacks(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1487,7 +1399,7 @@ ref = "v1.2.3"
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1544,7 +1456,7 @@ func TestDoRigAdd_WithoutPack(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1586,7 +1498,7 @@ func TestDoRigAdd_DefaultRigIncludes(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1645,7 +1557,7 @@ source = "packs/a-pack"
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1717,7 +1629,7 @@ source = "github.com/foo/A"
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1766,7 +1678,7 @@ name = "mayor"
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -1796,7 +1708,7 @@ name = "mayor"
 
 func TestDoRigAdd_RealGastownExampleRootPackDefaultRigImport(t *testing.T) {
 	t.Setenv("GC_BEADS", "file")
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	configureIsolatedRuntimeEnv(t)
 
 	examplePath, err := filepath.Abs(filepath.Join("..", "..", "examples", "gastown"))
@@ -1859,7 +1771,7 @@ func TestDoRigAdd_ExplicitIncludeOverridesDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2021,7 +1933,7 @@ func TestDoRigAdd_PrefixCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2047,7 +1959,7 @@ func TestDoRigAdd_HQPrefixCollisionDoesNotMutateRig(t *testing.T) {
 
 	rigPath := filepath.Join(t.TempDir(), "token-flames")
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2102,7 +2014,7 @@ func TestDoRigAdd_ExplicitPrefixResolvesCollision(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2149,7 +2061,7 @@ func TestDoRigAdd_ExplicitPrefixConflictsWithExistingBeads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2178,7 +2090,7 @@ func TestDoRigAdd_DerivedPrefixConflictsWithExistingBeads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2212,7 +2124,7 @@ func TestDoRigAdd_ExistingBeadsRequiresAdopt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2252,7 +2164,7 @@ func TestDoRigAdd_ExistingBeadsMetadataOnlyRequiresAdopt(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2294,7 +2206,7 @@ func TestDoRigAdd_BeadsDirWithUnrelatedContentSucceeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2328,7 +2240,7 @@ func TestDoRigAdd_ExistingBeadsStatErrorFailsClosed(t *testing.T) {
 	f.Dirs[rigPath] = true
 	f.Errors[beadsPath] = os.ErrPermission
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2358,7 +2270,7 @@ func TestDoRigAdd_ExistingBeadsMarkerStatErrorFailsClosed(t *testing.T) {
 	f.Files[filepath.Join(cityPath, "city.toml")] = []byte("[workspace]\nname = \"my-city\"\n\n[[agent]]\nname = \"mayor\"\n")
 	f.Errors[markerPath] = os.ErrPermission
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2439,7 +2351,7 @@ func TestDoRigAdd_ReAddWarnsDifferingPrefix(t *testing.T) {
 	siteToml := fmt.Sprintf("workspace_name = \"test-city\"\n\n[[rig]]\nname = \"my-frontend\"\npath = %q\n", rigPath)
 	writeSchema2RigCity(t, cityPath, "test-city", cityToml, siteToml)
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	// Re-add with differing --prefix should warn.
@@ -2464,7 +2376,7 @@ func TestDoRigAdd_PrefixCanonicalizedToLowercase(t *testing.T) {
 
 	writeSchema2RigCity(t, cityPath, "test-city", "[workspace]\n", "")
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2510,7 +2422,7 @@ func TestDoRigAdd_PrefixAllowsHyphens(t *testing.T) {
 	}
 	writeSchema2RigCity(t, cityPath, "test-city", "[workspace]\n", "")
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2625,7 +2537,7 @@ name = "inline-agent"
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2666,7 +2578,7 @@ func TestDoRigAdd_AdoptExistingBeads(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2693,7 +2605,7 @@ func TestDoRigAdd_AdoptRequiresMetadataJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2712,7 +2624,7 @@ func TestDoRigAdd_AdoptRequiresExistingDir(t *testing.T) {
 
 	rigPath := filepath.Join(t.TempDir(), "does-not-exist")
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2743,7 +2655,7 @@ func TestDoRigAdd_AdoptNonGitDirSucceeds(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2775,7 +2687,7 @@ func TestDoRigAdd_AdoptRequiresConfigYaml(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2806,7 +2718,7 @@ func TestDoRigAdd_AdoptRejectsEmptyConfigYaml(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	var stdout, stderr bytes.Buffer
@@ -2838,7 +2750,7 @@ func TestDoRigAdd_AdoptWithoutPrefixMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_SKIP", "skip")
 	t.Setenv("GC_BEADS", "file")
 
 	// No --prefix: derived prefix from basename "mismatch-rig" won't match "xr".
@@ -2861,20 +2773,17 @@ func TestDoRigAdd_AdoptWithBdContractInvokesInitAndHook(t *testing.T) {
 	cityPath := t.TempDir()
 	writeSchema2RigCity(t, cityPath, "test-city", "[workspace]\n", "")
 	t.Setenv("GC_BEADS", "exec:"+filepath.Join(cityPath, "gc-beads-bd"))
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 
 	// Stub lifecycle hooks — no real Dolt in unit tests. Record that the
 	// init path was invoked with the adopted rig dir.
 	origEnsure := initDirIfReadyEnsureBeadsProvider
 	origInit := initDirIfReadyInitAndHookDir
-	origWait := initDirIfReadyWaitForManagedDolt
 	t.Cleanup(func() {
 		initDirIfReadyEnsureBeadsProvider = origEnsure
 		initDirIfReadyInitAndHookDir = origInit
-		initDirIfReadyWaitForManagedDolt = origWait
 	})
 	initDirIfReadyEnsureBeadsProvider = func(_ string) error { return nil }
-	initDirIfReadyWaitForManagedDolt = func(_ string, _ time.Duration) error { return nil }
 
 	var initCalls []string
 	initDirIfReadyInitAndHookDir = func(_, dir, _ string) error {
@@ -2926,18 +2835,15 @@ func TestDoRigAdd_AdoptWithBdContractProvider_NonAdoptControlInvokesInit(t *test
 	cityPath := t.TempDir()
 	writeSchema2RigCity(t, cityPath, "test-city", "[workspace]\n", "")
 	t.Setenv("GC_BEADS", "exec:"+filepath.Join(cityPath, "gc-beads-bd"))
-	t.Setenv("GC_DOLT", "")
+	t.Setenv("GC_BEADS_SKIP", "")
 
 	origEnsure := initDirIfReadyEnsureBeadsProvider
 	origInit := initDirIfReadyInitAndHookDir
-	origWait := initDirIfReadyWaitForManagedDolt
 	t.Cleanup(func() {
 		initDirIfReadyEnsureBeadsProvider = origEnsure
 		initDirIfReadyInitAndHookDir = origInit
-		initDirIfReadyWaitForManagedDolt = origWait
 	})
 	initDirIfReadyEnsureBeadsProvider = func(_ string) error { return nil }
-	initDirIfReadyWaitForManagedDolt = func(_ string, _ time.Duration) error { return nil }
 
 	var initCalls []string
 	initDirIfReadyInitAndHookDir = func(_, dir, _ string) error {

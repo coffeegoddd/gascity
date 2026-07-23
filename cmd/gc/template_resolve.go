@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"os"
@@ -782,23 +783,19 @@ func sessionBackendEnvWithError(cityPath, rigRoot string, rigs []config.Rig) (ma
 				return env, nil
 			}
 		}
-		if err := applyResolvedCityDoltEnv(env, cityPath, false); err != nil {
+		if err := applyResolvedCityDoltEnvContext(context.Background(), env, cityPath, false); err != nil {
 			mirrorBeadsDoltEnv(env)
 			ensureProjectedPostgresEnvExplicit(env)
-			if !isRecoverableManagedDoltEnvError(err) {
-				return env, err
-			}
+			return env, err
 		}
 		ensureProjectedPostgresEnvExplicit(env)
 		return env, nil
 	}
 
-	if err := applyResolvedRigDoltEnv(env, cityPath, rigRoot, rigConfigForScopeRoot(cityPath, rigRoot, rigs), false); err != nil {
+	if err := applyResolvedRigDoltEnvContext(context.Background(), env, cityPath, rigRoot, rigConfigForScopeRoot(cityPath, rigRoot, rigs), false); err != nil {
 		mirrorBeadsDoltEnv(env)
 		ensureProjectedPostgresEnvExplicit(env)
-		if !isRecoverableManagedDoltEnvError(err) {
-			return env, err
-		}
+		return env, err
 	}
 	ensureProjectedPostgresEnvExplicit(env)
 	return env, nil

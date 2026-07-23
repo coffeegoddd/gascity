@@ -188,7 +188,7 @@ The provider sets these before exec'ing the script:
 | `GC_RIG` / `GC_RIG_ROOT` | the rig name and root path (rig scope only) |
 
 The parent environment is otherwise inherited, except that `BEADS_*` and
-`GC_DOLT_*` keys are stripped so a script cannot accidentally inherit the
+`GC_BEADS_*` keys are stripped so a script cannot accidentally inherit the
 default store's backend configuration.
 
 ## Writing Your Own Script

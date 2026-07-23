@@ -27,8 +27,8 @@ func TestHookClaimSessionStoreContextUsesCityScopeAfterRigClaim(t *testing.T) {
 		"GC_RIG=demo",
 		"GC_RIG_ROOT=" + rigDir,
 		"BEADS_DIR=" + rigBeadsDir,
-		"GC_DOLT_HOST=rig-dolt.example",
-		"GC_DOLT_PORT=3307",
+		"GC_BEADS_HOST=rig-dolt.example",
+		"GC_BEADS_PORT=3307",
 	})
 	if err != nil {
 		t.Fatalf("hookClaimSessionStoreContext: %v", err)
@@ -50,7 +50,7 @@ func TestHookClaimSessionStoreContextUsesCityScopeAfterRigClaim(t *testing.T) {
 			t.Errorf("%s = %q, want %q", key, got[key], want)
 		}
 	}
-	if got["GC_DOLT_HOST"] == "rig-dolt.example" || got["GC_DOLT_PORT"] == "3307" {
+	if got["GC_BEADS_HOST"] == "rig-dolt.example" || got["GC_BEADS_PORT"] == "3307" {
 		t.Fatalf("rig Dolt endpoint leaked into city session store env: %#v", got)
 	}
 }

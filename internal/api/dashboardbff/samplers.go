@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -30,7 +29,6 @@ const (
 	rigProbeInterval     = 5 * time.Minute
 	doltRingSlots        = 144 // 24h at 10-min cadence
 	statusFetchTimeout   = 40 * time.Second
-	tcpProbeTimeout      = 2 * time.Second
 
 	doltSource = "status.store_health.size_bytes"
 )
@@ -199,11 +197,11 @@ func (cs *citySampler) loop(ctx context.Context) {
 
 // refresh recomputes the cached snapshot off the request path. It is the
 // module's hot loop, so it does ALL blocking/expensive work — the status read,
-// the parse, and the per-rig bd-doctor + TCP probe fan-out — on local
+// the parse, and the per-rig bd-doctor probe fan-out — on local
 // variables with NO lock held, then takes cs.mu.Lock() exactly once at the end
 // to publish the computed fields (microseconds). The contract is that a reader
 // (supervisorStatus/doltTrend/rigStoreHealth) never blocks behind a probe, so
-// the write lock must never be held across exec/TCP/HTTP.
+// the write lock must never be held across exec/HTTP.
 //
 // refresh runs only from the single loop() goroutine per sampler, so reading
 // the cadence gates and dolt ring under a brief RLock up front and writing the
@@ -400,13 +398,9 @@ func (m *samplerManager) probeRig(ctx context.Context, rigName, rigPath string) 
 		}
 	}
 
-	var doltEndpoint *string
-	port := readDoltServerPort(beadsPath)
-	if port > 0 {
-		ep := "127.0.0.1:" + strconv.Itoa(port)
-		doltEndpoint = &ep
-	}
-
+	// bd owns the dolt endpoint in proxied-server mode; gascity publishes no
+	// port to dial, so reachability comes from bd doctor's Dolt Connection
+	// check — bd is the sole interface to the server.
 	var checks []rigStoreCheck
 	var note string
 	if res, err := m.exec.execBdDoctor(ctx, beadsPath); err != nil {
@@ -417,13 +411,7 @@ func (m *samplerManager) probeRig(ctx context.Context, rigName, rigPath string) 
 		note = "bd doctor returned no JSON (embedded mode or dolt server unreachable)"
 	}
 
-	var doltConnected *bool
-	if port > 0 {
-		ok := tcpProbe(port)
-		doltConnected = &ok
-	} else if checks != nil {
-		doltConnected = doltConnectedFromChecks(checks)
-	}
+	doltConnected := doltConnectedFromChecks(checks)
 
 	problems := storeProblems(checks)
 	issueCount := issueCountFromChecks(checks)
@@ -431,7 +419,7 @@ func (m *samplerManager) probeRig(ctx context.Context, rigName, rigPath string) 
 
 	return rigStoreHealth{
 		Rig: rigName, BeadsPath: beadsPath, Rollup: rollup, Reachable: true,
-		DoltEndpoint: doltEndpoint, DoltConnected: doltConnected,
+		DoltEndpoint: nil, DoltConnected: doltConnected,
 		// Note carries subprocess/error text (bd doctor failure reason); sanitize
 		// it before it reaches the browser, per the "all subprocess output is
 		// sanitized" contract.
@@ -559,27 +547,6 @@ func rollupFor(reachable bool, doltConnected *bool, problems []rigStoreCheck, in
 func isDir(p string) bool {
 	st, err := os.Stat(p)
 	return err == nil && st.IsDir()
-}
-
-func readDoltServerPort(beadsPath string) int {
-	raw, err := os.ReadFile(filepath.Join(beadsPath, "dolt-server.port"))
-	if err != nil {
-		return 0
-	}
-	port, err := strconv.Atoi(strings.TrimSpace(string(raw)))
-	if err != nil || port <= 0 || port > 65535 {
-		return 0
-	}
-	return port
-}
-
-func tcpProbe(port int) bool {
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:"+strconv.Itoa(port), tcpProbeTimeout)
-	if err != nil {
-		return false
-	}
-	_ = conn.Close()
-	return true
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────

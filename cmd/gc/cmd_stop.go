@@ -391,9 +391,8 @@ func stopCityManagedBeadsProvider(cityPath string) (bool, error) {
 	if rawBeadsProvider(cityPath) != "bd" {
 		return false, nil
 	}
-	if currentResolvableManagedDoltPort(cityPath) == "" {
-		return false, nil
-	}
+	// bd owns the server lifecycle in proxied-server mode; always fire the
+	// provider "stop" (→ `bd dolt stop`) to tear down the proxy + child dolt.
 	return true, shutdownBeadsProviderForStop(cityPath)
 }
 

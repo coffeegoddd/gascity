@@ -5,11 +5,11 @@
 # detects the condition and attempts automatic recovery by calling
 # the gc-beads-bd recover operation.
 #
-# Environment: GC_CITY_PATH, GC_DOLT_HOST, GC_DOLT_PORT, GC_DOLT_USER,
-#              GC_DOLT_PASSWORD
+# Environment: GC_CITY_PATH, GC_BEADS_HOST, GC_BEADS_PORT, GC_BEADS_USER,
+#              GC_BEADS_PASSWORD
 set -e
 
-: "${GC_DOLT_USER:=root}"
+: "${GC_BEADS_USER:=root}"
 PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 . "$PACK_DIR/assets/scripts/runtime.sh"
 
@@ -18,8 +18,8 @@ beads_bd="$GC_BEADS_BD_SCRIPT"
 # Reject remote servers — can't manage remote dolt processes. Local hosts
 # include 0.0.0.0, the explicit wildcard opt-out for the managed server's
 # bind (the default bind is 127.0.0.1).
-if [ -n "$GC_DOLT_HOST" ]; then
-  case "$GC_DOLT_HOST" in
+if [ -n "$GC_BEADS_HOST" ]; then
+  case "$GC_BEADS_HOST" in
     127.0.0.1|0.0.0.0|localhost|"::1"|"[::1]") ;; # local is fine
     *) echo "gc dolt recover: not supported for remote dolt servers" >&2; exit 1 ;;
   esac
@@ -37,9 +37,9 @@ fi
 # This table-only probe intentionally avoids DROP DATABASE; explicit
 # managed probe recovery is available through `gc dolt-state reset-probe`.
 check_read_only() {
-  host="${GC_DOLT_HOST:-127.0.0.1}"
-  args="--host $host --port $GC_DOLT_PORT --user $GC_DOLT_USER --no-tls"
-  export DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}"
+  host="${GC_BEADS_HOST:-127.0.0.1}"
+  args="--host $host --port $GC_BEADS_PORT --user $GC_BEADS_USER --no-tls"
+  export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
   result=$(run_bounded 10 dolt $args sql -q "CREATE TABLE __gc_ro_check (id INT); DROP TABLE __gc_ro_check;" 2>&1) || true
   case "$result" in
     *read*only*|*read-only*|*readonly*) return 0 ;; # read-only detected

@@ -71,7 +71,7 @@ directory at your leisure once you are confident in the new store.
 ## Reclaiming a database stranded below the compaction threshold
 
 `gc dolt compact` skips any database with fewer commits than the threshold
-(default 2000, `GC_DOLT_COMPACT_THRESHOLD_COMMITS`). A database can fall *below*
+(default 2000, `GC_BEADS_COMPACT_THRESHOLD_COMMITS`). A database can fall *below*
 that threshold yet still carry orphaned chunks — most commonly after a prior
 flatten squashed its history but the post-flatten full GC was deferred (a
 concurrent writer raced the flatten), quarantined and later cleared, or
@@ -123,14 +123,14 @@ later run once the fetch path is healthy:
 gc dolt compact --skip-fetch
 
 # Equivalent environment opt-out (e.g. set in a wrapper or on the city).
-GC_DOLT_COMPACT_SKIP_FETCH=1 gc dolt compact
+GC_BEADS_COMPACT_SKIP_FETCH=1 gc dolt compact
 
 # Skip the fetch only for specific, known-uncredentialed databases (CSV);
 # credentialed databases in the same city still fetch and push normally.
-GC_DOLT_COMPACT_SKIP_FETCH_DBS=<database>[,<database>...] gc dolt compact
+GC_BEADS_COMPACT_SKIP_FETCH_DBS=<database>[,<database>...] gc dolt compact
 ```
 
-Prefer the per-database `GC_DOLT_COMPACT_SKIP_FETCH_DBS` form over the global
+Prefer the per-database `GC_BEADS_COMPACT_SKIP_FETCH_DBS` form over the global
 opt-out when only some databases are uncredentialed — the global form disables
 remote sync for every database, including ones whose push would otherwise
 succeed. Do **not** set the global opt-out in the shared `mol-dog-compactor`
