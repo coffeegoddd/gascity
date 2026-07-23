@@ -15,6 +15,34 @@ PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 . "$PACK_DIR/assets/scripts/runtime.sh"
 data_dir="$DOLT_DATA_DIR"
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd owns the endpoint; route through `bd sql`. bd sql is one-shot (no
+  # interactive shell) and takes a positional query, not dolt's
+  # -q/--result-format flags, so translate the common non-interactive forms
+  # and forward --csv/--json through.
+  fmt=""
+  query=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      -q|--query)          query="$2"; shift 2 ;;
+      --result-format)     case "$2" in csv) fmt=--csv ;; json) fmt=--json ;; esac; shift 2 ;;
+      --result-format=csv) fmt=--csv; shift ;;
+      --result-format=json) fmt=--json; shift ;;
+      -r)                  case "$2" in csv) fmt=--csv ;; json) fmt=--json ;; esac; shift 2 ;;
+      --csv|--json)        fmt="$1"; shift ;;
+      *)                   [ -z "$query" ] && query="$1"; shift ;;
+    esac
+  done
+  if [ -z "$query" ]; then
+    echo "gc dolt sql: an interactive shell is unavailable in bd proxied-server mode; pass a query (gc dolt sql -q 'SELECT ...')" >&2
+    exit 1
+  fi
+  if [ -n "$fmt" ]; then
+    exec bd -C "$GC_CITY_PATH" sql "$fmt" "$query"
+  fi
+  exec bd -C "$GC_CITY_PATH" sql "$query"
+fi
+
 # Check if the server is reachable.
 is_running() {
   if [ -n "$GC_BEADS_HOST" ]; then

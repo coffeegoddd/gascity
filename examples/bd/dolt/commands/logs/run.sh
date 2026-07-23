@@ -33,6 +33,20 @@ done
 log_file="$DOLT_LOG_FILE"
 host="${GC_BEADS_HOST:-127.0.0.1}"
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd writes the proxied Dolt server's log to the path it records in
+  # proxied_server_client_info.json; prefer that over the managed-layout default.
+  _ci="$GC_CITY_PATH/.beads/proxied_server_client_info.json"
+  if [ -f "$_ci" ]; then
+    _lp=$(sed -n 's/.*"log_path"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$_ci" | head -1)
+    [ -n "$_lp" ] && log_file="$_lp"
+  fi
+  if [ ! -f "$log_file" ]; then
+    echo "gc dolt logs: no dolt log yet (bd starts the proxied server lazily; it appears after the first access)." >&2
+    exit 0
+  fi
+fi
+
 if [ ! -f "$log_file" ]; then
   if ! is_local_dolt_host "$host"; then
     # Configured external Dolt endpoint: the server log lives on the remote

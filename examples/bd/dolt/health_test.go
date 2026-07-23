@@ -1118,8 +1118,8 @@ for a in "$@"; do
 done
 case "$q" in
   *"SHOW DATABASES"*) printf 'Database\ninformation_schema\nmysql\nac\ndh\nhq\n' ;;
-  *"FROM dolt_log"*)  printf 'count\n42\n' ;;
-  *"FROM issues"*)    printf 'count\n7\n' ;;
+  *dolt_log*)         printf 'count\n42\n' ;;
+  *issues*)           printf 'count\n7\n' ;;
 esac
 exit 0
 `

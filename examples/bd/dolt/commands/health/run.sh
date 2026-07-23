@@ -98,7 +98,13 @@ now_ms() {
 # runtime.sh and shared with the status/logs commands.
 should_probe_sql=false
 is_external=false
-if is_local_dolt_host "$host"; then
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd proxied-server mode: bd owns the endpoint and exposes no port. There is
+  # no local process for GC to probe (server.running / server.pid keep their
+  # false / 0 defaults); reachability and every query route through bd sql via
+  # store_reachable / store_sql below.
+  should_probe_sql=true
+elif is_local_dolt_host "$host"; then
   pid=$(managed_runtime_listener_pid "$GC_BEADS_PORT" || true)
   if [ -n "$pid" ] || managed_runtime_tcp_reachable "$GC_BEADS_PORT"; then
     server_running=true
@@ -117,19 +123,12 @@ else
 fi
 
 if [ "$should_probe_sql" = true ]; then
-  # Measure query latency.
+  # Measure query latency. store_reachable runs `bd sql SELECT 1` (proxied) or a
+  # direct `dolt --host --port` ping (legacy/external) — the password handling
+  # and bounded execution live inside store_sql. A TCP-reachable but
+  # unresponsive server would otherwise hang; store_sql bounds the ping.
   start_ms=$(now_ms)
-  conn_args="--host $host --port $GC_BEADS_PORT --user $GC_BEADS_USER --no-tls"
-  # Always export DOLT_CLI_PASSWORD (even empty) so the client does not
-  # prompt for a password on stdin. Without this, the SELECT 1 probe
-  # silently fails with "Failed to parse credentials: operation not
-  # supported by device" on sessions without a controlling TTY —
-  # which then left the health report claiming "server: running" but
-  # never reporting per-database detail.
-  export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
-  # Bound the ping. A TCP-reachable but unresponsive server (stuck
-  # goroutine, saturated pool, migration lock) would otherwise hang.
-  if run_bounded 5 dolt $conn_args sql -q "SELECT 1" >/dev/null 2>&1; then
+  if store_reachable; then
     server_reachable=true
     end_ms=$(now_ms)
     server_latency=$((end_ms - start_ms))
@@ -190,12 +189,13 @@ db_name_is_safe() {
 # collapse the count to 0.
 db_commit_and_open_counts() {
   _name="$1"
-  _commits_csv=$(run_bounded 5 dolt $conn_args sql --result-format csv \
-    -q "USE \`$_name\`; SELECT COUNT(*) FROM dolt_log;" 2>/dev/null || true)
+  # Fully db.table-qualified single statements (no USE): required by bd sql in
+  # proxied mode and equally valid against a direct dolt connection in legacy
+  # mode. The numeric grep below already tolerates the csv header row.
+  _commits_csv=$(store_sql csv "SELECT COUNT(*) FROM \`$_name\`.dolt_log" 2>/dev/null || true)
   _commits=$(printf '%s\n' "$_commits_csv" | grep -E '^[0-9]+$' | head -1)
   case "$_commits" in ''|*[!0-9]*) _commits=0 ;; esac
-  _open_csv=$(run_bounded 5 dolt $conn_args sql --result-format csv \
-    -q "USE \`$_name\`; SELECT COUNT(*) FROM issues WHERE status='open';" 2>/dev/null || true)
+  _open_csv=$(store_sql csv "SELECT COUNT(*) FROM \`$_name\`.issues WHERE status='open'" 2>/dev/null || true)
   _open_beads=$(printf '%s\n' "$_open_csv" | grep -E '^[0-9]+$' | head -1)
   case "$_open_beads" in ''|*[!0-9]*) _open_beads=0 ;; esac
   printf '%s|%s|%s\n' "$_name" "$_commits" "$_open_beads"
@@ -207,8 +207,7 @@ db_commit_and_open_counts() {
 # is the authoritative catalog for a remote endpoint (su-deol8). The CSV header
 # and system databases are filtered; unsafe identifiers are skipped.
 external_database_names() {
-  _show_csv=$(run_bounded 5 dolt $conn_args sql --result-format csv \
-    -q "SHOW DATABASES;" 2>/dev/null || true)
+  _show_csv=$(store_sql csv "SHOW DATABASES" 2>/dev/null || true)
   printf '%s\n' "$_show_csv" | while IFS= read -r _raw; do
     _name=$(printf '%s' "$_raw" | tr -d '\r' | sed 's/^"//; s/"$//')
     [ -n "$_name" ] || continue
@@ -223,10 +222,11 @@ external_database_names() {
 
 db_info=""
 if [ "$server_reachable" = true ]; then
-  if [ "$is_external" = true ]; then
-    # External endpoint: enumerate databases from the reachable remote server
-    # via SQL, then count each. The on-disk scan below cannot see remote
-    # databases, so it would report databases=[] despite healthy SQL (su-deol8).
+  if [ "${GC_BEADS_PROXIED:-0}" = 1 ] || [ "$is_external" = true ]; then
+    # Proxied-server or external endpoint: enumerate databases from the
+    # reachable server via SQL (SHOW DATABASES), then count each. bd owns the
+    # data dir in proxied mode, so the on-disk scan below is neither available
+    # nor authoritative — the SQL catalog is (su-deol8).
     db_info=$(external_database_names | while IFS= read -r name; do
       [ -n "$name" ] || continue
       db_commit_and_open_counts "$name"
@@ -278,7 +278,10 @@ fi
 # unavailable (gc itself may be the failure this patrol is detecting).
 orphan_list=""
 orphan_count=0
-if [ -d "$data_dir" ]; then
+# In proxied-server mode bd owns the data dir; orphan discovery (and any
+# reaping) is bd's responsibility (`bd dolt clean-databases`), not a gascity
+# on-disk scan. Skip the local scan entirely.
+if [ "${GC_BEADS_PROXIED:-0}" != 1 ] && [ -d "$data_dir" ]; then
   orphan_names=""
   cleanup_ok=false
   if command -v gc >/dev/null 2>&1 && command -v jq >/dev/null 2>&1; then
@@ -365,7 +368,10 @@ fi
 # about without being hostage to ambient process state.
 zombie_count=0
 zombie_pids=""
-if [ "${GC_HEALTH_SKIP_ZOMBIE_SCAN:-0}" != "1" ]; then
+# bd owns the Dolt process lifecycle in proxied-server mode, so a gascity
+# zombie/orphan-process scan is neither meaningful nor safe (it would flag
+# bd's own proxy child). Skip it.
+if [ "${GC_HEALTH_SKIP_ZOMBIE_SCAN:-0}" != "1" ] && [ "${GC_BEADS_PROXIED:-0}" != 1 ]; then
   # Collect PIDs of legitimate rig-local Dolt servers.
   rig_dolt_pids=""
   while IFS= read -r meta; do
@@ -480,7 +486,7 @@ if [ "$json_output" = true ]; then
     "reachable": $server_reachable,
     "external": $is_external,
     "pid": $server_pid,
-    "port": $GC_BEADS_PORT,
+    "port": ${GC_BEADS_PORT:-0},
     "latency_ms": $server_latency
   },
   "databases": [

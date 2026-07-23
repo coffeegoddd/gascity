@@ -15,6 +15,18 @@ PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 
 beads_bd="$GC_BEADS_BD_SCRIPT"
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd owns the Dolt process and transparently respawns an idled or failed
+  # proxy on next access. There is no gascity-managed read-only recovery to
+  # perform; report liveness and exit cleanly.
+  if store_reachable; then
+    echo "Dolt store reachable (bd proxied-server); no recovery needed."
+  else
+    echo "Dolt store not reachable; bd will respawn its proxy on next access."
+  fi
+  exit 0
+fi
+
 # Reject remote servers — can't manage remote dolt processes. Local hosts
 # include 0.0.0.0, the explicit wildcard opt-out for the managed server's
 # bind (the default bind is 127.0.0.1).

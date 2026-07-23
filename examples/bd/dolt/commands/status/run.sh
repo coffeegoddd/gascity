@@ -15,6 +15,17 @@ set -e
 PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 . "$PACK_DIR/assets/scripts/runtime.sh"
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd owns the endpoint; reachability is a bd SELECT-1 probe (which also
+  # respawns an idled proxy). No managed local process to describe.
+  if store_reachable; then
+    echo "Dolt store: reachable (bd proxied-server)"
+    exit 0
+  fi
+  echo "Dolt store: unreachable (bd proxied-server)" >&2
+  exit 1
+fi
+
 if [ ! -x "$GC_BEADS_BD_SCRIPT" ]; then
   echo "gc dolt status: gc-beads-bd not found" >&2
   exit 1
