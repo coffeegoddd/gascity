@@ -199,10 +199,31 @@ DOLT_HOST="${GC_BEADS_HOST:-127.0.0.1}"
 DOLT_PORT="$GC_BEADS_PORT"
 DOLT_USER="${GC_BEADS_USER:-root}"
 
-# Match the Dolt pack commands, which currently use non-TLS SQL connections.
-# If TLS becomes a supported GC_BEADS_* contract, add it in the Dolt pack first.
+# dolt_sql — run a Dolt SQL query for the maintenance scripts. In bd
+# proxied-server mode (GC_BEADS_PROXIED=1) bd owns the endpoint, so this routes
+# through the store_sql shim (`the bd CLI SQL`) after translating the subset of dolt
+# flags the scripts use: -q/--query <sql> and -r/--result-format <csv|json>.
+# Otherwise it opens a direct dolt connection (unchanged legacy behavior).
+#
+# In proxied mode the query MUST be a single, fully db.table-qualified
+# statement: the bd CLI SQL surfaces only the first statement of a ;-joined batch and
+# has no session USE. Callers issuing DML/commits handle that split explicitly.
 dolt_sql() {
-    DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}" dolt --host "$DOLT_HOST" --port "$DOLT_PORT" --user "$DOLT_USER" --no-tls sql "$@"
+    if [ "${GC_BEADS_PROXIED:-0}" != 1 ]; then
+        DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}" dolt --host "$DOLT_HOST" --port "$DOLT_PORT" --user "$DOLT_USER" --no-tls sql "$@"
+        return
+    fi
+    _dt_fmt=table
+    _dt_q=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -q|--query)          _dt_q="$2"; shift 2 ;;
+            -r|--result-format)  case "$2" in csv) _dt_fmt=csv ;; json) _dt_fmt=json ;; esac; shift 2 ;;
+            -r*)                 case "${1#-r}" in csv) _dt_fmt=csv ;; json) _dt_fmt=json ;; esac; shift ;;
+            *)                   [ -z "$_dt_q" ] && _dt_q="$1"; shift ;;
+        esac
+    done
+    store_sql "$_dt_fmt" "$_dt_q"
 }
 
 # has_wisps_table reports whether $1 contains a `wisps` table. Maintenance

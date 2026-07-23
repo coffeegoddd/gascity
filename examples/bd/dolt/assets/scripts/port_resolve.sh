@@ -118,21 +118,16 @@ resolve_dolt_port_or_die() {
 # ---------------------------------------------------------------------------
 
 # beads_dolt_mode — echo the current city's dolt_mode ("proxied-server",
-# "server", ...) or nothing. Cheapest source first: .beads/metadata.json (no
-# subprocess); falls back to `bd context --json`. Requires GC_CITY_PATH.
+# "server", ...) or nothing. Reads .beads/metadata.json, which `bd init` always
+# writes (dolt_mode is persisted there). No subprocess: this runs while every
+# gc-dolt command and maintenance script is sourcing, so it must not spawn bd
+# (and must not inherit an ambient BEADS_DIR). A missing/sparse metadata file
+# yields no mode and the caller defaults to the legacy direct-dolt path.
 beads_dolt_mode() {
     [ -n "${GC_CITY_PATH:-}" ] || return 1
     _bdm_meta="$GC_CITY_PATH/.beads/metadata.json"
-    if [ -f "$_bdm_meta" ]; then
-        _bdm=$(sed -n 's/.*"dolt_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$_bdm_meta" 2>/dev/null | head -1)
-        if [ -n "$_bdm" ]; then
-            printf '%s\n' "$_bdm"
-            return 0
-        fi
-    fi
-    command -v bd >/dev/null 2>&1 || return 1
-    bd -C "$GC_CITY_PATH" context --json 2>/dev/null \
-        | sed -n 's/.*"dolt_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1
+    [ -f "$_bdm_meta" ] || return 1
+    sed -n 's/.*"dolt_mode"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$_bdm_meta" 2>/dev/null | head -1
 }
 
 # GC_BEADS_PROXIED is 1 when this city's store is in bd proxied-server mode,

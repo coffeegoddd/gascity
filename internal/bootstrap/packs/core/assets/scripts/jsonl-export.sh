@@ -87,6 +87,21 @@ count_jsonl_rows() {
     jq -s -r 'if length == 0 then 0 else ((.[0].rows // []) | length) end' || echo "0"
 }
 
+# export_json_rows QUERY FILE — write a JSON document with a .rows array (the
+# shape count_jsonl_rows / scrub_exported_issues consume). A direct dolt
+# `-r json` already emits {"rows":[...]}; the bd CLI SQL --json (proxied mode) emits a
+# bare array, so wrap it. Returns non-zero if the query itself fails so the
+# caller's failed-DB handling still fires. jq is a hard dependency (asserted at
+# startup).
+export_json_rows() {
+    _ejr_out=$(dolt_sql -r json -q "$1") || return 1
+    if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+        printf '%s' "${_ejr_out:-[]}" | jq '{rows: .}' > "$2" || return 1
+    else
+        printf '%s\n' "$_ejr_out" > "$2"
+    fi
+}
+
 push_retry_delay_seconds() {
     awk -v seed="$RANDOM$$" -v min="$PUSH_RETRY_DELAY_MIN" -v span="$PUSH_RETRY_DELAY_SPAN" \
         'BEGIN{srand(seed); printf "%.2f", min + rand() * span}'
@@ -911,7 +926,7 @@ while IFS= read -r DB; do
 
     # Step 1: Export issues table.
     ISSUE_EXPORT_TMP=$(mktemp "$DB_DIR/issues.jsonl.tmp.XXXXXX")
-    if ! dolt_sql -r json -q "SELECT * FROM \`$DB\`.issues $SCRUB_FILTER" > "$ISSUE_EXPORT_TMP" 2>/dev/null; then
+    if ! export_json_rows "SELECT * FROM \`$DB\`.issues $SCRUB_FILTER" "$ISSUE_EXPORT_TMP" 2>/dev/null; then
         rm -f "$ISSUE_EXPORT_TMP"
         discard_failed_db_outputs "$DB"
         FAILED_DB_COUNT=$((FAILED_DB_COUNT + 1))
@@ -930,7 +945,7 @@ while IFS= read -r DB; do
 
     # Export supplemental tables (best-effort).
     for TABLE in comments config dependencies labels metadata; do
-        dolt_sql -r json -q "SELECT * FROM \`$DB\`.\`$TABLE\`" > "$DB_DIR/$TABLE.jsonl" 2>/dev/null || true
+        export_json_rows "SELECT * FROM \`$DB\`.\`$TABLE\`" "$DB_DIR/$TABLE.jsonl" 2>/dev/null || true
     done
 
     # Step 2: Validate the exported JSON payload and optionally scrub it. Even

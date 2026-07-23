@@ -742,10 +742,32 @@ run_sql_change() {
         record_anomaly "$db" "$label failed for $db: could not create stderr capture file"
         return 1
     fi
-    # DML (DELETE/UPDATE) against a database-qualified table still needs an
-    # active database selected, or Dolt can reject it with "no database
-    # selected" (Error 1105) even though the target is fully qualified —
-    # reads (get_sql_count/get_sql_rows) do not. USE the target db first,
+    # bd proxied-server mode: the bd CLI SQL runs a single statement per call with no
+    # session USE, so the USE/;-joined/ROW_COUNT() form is unavailable. The
+    # query is already fully db.table-qualified; run it directly and read the
+    # affected-row count from bd's rows_affected (bd has a database selected, so
+    # a qualified DML does not hit "no database selected"). Writes land in the
+    # working set; committing to Dolt history is bd's responsibility.
+    if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+        if ! rows=$(store_dml_rows_db_qualified "$query" 2>"$stderr_file"); then
+            stderr_output=$(cat "$stderr_file" 2>/dev/null || true)
+            rm -f "$stderr_file"
+            record_anomaly "$db" "$label failed for $db: $(sanitize_output "$stderr_output")"
+            return 1
+        fi
+        rm -f "$stderr_file"
+        rows=$(printf '%s' "$rows" | tr -d '[:space:]\r')
+        if [ -z "$rows" ] || ! [[ "$rows" =~ ^[0-9]+$ ]]; then
+            record_anomaly "$db" "$label returned non-numeric row count for $db"
+            return 1
+        fi
+        SQL_CHANGE_ROWS_RESULT="$rows"
+        return 0
+    fi
+    # Legacy/external direct-dolt path. DML against a database-qualified table
+    # still needs an active database selected, or Dolt can reject it with "no
+    # database selected" (Error 1105) even though the target is fully qualified
+    # — reads (get_sql_count/get_sql_rows) do not. USE the target db first,
     # mirroring the DOLT_COMMIT block below.
     if ! output=$(dolt_sql -r csv -q "
 USE \`$db\`;
@@ -1131,7 +1153,12 @@ while IFS= read -r DB; do
     # database via USE so CALL DOLT_COMMIT(...) runs in the target database.
     # Commit failures are surfaced as anomalies so the dog loop does not
     # silently retry forever.
-    if [ -z "$DRY_RUN" ] && [ "$DB_MUTATIONS" -gt 0 ]; then
+    #
+    # In bd proxied-server mode bd owns commit responsibility: reaper's DML
+    # lands in the durable working set (auto-commit off) and folds into bd's
+    # next commit. CALL DOLT_COMMIT is a session/DB-context procedure that
+    # cannot be issued through the bd CLI SQL, so skip the explicit per-DB commit.
+    if [ "${GC_BEADS_PROXIED:-0}" != 1 ] && [ -z "$DRY_RUN" ] && [ "$DB_MUTATIONS" -gt 0 ]; then
         if ! COMMIT_OUTPUT=$(dolt_sql -q "
             USE \`$DB\`;
             CALL DOLT_COMMIT('-Am', 'reaper: stale_wisps=$STALE_WISP_COUNT closed_wisps=$DB_CLOSED_WISPS workflow_roots=$DB_WORKFLOW_ROOTS_CLOSED purged=$DB_PURGED stale_issues=$DB_ISSUES_CLOSED expired_issues=$DB_EXPIRED_ISSUES_CLOSED', '--author', 'reaper <reaper@gastown.local>')
@@ -1180,24 +1207,39 @@ if [ -d "$CITY_BEADS_DIR" ]; then
         if [ -z "$CITY_DB" ]; then
             record_anomaly "session" "type-safe SQL path: city database unresolved — skipping"
         else
+            # SELECTs are fully db.table-qualified (no USE) so they run
+            # unchanged against the bd CLI SQL (proxied) or a direct dolt connection
+            # (legacy) — reads never need an active database.
             if [ -n "$DRY_RUN" ]; then
-                RAW=$(dolt_sql -r csv -q "USE \`${CITY_DB}\`; SELECT COUNT(*) FROM issues WHERE issue_type='session' AND status='closed' AND closed_at < DATE_SUB(NOW(), INTERVAL ${SESSION_AGE_H} HOUR);") 2>/dev/null || RAW=""
+                RAW=$(dolt_sql -r csv -q "SELECT COUNT(*) FROM \`${CITY_DB}\`.issues WHERE issue_type='session' AND status='closed' AND closed_at < DATE_SUB(NOW(), INTERVAL ${SESSION_AGE_H} HOUR)") 2>/dev/null || RAW=""
                 COUNT=$(printf '%s\n' "$RAW" | tail -n +2 | tr -d ',' | grep -v '^$' | head -1)
                 TOTAL_SESSIONS_PRUNED="${COUNT:-0}"
             else
                 TOTAL=0
                 while true; do
-                    RAW=$(dolt_sql -r csv -q "USE \`${CITY_DB}\`; SELECT id FROM issues WHERE issue_type='session' AND status='closed' AND closed_at < DATE_SUB(NOW(), INTERVAL ${SESSION_AGE_H} HOUR) LIMIT 500;") 2>/dev/null || break
+                    RAW=$(dolt_sql -r csv -q "SELECT id FROM \`${CITY_DB}\`.issues WHERE issue_type='session' AND status='closed' AND closed_at < DATE_SUB(NOW(), INTERVAL ${SESSION_AGE_H} HOUR) LIMIT 500") 2>/dev/null || break
                     BATCH_IDS=$(printf '%s\n' "$RAW" | tail -n +2 | grep -v '^$')
                     BATCH_COUNT=$(printf '%s\n' "$BATCH_IDS" | grep -c . || true)
                     [ "$BATCH_COUNT" -gt 0 ] || break
                     SQL_IDS=$(printf '%s\n' "$BATCH_IDS" | sed "s/.*/'&'/" | tr '\n' ',' | sed 's/,$//')
-                    dolt_sql -r csv -q "USE \`${CITY_DB}\`;
+                    if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+                        # the bd CLI SQL runs one statement per call and has no session
+                        # USE, so the cascade is three separate db.table-qualified
+                        # DELETEs. No explicit commit: the working set is durable
+                        # and bd owns committing history.
+                        if ! { dolt_sql -r csv -q "DELETE FROM \`${CITY_DB}\`.labels WHERE issue_id IN (${SQL_IDS})" >/dev/null 2>&1 \
+                            && dolt_sql -r csv -q "DELETE FROM \`${CITY_DB}\`.dependencies WHERE issue_id IN (${SQL_IDS}) OR depends_on_issue_id IN (${SQL_IDS})" >/dev/null 2>&1 \
+                            && dolt_sql -r csv -q "DELETE FROM \`${CITY_DB}\`.issues WHERE id IN (${SQL_IDS})" >/dev/null 2>&1; }; then
+                            record_anomaly "session" "SQL cascade failed at offset $TOTAL"; break
+                        fi
+                    else
+                        dolt_sql -r csv -q "USE \`${CITY_DB}\`;
 DELETE FROM labels WHERE issue_id IN (${SQL_IDS});
 DELETE FROM dependencies WHERE issue_id IN (${SQL_IDS}) OR depends_on_issue_id IN (${SQL_IDS});
 DELETE FROM issues WHERE id IN (${SQL_IDS});
 CALL DOLT_COMMIT('-A', '-m', 'reaper: session_beads_pruned=${BATCH_COUNT} type=session age>${SESSION_AGE_H}h', '--author', 'reaper <reaper@gascity.local>');" >/dev/null \
-                        || { record_anomaly "session" "SQL cascade failed at offset $TOTAL"; break; }
+                            || { record_anomaly "session" "SQL cascade failed at offset $TOTAL"; break; }
+                    fi
                     TOTAL=$((TOTAL + BATCH_COUNT))
                 done
                 TOTAL_SESSIONS_PRUNED=$TOTAL
