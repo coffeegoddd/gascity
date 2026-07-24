@@ -222,6 +222,56 @@ func TestCleanupForceRefusesWhenRigDBMatchesBdStalePrefix(t *testing.T) {
 	}
 }
 
+// TestCleanupForcePurgesToReclaimDisk proves --force asks bd to purge the
+// dropped databases' data. Dropping alone frees no disk, which was the entire
+// point of the cleanup — the Go command this delegation replaced did drop and
+// purge together.
+func TestCleanupForcePurgesToReclaimDisk(t *testing.T) {
+	if _, err := exec.LookPath("sh"); err != nil {
+		t.Skip("sh not available")
+	}
+	root := repoRoot(t)
+	binDir := t.TempDir()
+	cityPath := t.TempDir()
+	dataDir := t.TempDir()
+	writeStoreMetadata(t, cityPath, "proxied-server")
+
+	// A registered rig with a name that does NOT collide with bd's prefixes.
+	rigPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(rigPath, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rigPath, ".beads", "metadata.json"),
+		[]byte(`{"dolt_database":"safe_rig"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	writeExecutable(t, filepath.Join(binDir, "gc"), "#!/bin/sh\n"+
+		"if [ \"$1\" = \"rig\" ]; then printf '{\"rigs\":[{\"path\":\""+rigPath+"\"}]}\\n'; fi\nexit 0\n")
+	bdLog := filepath.Join(t.TempDir(), "bd.args")
+	writeExecutable(t, filepath.Join(binDir, "bd"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> '"+bdLog+"'\nexit 0\n")
+
+	cmd := exec.Command("sh", filepath.Join(root, "commands", "cleanup", "run.sh"), "--force")
+	cmd.Env = append(filteredEnv("PATH"),
+		"PATH="+binDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"GC_CITY_PATH="+cityPath,
+		"GC_PACK_DIR="+root,
+		"GC_BEADS_DATA_DIR="+dataDir,
+	)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("cleanup --force failed: %v\n%s", err, out)
+	}
+	body, err := os.ReadFile(bdLog)
+	if err != nil {
+		t.Fatalf("read bd args: %v", err)
+	}
+	if !strings.Contains(string(body), "clean-databases --purge-dropped") {
+		t.Fatalf("--force did not ask bd to purge; bd saw: %q", string(body))
+	}
+	if strings.Contains(string(body), "--dry-run") {
+		t.Fatalf("--force delegated a dry run: %q", string(body))
+	}
+}
+
 // TestPortReadingScriptsAreProxiedAware guards the whole class of bug behind
 // pc1-rqv and pc1-ntz. resolve_dolt_port_or_die returns EMPTY in proxied mode
 // (rather than exiting 78), so a script that dials $GC_BEADS_PORT without ever

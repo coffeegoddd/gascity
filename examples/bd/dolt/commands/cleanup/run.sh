@@ -35,7 +35,9 @@ while [ $# -gt 0 ]; do
       echo "Find Dolt databases not referenced by any registered rig."
       echo ""
       echo "Flags:"
-      echo "  --force            Actually remove orphaned databases"
+      echo "  --force            Actually remove orphaned databases. Under bd"
+      echo "                     proxied-server this also purges the dropped"
+      echo "                     databases' data to reclaim disk (irreversible)."
       echo "  --max N            Refuse if more than N orphans (default: 50)"
       echo "  --server-down-ok   Permit filesystem rm fallback when the dolt"
       echo "                     server is provably stopped. Without this flag"
@@ -114,7 +116,11 @@ if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
           ;;
       esac
     done
-    exec bd -C "$GC_CITY_PATH" dolt clean-databases
+    # --purge-dropped reclaims the disk that dropping alone leaves behind;
+    # without it --force frees no space, which was the point of the cleanup.
+    # It is irreversible and covers every database on this city's proxied
+    # server, which is the same blast radius --force already carries.
+    exec bd -C "$GC_CITY_PATH" dolt clean-databases --purge-dropped
   fi
   exec bd -C "$GC_CITY_PATH" dolt clean-databases --dry-run
 fi
