@@ -742,12 +742,12 @@ run_sql_change() {
         record_anomaly "$db" "$label failed for $db: could not create stderr capture file"
         return 1
     fi
-    # bd proxied-server mode: the bd CLI SQL runs a single statement per call with no
-    # session USE, so the USE/;-joined/ROW_COUNT() form is unavailable. The
-    # query is already fully db.table-qualified; run it directly and read the
-    # affected-row count from bd's rows_affected (bd has a database selected, so
-    # a qualified DML does not hit "no database selected"). Writes land in the
-    # working set; committing to Dolt history is bd's responsibility.
+    # bd proxied-server mode: a batch's trailing SELECT ROW_COUNT() is not
+    # surfaced, so the count comes from bd's rows_affected on a single DML. The
+    # query is already fully db.table-qualified, so it needs no database
+    # context. Each such call is its own unit of work and commits itself with a
+    # generated message; the labeled summary commit below covers whatever is
+    # left, and `gc dolt compact` squashes the per-statement history.
     if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
         if ! rows=$(store_dml_rows_db_qualified "$query" 2>"$stderr_file"); then
             stderr_output=$(cat "$stderr_file" 2>/dev/null || true)
@@ -1149,18 +1149,18 @@ while IFS= read -r DB; do
         ANOMALIES="${ANOMALIES}$DB: $MAIL_WISPS open mail-wisps (mail threshold: $MAIL_ALERT_THRESHOLD)\n"
     fi
 
-    # Commit Dolt changes. Must use CALL (not SELECT) and have an active
-    # database via USE so CALL DOLT_COMMIT(...) runs in the target database.
-    # Commit failures are surfaced as anomalies so the dog loop does not
-    # silently retry forever.
+    # Commit Dolt changes. CALL DOLT_COMMIT(...) is a session/database-context
+    # procedure — it cannot be `db.`-qualified — so the target database is
+    # selected by store_sql_db (--database in proxied mode, --use-db for a
+    # direct dolt client) instead of a USE statement. Commit failures are
+    # surfaced as anomalies so the dog loop does not silently retry forever.
     #
-    # In bd proxied-server mode bd owns commit responsibility: reaper's DML
-    # lands in the durable working set (auto-commit off) and folds into bd's
-    # next commit. CALL DOLT_COMMIT is a session/DB-context procedure that
-    # cannot be issued through the bd CLI SQL, so skip the explicit per-DB commit.
-    if [ "${GC_BEADS_PROXIED:-0}" != 1 ] && [ -z "$DRY_RUN" ] && [ "$DB_MUTATIONS" -gt 0 ]; then
-        if ! COMMIT_OUTPUT=$(dolt_sql -q "
-            USE \`$DB\`;
+    # This is a summary commit: the per-statement DML above already commits its
+    # own unit of work, so on a store that auto-commits this usually reports
+    # "nothing to commit" — tolerated below — and only stamps a labeled commit
+    # when uncommitted changes remain.
+    if [ -z "$DRY_RUN" ] && [ "$DB_MUTATIONS" -gt 0 ]; then
+        if ! COMMIT_OUTPUT=$(store_sql_db "$DB" table "
             CALL DOLT_COMMIT('-Am', 'reaper: stale_wisps=$STALE_WISP_COUNT closed_wisps=$DB_CLOSED_WISPS workflow_roots=$DB_WORKFLOW_ROOTS_CLOSED purged=$DB_PURGED stale_issues=$DB_ISSUES_CLOSED expired_issues=$DB_EXPIRED_ISSUES_CLOSED', '--author', 'reaper <reaper@gastown.local>')
         " 2>&1); then
             case "$COMMIT_OUTPUT" in
@@ -1222,24 +1222,21 @@ if [ -d "$CITY_BEADS_DIR" ]; then
                     BATCH_COUNT=$(printf '%s\n' "$BATCH_IDS" | grep -c . || true)
                     [ "$BATCH_COUNT" -gt 0 ] || break
                     SQL_IDS=$(printf '%s\n' "$BATCH_IDS" | sed "s/.*/'&'/" | tr '\n' ',' | sed 's/,$//')
-                    if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
-                        # the bd CLI SQL runs one statement per call and has no session
-                        # USE, so the cascade is three separate db.table-qualified
-                        # DELETEs. No explicit commit: the working set is durable
-                        # and bd owns committing history.
-                        if ! { dolt_sql -r csv -q "DELETE FROM \`${CITY_DB}\`.labels WHERE issue_id IN (${SQL_IDS})" >/dev/null 2>&1 \
-                            && dolt_sql -r csv -q "DELETE FROM \`${CITY_DB}\`.dependencies WHERE issue_id IN (${SQL_IDS}) OR depends_on_issue_id IN (${SQL_IDS})" >/dev/null 2>&1 \
-                            && dolt_sql -r csv -q "DELETE FROM \`${CITY_DB}\`.issues WHERE id IN (${SQL_IDS})" >/dev/null 2>&1; }; then
-                            record_anomaly "session" "SQL cascade failed at offset $TOTAL"; break
-                        fi
-                    else
-                        dolt_sql -r csv -q "USE \`${CITY_DB}\`;
+                    # The cascade and its commit run as ONE batch against the
+                    # city database, selected by store_sql_db (--database in
+                    # proxied mode, --use-db for a direct dolt client) rather
+                    # than a USE statement. Batching is what yields a single
+                    # labeled commit: every separate call is its own unit of
+                    # work and auto-commits, so a commit issued afterwards
+                    # would find nothing to commit. The batch's row counts are
+                    # not surfaced, which is fine — BATCH_COUNT comes from the
+                    # id SELECT above.
+                    store_sql_db "$CITY_DB" csv "
 DELETE FROM labels WHERE issue_id IN (${SQL_IDS});
 DELETE FROM dependencies WHERE issue_id IN (${SQL_IDS}) OR depends_on_issue_id IN (${SQL_IDS});
 DELETE FROM issues WHERE id IN (${SQL_IDS});
 CALL DOLT_COMMIT('-A', '-m', 'reaper: session_beads_pruned=${BATCH_COUNT} type=session age>${SESSION_AGE_H}h', '--author', 'reaper <reaper@gascity.local>');" >/dev/null \
-                            || { record_anomaly "session" "SQL cascade failed at offset $TOTAL"; break; }
-                    fi
+                        || { record_anomaly "session" "SQL cascade failed at offset $TOTAL"; break; }
                     TOTAL=$((TOTAL + BATCH_COUNT))
                 done
                 TOTAL_SESSIONS_PRUNED=$TOTAL

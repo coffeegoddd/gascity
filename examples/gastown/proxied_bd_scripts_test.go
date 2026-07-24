@@ -74,37 +74,67 @@ func TestReaperRunSQLChangeProxiedUsesBdRowsAffected(t *testing.T) {
 	}
 }
 
-// TestReaperSessionPruneProxiedSplitsCascadeNoCommit proves the proxied
-// session-prune branch issues three separate db.table-qualified DELETEs and no
-// CALL DOLT_COMMIT (bd owns committing history; bd sql runs one statement/call).
-func TestReaperSessionPruneProxiedSplitsCascadeNoCommit(t *testing.T) {
+// TestReaperSessionPruneBatchesCascadeWithLabeledCommit proves the session-prune
+// cascade and its commit run as ONE store_sql_db batch against the city
+// database: batching is what produces a single labeled Dolt commit (each
+// separate call is its own unit of work and auto-commits, so a commit issued
+// afterwards would find nothing to commit). The database is selected by
+// store_sql_db, never by a USE statement, which cannot be relied on to carry
+// context across the proxied wire.
+func TestReaperSessionPruneBatchesCascadeWithLabeledCommit(t *testing.T) {
 	src := readCoreScript(t, "reaper.sh")
-	marker := "# the bd CLI SQL runs one statement per call and has no session"
-	start := strings.Index(src, marker)
+	start := strings.Index(src, `store_sql_db "$CITY_DB"`)
 	if start < 0 {
-		t.Fatal("proxied session-prune branch marker not found")
+		t.Fatal("session-prune store_sql_db batch not found")
 	}
-	elseIdx := strings.Index(src[start:], "\n                    else")
-	if elseIdx < 0 {
-		t.Fatal("proxied branch terminator not found")
+	end := strings.Index(src[start:], "TOTAL=$((TOTAL + BATCH_COUNT))")
+	if end < 0 {
+		t.Fatal("session-prune batch terminator not found")
 	}
-	branch := src[start : start+elseIdx]
+	batch := src[start : start+end]
 
-	// Three separate qualified DELETEs against the CITY_DB, one per table.
-	for _, tbl := range []string{".labels", ".dependencies", ".issues"} {
-		want := "${CITY_DB}"
-		if !strings.Contains(branch, want) || !strings.Contains(branch, "DELETE FROM") || !strings.Contains(branch, tbl) {
-			t.Fatalf("proxied session-prune branch missing qualified DELETE for %q\n%s", tbl, branch)
+	for _, tbl := range []string{"DELETE FROM labels", "DELETE FROM dependencies", "DELETE FROM issues"} {
+		if !strings.Contains(batch, tbl) {
+			t.Fatalf("session-prune batch missing %q\n%s", tbl, batch)
 		}
 	}
-	if n := strings.Count(branch, "DELETE FROM"); n != 3 {
-		t.Fatalf("proxied session-prune branch has %d DELETEs, want 3 (split cascade)\n%s", n, branch)
+	if !strings.Contains(batch, "CALL DOLT_COMMIT") {
+		t.Fatalf("session-prune batch must carry its labeled CALL DOLT_COMMIT\n%s", batch)
 	}
-	if strings.Contains(branch, "CALL DOLT_COMMIT") {
-		t.Fatalf("proxied session-prune branch must not CALL DOLT_COMMIT\n%s", branch)
+	if !strings.Contains(batch, "session_beads_pruned=${BATCH_COUNT}") {
+		t.Fatalf("session-prune commit lost its labeled message\n%s", batch)
 	}
-	if strings.Contains(branch, "USE ") {
-		t.Fatalf("proxied session-prune branch must not USE a database\n%s", branch)
+	if strings.Contains(batch, "USE ") {
+		t.Fatalf("session-prune batch must select the database via store_sql_db, not USE\n%s", batch)
+	}
+}
+
+// TestReaperPerDatabaseCommitUsesDatabaseContext proves the per-database summary
+// commit runs through store_sql_db (which selects the database via --database /
+// --use-db) rather than a USE statement, and is no longer gated off in proxied
+// mode — CALL DOLT_COMMIT cannot be db.-qualified, so database context is the
+// only way to target it.
+func TestReaperPerDatabaseCommitUsesDatabaseContext(t *testing.T) {
+	src := readCoreScript(t, "reaper.sh")
+	idx := strings.Index(src, "reaper: stale_wisps=")
+	if idx < 0 {
+		t.Fatal("per-database summary commit not found")
+	}
+	// Look back far enough to cover the guard and the call itself.
+	windowStart := idx - 1200
+	if windowStart < 0 {
+		windowStart = 0
+	}
+	window := src[windowStart : idx+200]
+
+	if !strings.Contains(window, `store_sql_db "$DB"`) {
+		t.Fatalf("summary commit does not route through store_sql_db\n%s", window)
+	}
+	if strings.Contains(window, `GC_BEADS_PROXIED:-0}" != 1`) {
+		t.Fatalf("summary commit is still gated off in proxied mode\n%s", window)
+	}
+	if strings.Contains(window, "USE \\`$DB\\`") {
+		t.Fatalf("summary commit still uses a USE statement\n%s", window)
 	}
 }
 

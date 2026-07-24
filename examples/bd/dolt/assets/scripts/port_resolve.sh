@@ -159,9 +159,10 @@ _store_bounded() {
 # FORMAT is csv|json|table. Proxied mode routes through `bd sql`; otherwise a
 # direct dolt client (unchanged legacy behavior).
 #
-# bd proxied constraints the caller MUST respect: a single, fully
-# `db.table`-qualified statement — NO `USE`, NO `;`-joined statements (bd
-# surfaces only the first) — and csv/json output carries a header row.
+# Use this for READS. bd executes every statement of a `;`-joined batch but
+# surfaces only the FIRST statement's result, so a read must be a single
+# statement — either `db.table`-qualified or run through store_sql_db, which
+# selects the active database. csv/json output carries a header row.
 store_sql() {
     _ss_fmt="$1"; _ss_q="$2"; _ss_t="${STORE_SQL_TIMEOUT:-5}"
     if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
@@ -182,6 +183,38 @@ store_sql() {
     fi
 }
 
+# store_sql_db DATABASE FORMAT QUERY — run QUERY with DATABASE as the active
+# database, so the statements need no `db.` qualification and no `USE` prefix
+# (`bd sql --database DB`; the dolt client's equivalent is the global
+# `--use-db`). QUERY may be a multi-statement batch: every statement executes,
+# but only the FIRST statement's result is surfaced, so use this for DML/CALL
+# batches and single reads — not for a batch whose trailing SELECT you need.
+#
+# This is the only way to target session/database-context procedures such as
+# CALL DOLT_COMMIT(), which cannot be `db.`-qualified. Pairing the DML and the
+# commit in ONE batch is also what produces a labeled Dolt commit: each separate
+# bd sql call is its own unit of work and auto-commits, so a commit issued in a
+# later call finds nothing to commit.
+store_sql_db() {
+    _sdb_db="$1"; _sdb_fmt="$2"; _sdb_q="$3"; _sdb_t="${STORE_SQL_TIMEOUT:-5}"
+    if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+        case "$_sdb_fmt" in
+            csv)  _store_bounded "$_sdb_t" bd -C "$GC_CITY_PATH" sql --database "$_sdb_db" --csv  "$_sdb_q" ;;
+            json) _store_bounded "$_sdb_t" bd -C "$GC_CITY_PATH" sql --database "$_sdb_db" --json "$_sdb_q" ;;
+            *)    _store_bounded "$_sdb_t" bd -C "$GC_CITY_PATH" sql --database "$_sdb_db"        "$_sdb_q" ;;
+        esac
+    else
+        export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
+        _sdb_host="${GC_BEADS_HOST:-127.0.0.1}"
+        _sdb_user="${GC_BEADS_USER:-root}"
+        case "$_sdb_fmt" in
+            csv)  _store_bounded "$_sdb_t" dolt --host "$_sdb_host" --port "$GC_BEADS_PORT" --user "$_sdb_user" --no-tls --use-db "$_sdb_db" sql --result-format csv  -q "$_sdb_q" ;;
+            json) _store_bounded "$_sdb_t" dolt --host "$_sdb_host" --port "$GC_BEADS_PORT" --user "$_sdb_user" --no-tls --use-db "$_sdb_db" sql --result-format json -q "$_sdb_q" ;;
+            *)    _store_bounded "$_sdb_t" dolt --host "$_sdb_host" --port "$GC_BEADS_PORT" --user "$_sdb_user" --no-tls --use-db "$_sdb_db" sql -q "$_sdb_q" ;;
+        esac
+    fi
+}
+
 # store_reachable — store liveness. In proxied mode this SELECT 1 also respawns
 # an idled proxy. Exit 0 when reachable, non-zero otherwise.
 store_reachable() {
@@ -192,6 +225,12 @@ store_reachable() {
 # statement and echo the affected-row count. Proxied: parse rows_affected from
 # `bd sql --json` (ROW_COUNT() is not recoverable across a fresh connection).
 # Legacy: append a trailing SELECT ROW_COUNT() (dolt returns it) and read it.
+#
+# Trade-off in proxied mode: a single DML reports its row count but auto-commits
+# as its own unit of work, with bd's generated commit message. Callers that want
+# ONE labeled commit instead must batch the DML with CALL DOLT_COMMIT through
+# store_sql_db — which returns no row count. Pick per call site: use this when
+# the count feeds reporting, store_sql_db when the commit label matters.
 store_dml_rows_db_qualified() {
     _sd_q="$1"
     if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
