@@ -38,6 +38,12 @@ type fsPressureStatus struct {
 	Avg60     float64
 	Threshold float64
 	High      bool
+	// DeviceBusyPercent is the busiest real block device's utilization since
+	// the previous observation. DeviceBusyKnown is false when no rate could be
+	// derived (first tick, unreadable diskstats), in which case the gate fails
+	// open — PSI alone never sheds work. See fsPressureIsHigh.
+	DeviceBusyPercent float64
+	DeviceBusyKnown   bool
 }
 
 // fsPressureThreshold returns the currently configured IO pressure threshold.
@@ -73,17 +79,20 @@ func currentFSPressureStatus(stderr io.Writer) (fsPressureStatus, bool) {
 		}
 		return fsPressureStatus{}, false
 	}
+	deviceBusy, deviceKnown := currentDeviceBusyPercent()
 	return fsPressureStatus{
-		Avg60:     avg60,
-		Threshold: threshold,
-		High:      avg60 > threshold,
+		Avg60:             avg60,
+		Threshold:         threshold,
+		High:              fsPressureIsHigh(avg60, threshold, deviceBusy, deviceKnown),
+		DeviceBusyPercent: deviceBusy,
+		DeviceBusyKnown:   deviceKnown,
 	}, true
 }
 
 func logFSPressureSkip(stderr io.Writer, status fsPressureStatus) {
 	if stderr != nil {
-		fmt.Fprintf(stderr, "supervisor: FS pressure high (some avg60=%.2f > threshold=%.1f), skipping tick\n", //nolint:errcheck // best-effort stderr
-			status.Avg60, status.Threshold)
+		fmt.Fprintf(stderr, "supervisor: FS pressure high (some avg60=%.2f > threshold=%.1f, device busy=%.1f%%), skipping tick\n", //nolint:errcheck // best-effort stderr
+			status.Avg60, status.Threshold, status.DeviceBusyPercent)
 	}
 }
 
@@ -156,8 +165,8 @@ func (cr *CityRuntime) shouldSkipTickForFSPressure(trace *sessionReconcilerTrace
 
 	if cr.fsPressureConsecutiveSkips >= maxConsecutiveFSPressureSkips {
 		if cr.stderr != nil {
-			fmt.Fprintf(cr.stderr, "supervisor: FS pressure high (some avg60=%.2f > threshold=%.1f), forcing tick after %d skipped ticks\n", //nolint:errcheck // best-effort stderr
-				status.Avg60, status.Threshold, cr.fsPressureConsecutiveSkips)
+			fmt.Fprintf(cr.stderr, "supervisor: FS pressure high (some avg60=%.2f > threshold=%.1f, device busy=%.1f%%), forcing tick after %d skipped ticks\n", //nolint:errcheck // best-effort stderr
+				status.Avg60, status.Threshold, status.DeviceBusyPercent, cr.fsPressureConsecutiveSkips)
 		}
 		recordFSPressureForcedTickTrace(trace, trigger, status, cr.fsPressureConsecutiveSkips)
 		recordFSPressureSkippedTickEvent(cr.rec, cr.cityName, trigger, status, cr.fsPressureConsecutiveSkips, fsPressureOutcomeForced)

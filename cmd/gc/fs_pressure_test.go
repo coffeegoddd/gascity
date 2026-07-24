@@ -126,6 +126,7 @@ func TestShouldSkipTickForFSPressure_Below(t *testing.T) {
 
 func TestShouldSkipTickForFSPressure_Above(t *testing.T) {
 	withFakePressureFile(t, []byte(samplePressureHigh), nil)
+	withSaturatedDevice(t)
 	t.Setenv(fsPressureThresholdEnv, "")
 	var buf bytes.Buffer
 	cr := &CityRuntime{stderr: &buf}
@@ -192,6 +193,7 @@ func (errFakeMissing) Error() string { return "fake: file not found" }
 func TestShouldSkipTickForFSPressure_EnvThresholdOverride(t *testing.T) {
 	// With low pressure but a very low threshold, we should now skip.
 	withFakePressureFile(t, []byte(samplePressureLow), nil)
+	withSaturatedDevice(t)
 	t.Setenv(fsPressureThresholdEnv, "1.0") // 1.23 > 1.0 -> skip
 	var buf bytes.Buffer
 	cr := &CityRuntime{stderr: &buf}
@@ -205,6 +207,7 @@ func TestShouldSkipTickForFSPressure_EnvThresholdOverride(t *testing.T) {
 
 func TestCityRuntimeTickSkipsBeforeManagedDoltAndDemandUnderFSPressure(t *testing.T) {
 	withFakePressureFile(t, []byte(samplePressureHigh), nil)
+	withSaturatedDevice(t)
 	t.Setenv(fsPressureThresholdEnv, "")
 
 	var buildCalls atomic.Int32
@@ -268,6 +271,7 @@ func TestCityRuntimeTickSkipsBeforeManagedDoltAndDemandUnderFSPressure(t *testin
 
 func TestCityRuntimeTickSkipsDueOrderDispatchUnderFSPressure(t *testing.T) {
 	withFakePressureFile(t, []byte(samplePressureHigh), nil)
+	withSaturatedDevice(t)
 	t.Setenv(fsPressureThresholdEnv, "")
 
 	store := beads.NewMemStore()
@@ -364,6 +368,7 @@ func TestCityRuntimeTickForcesRunAfterMaxConsecutiveFSPressureSkips(t *testing.T
 	withFakePressureReader(t, func(string) ([]byte, error) {
 		return pressure, nil
 	})
+	withSaturatedDevice(t)
 	t.Setenv(fsPressureThresholdEnv, "")
 
 	var buildCalls atomic.Int32
