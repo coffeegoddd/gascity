@@ -48,18 +48,10 @@ while [ $# -gt 0 ]; do
   esac
 done
 
-if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
-  # bd owns the Dolt data dir and process lifecycle in proxied-server mode, so
-  # stale/orphan-database cleanup is bd's responsibility (gascity must never
-  # scan or rm the bd-owned data dir). Delegate to `bd dolt clean-databases`:
-  # default lists (dry-run); --force actually drops.
-  if [ "$force" = true ]; then
-    exec bd -C "$GC_CITY_PATH" dolt clean-databases
-  fi
-  exec bd -C "$GC_CITY_PATH" dolt clean-databases --dry-run
-fi
-
-if [ ! -d "$data_dir" ]; then
+# A missing local data dir means "nothing to scan" only when gascity owns the
+# data dir. In proxied-server mode bd owns it and may place it anywhere, so this
+# must not short-circuit the delegation below.
+if [ "${GC_BEADS_PROXIED:-0}" != 1 ] && [ ! -d "$data_dir" ]; then
   echo "No orphaned databases found."
   exit 0
 fi
@@ -101,6 +93,31 @@ while IFS= read -r meta; do
 done <<EOF
 $(metadata_files)
 EOF
+
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd owns the Dolt data dir and process lifecycle in proxied-server mode, so
+  # stale/orphan-database cleanup is bd's responsibility — gascity must never
+  # scan or rm the bd-owned data dir. Delegate to `bd dolt clean-databases`.
+  #
+  # Safety: bd selects victims purely by NAME PREFIX and has no
+  # registered-rig protection, unlike the Go command this delegation replaced
+  # (which read every rig's dolt_database and refused on metadata error). So
+  # before handing bd a destructive run, refuse if any database this city has
+  # registered would match one of bd's stale prefixes — bd would drop it
+  # without asking. Listing (the default) is always safe.
+  if [ "$force" = true ]; then
+    for _cleanup_db in $referenced; do
+      case "$_cleanup_db" in
+        testdb_*|beads_test*|beads_pt*|beads_vr*|doctest_*|doctortest_*|benchdb_*)
+          echo "gc dolt cleanup: refusing --force: registered database \"$_cleanup_db\" matches a bd stale-database prefix, and \`bd dolt clean-databases\` has no registered-rig protection — it would drop a live rig database. Rename the database, or run bd directly if that is genuinely intended." >&2
+          exit 1
+          ;;
+      esac
+    done
+    exec bd -C "$GC_CITY_PATH" dolt clean-databases
+  fi
+  exec bd -C "$GC_CITY_PATH" dolt clean-databases --dry-run
+fi
 
 # Find orphans.
 orphans=""

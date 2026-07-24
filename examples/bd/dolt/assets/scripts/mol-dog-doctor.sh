@@ -25,6 +25,14 @@ PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." 
 PORT="$GC_BEADS_PORT"
 HOST="${GC_BEADS_HOST:-127.0.0.1}"
 USER="${GC_BEADS_USER:-root}"
+# Human-readable endpoint for operator-facing messages. In bd proxied-server
+# mode there is no port to report — bd owns the endpoint and exposes none — so
+# interpolating $PORT would emit "on port  " and make a real outage unreadable.
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+    ENDPOINT_DESC="bd proxied-server"
+else
+    ENDPOINT_DESC="port $PORT"
+fi
 # Latency warn threshold in milliseconds. GC_DOCTOR_LATENCY_WARN_MS takes
 # precedence; otherwise derive from the legacy seconds knob (default 1s ->
 # 1000ms) for backward compatibility.
@@ -37,10 +45,32 @@ BACKUP_ARTIFACT_DIR="${GC_BACKUP_ARTIFACT_DIR:-$GC_CITY_PATH/.dolt-backup}"
 # a fresh bead every 5-min tick. DOLT_STATE_DIR is set by runtime.sh.
 ADVISORY_STATE_FILE="${GC_DOCTOR_ADVISORY_STATE_FILE:-$DOLT_STATE_DIR/doctor-advisory-state}"
 
+# dolt_sql runs one SQL statement for the doctor probes. In bd proxied-server
+# mode bd owns the endpoint and $PORT is empty, so the query routes through the
+# store_sql shim (`bd sql`); otherwise it opens a direct dolt connection exactly
+# as before. The dolt flag subset the callers use (-r csv|json, -q QUERY) is
+# translated for the shim, mirroring core's dolt-target.sh.
+#
+# The function name and its argument shape are load-bearing: test/dolt/conn_max_test.sh
+# extracts the CONN_MAX block below and evals it with dolt_sql mocked.
 dolt_sql() {
-    DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}" \
-        run_bounded 10 \
-        dolt --host "$HOST" --port "$PORT" --user "$USER" --no-tls sql "$@"
+    if [ "${GC_BEADS_PROXIED:-0}" != 1 ]; then
+        DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}" \
+            run_bounded 10 \
+            dolt --host "$HOST" --port "$PORT" --user "$USER" --no-tls sql "$@"
+        return
+    fi
+    _md_fmt=table
+    _md_q=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -q|--query)          _md_q="$2"; shift 2 ;;
+            -r|--result-format)  case "$2" in csv) _md_fmt=csv ;; json) _md_fmt=json ;; esac; shift 2 ;;
+            -r*)                 case "${1#-r}" in csv) _md_fmt=csv ;; json) _md_fmt=json ;; esac; shift ;;
+            *)                   [ -z "$_md_q" ] && _md_q="$1"; shift ;;
+        esac
+    done
+    STORE_SQL_TIMEOUT=10 store_sql "$_md_fmt" "$_md_q"
 }
 
 # CONN_MAX: explicit override > server @@GLOBAL.max_connections > fallback.
@@ -119,13 +149,13 @@ send_escalation() {
 PROBE_START_MS=$(now_ms)
 if ! dolt_sql -q "SELECT active_branch()" >/dev/null 2>&1; then
     if send_escalation \
-        "ESCALATION: Dolt server unreachable on port $PORT [CRITICAL]" \
+        "ESCALATION: Dolt server unreachable on $ENDPOINT_DESC [CRITICAL]" \
         "Doctor probe failed: server did not respond to active_branch() query."; then
         dolt_notify_done "doctor — server: UNREACHABLE (escalated)"
-        echo "doctor: server unreachable on port $PORT (escalated)"
+        echo "doctor: server unreachable on $ENDPOINT_DESC (escalated)"
     else
         dolt_notify_done "doctor — server: UNREACHABLE (escalation failed)"
-        echo "doctor: server unreachable on port $PORT (escalation failed)"
+        echo "doctor: server unreachable on $ENDPOINT_DESC (escalation failed)"
     fi
     exit 0
 fi
