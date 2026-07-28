@@ -742,10 +742,32 @@ run_sql_change() {
         record_anomaly "$db" "$label failed for $db: could not create stderr capture file"
         return 1
     fi
-    # DML (DELETE/UPDATE) against a database-qualified table still needs an
-    # active database selected, or Dolt can reject it with "no database
-    # selected" (Error 1105) even though the target is fully qualified —
-    # reads (get_sql_count/get_sql_rows) do not. USE the target db first,
+    # bd proxied-server mode: a batch's trailing SELECT ROW_COUNT() is not
+    # surfaced, so the count comes from bd's rows_affected on a single DML. The
+    # query is already fully db.table-qualified, so it needs no database
+    # context. Each such call is its own unit of work and commits itself with a
+    # generated message; the labeled summary commit below covers whatever is
+    # left, and `gc dolt compact` squashes the per-statement history.
+    if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+        if ! rows=$(store_dml_rows_db_qualified "$query" 2>"$stderr_file"); then
+            stderr_output=$(cat "$stderr_file" 2>/dev/null || true)
+            rm -f "$stderr_file"
+            record_anomaly "$db" "$label failed for $db: $(sanitize_output "$stderr_output")"
+            return 1
+        fi
+        rm -f "$stderr_file"
+        rows=$(printf '%s' "$rows" | tr -d '[:space:]\r')
+        if [ -z "$rows" ] || ! [[ "$rows" =~ ^[0-9]+$ ]]; then
+            record_anomaly "$db" "$label returned non-numeric row count for $db"
+            return 1
+        fi
+        SQL_CHANGE_ROWS_RESULT="$rows"
+        return 0
+    fi
+    # Legacy/external direct-dolt path. DML against a database-qualified table
+    # still needs an active database selected, or Dolt can reject it with "no
+    # database selected" (Error 1105) even though the target is fully qualified
+    # — reads (get_sql_count/get_sql_rows) do not. USE the target db first,
     # mirroring the DOLT_COMMIT block below.
     if ! output=$(dolt_sql -r csv -q "
 USE \`$db\`;
@@ -1127,13 +1149,18 @@ while IFS= read -r DB; do
         ANOMALIES="${ANOMALIES}$DB: $MAIL_WISPS open mail-wisps (mail threshold: $MAIL_ALERT_THRESHOLD)\n"
     fi
 
-    # Commit Dolt changes. Must use CALL (not SELECT) and have an active
-    # database via USE so CALL DOLT_COMMIT(...) runs in the target database.
-    # Commit failures are surfaced as anomalies so the dog loop does not
-    # silently retry forever.
+    # Commit Dolt changes. CALL DOLT_COMMIT(...) is a session/database-context
+    # procedure — it cannot be `db.`-qualified — so the target database is
+    # selected by store_sql_db (--database in proxied mode, --use-db for a
+    # direct dolt client) instead of a USE statement. Commit failures are
+    # surfaced as anomalies so the dog loop does not silently retry forever.
+    #
+    # This is a summary commit: the per-statement DML above already commits its
+    # own unit of work, so on a store that auto-commits this usually reports
+    # "nothing to commit" — tolerated below — and only stamps a labeled commit
+    # when uncommitted changes remain.
     if [ -z "$DRY_RUN" ] && [ "$DB_MUTATIONS" -gt 0 ]; then
-        if ! COMMIT_OUTPUT=$(dolt_sql -q "
-            USE \`$DB\`;
+        if ! COMMIT_OUTPUT=$(store_sql_db "$DB" table "
             CALL DOLT_COMMIT('-Am', 'reaper: stale_wisps=$STALE_WISP_COUNT closed_wisps=$DB_CLOSED_WISPS workflow_roots=$DB_WORKFLOW_ROOTS_CLOSED purged=$DB_PURGED stale_issues=$DB_ISSUES_CLOSED expired_issues=$DB_EXPIRED_ISSUES_CLOSED', '--author', 'reaper <reaper@gastown.local>')
         " 2>&1); then
             case "$COMMIT_OUTPUT" in
@@ -1180,19 +1207,31 @@ if [ -d "$CITY_BEADS_DIR" ]; then
         if [ -z "$CITY_DB" ]; then
             record_anomaly "session" "type-safe SQL path: city database unresolved — skipping"
         else
+            # SELECTs are fully db.table-qualified (no USE) so they run
+            # unchanged against the bd CLI SQL (proxied) or a direct dolt connection
+            # (legacy) — reads never need an active database.
             if [ -n "$DRY_RUN" ]; then
-                RAW=$(dolt_sql -r csv -q "USE \`${CITY_DB}\`; SELECT COUNT(*) FROM issues WHERE issue_type='session' AND status='closed' AND closed_at < DATE_SUB(NOW(), INTERVAL ${SESSION_AGE_H} HOUR);") 2>/dev/null || RAW=""
+                RAW=$(dolt_sql -r csv -q "SELECT COUNT(*) FROM \`${CITY_DB}\`.issues WHERE issue_type='session' AND status='closed' AND closed_at < DATE_SUB(NOW(), INTERVAL ${SESSION_AGE_H} HOUR)") 2>/dev/null || RAW=""
                 COUNT=$(printf '%s\n' "$RAW" | tail -n +2 | tr -d ',' | grep -v '^$' | head -1)
                 TOTAL_SESSIONS_PRUNED="${COUNT:-0}"
             else
                 TOTAL=0
                 while true; do
-                    RAW=$(dolt_sql -r csv -q "USE \`${CITY_DB}\`; SELECT id FROM issues WHERE issue_type='session' AND status='closed' AND closed_at < DATE_SUB(NOW(), INTERVAL ${SESSION_AGE_H} HOUR) LIMIT 500;") 2>/dev/null || break
+                    RAW=$(dolt_sql -r csv -q "SELECT id FROM \`${CITY_DB}\`.issues WHERE issue_type='session' AND status='closed' AND closed_at < DATE_SUB(NOW(), INTERVAL ${SESSION_AGE_H} HOUR) LIMIT 500") 2>/dev/null || break
                     BATCH_IDS=$(printf '%s\n' "$RAW" | tail -n +2 | grep -v '^$')
                     BATCH_COUNT=$(printf '%s\n' "$BATCH_IDS" | grep -c . || true)
                     [ "$BATCH_COUNT" -gt 0 ] || break
                     SQL_IDS=$(printf '%s\n' "$BATCH_IDS" | sed "s/.*/'&'/" | tr '\n' ',' | sed 's/,$//')
-                    dolt_sql -r csv -q "USE \`${CITY_DB}\`;
+                    # The cascade and its commit run as ONE batch against the
+                    # city database, selected by store_sql_db (--database in
+                    # proxied mode, --use-db for a direct dolt client) rather
+                    # than a USE statement. Batching is what yields a single
+                    # labeled commit: every separate call is its own unit of
+                    # work and auto-commits, so a commit issued afterwards
+                    # would find nothing to commit. The batch's row counts are
+                    # not surfaced, which is fine — BATCH_COUNT comes from the
+                    # id SELECT above.
+                    store_sql_db "$CITY_DB" csv "
 DELETE FROM labels WHERE issue_id IN (${SQL_IDS});
 DELETE FROM dependencies WHERE issue_id IN (${SQL_IDS}) OR depends_on_issue_id IN (${SQL_IDS});
 DELETE FROM issues WHERE id IN (${SQL_IDS});

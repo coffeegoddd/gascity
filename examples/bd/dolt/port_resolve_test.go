@@ -266,3 +266,174 @@ func assertScriptSourcesPortResolveOnce(t *testing.T, scriptPath string) {
 		t.Fatalf("%s port_resolve.sh source count = %d, want 1\nmatches: %s", scriptPath, len(matches), strings.Join(matches, "\n"))
 	}
 }
+
+// ── bd proxied-server routing ──────────────────────────────────────────
+
+// runPortResolveScript sources port_resolve.sh then runs the given shell
+// body, returning its captured stdout/stderr/exit code. env is appended
+// on top of a GC_/DOLT_-scrubbed base environment (see filteredEnv).
+func runPortResolveScript(t *testing.T, body string, env ...string) portResolveResult {
+	t.Helper()
+	root := repoRoot(t)
+	driver := fmt.Sprintf(". %s\n%s\n", shellQuote(filepath.Join(root, "assets", "scripts", "port_resolve.sh")), body)
+
+	cmd := exec.Command("sh", "-c", driver)
+	cmd.Env = append(filteredEnv(), env...)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	err := cmd.Run()
+	code := 0
+	if err != nil {
+		exitErr := &exec.ExitError{}
+		if !errors.As(err, &exitErr) {
+			t.Fatalf("port_resolve script failed to run: %v\nstdout:\n%s\nstderr:\n%s", err, stdout.String(), stderr.String())
+		}
+		code = exitErr.ExitCode()
+	}
+	return portResolveResult{code: code, stdout: stdout.String(), stderr: stderr.String()}
+}
+
+func TestResolveDoltPortOrDieReturnsEmptyWhenProxied(t *testing.T) {
+	result := runPortResolveScript(t,
+		`resolve_dolt_port_or_die "/nonexistent/state.json" "/nonexistent/data" "/nonexistent/city"`,
+		"GC_BEADS_PROXIED=1",
+	)
+	assertPortResolveResult(t, result, 0, "", "")
+}
+
+func TestBeadsDoltModeReadsMetadataJSON(t *testing.T) {
+	cityPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, ".beads", "metadata.json"),
+		[]byte(`{"backend":"dolt","dolt_mode":"proxied-server","dolt_database":"hq"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// No trailing newline: metadata.json (like the fixture above, and real
+	// output from json.Marshal) commonly has none, and sed's pattern-space
+	// print does not append one when the input's last line lacks it.
+	result := runPortResolveScript(t, `beads_dolt_mode`, "GC_CITY_PATH="+cityPath)
+	assertPortResolveResult(t, result, 0, "proxied-server", "")
+}
+
+func TestBeadsDoltModeMissingMetadataFails(t *testing.T) {
+	cityPath := t.TempDir()
+	result := runPortResolveScript(t, `beads_dolt_mode`, "GC_CITY_PATH="+cityPath)
+	if result.code == 0 {
+		t.Fatalf("beads_dolt_mode exit = 0, want non-zero for missing metadata.json")
+	}
+	if result.stdout != "" {
+		t.Fatalf("beads_dolt_mode stdout = %q, want empty", result.stdout)
+	}
+}
+
+func TestGCBeadsProxiedDetectedFromCityMetadata(t *testing.T) {
+	cityPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, ".beads", "metadata.json"),
+		[]byte(`{"backend":"dolt","dolt_mode":"proxied-server","dolt_database":"hq"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runPortResolveScript(t, `printf '%s\n' "$GC_BEADS_PROXIED"`, "GC_CITY_PATH="+cityPath)
+	assertPortResolveResult(t, result, 0, "1\n", "")
+}
+
+func TestGCBeadsProxiedDefaultsToZeroForServerMode(t *testing.T) {
+	cityPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, ".beads", "metadata.json"),
+		[]byte(`{"backend":"dolt","dolt_mode":"server","dolt_database":"hq"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	result := runPortResolveScript(t, `printf '%s\n' "$GC_BEADS_PROXIED"`, "GC_CITY_PATH="+cityPath)
+	assertPortResolveResult(t, result, 0, "0\n", "")
+}
+
+// writeFakeBinOnPath creates an executable at binDir/name that appends its
+// invocation ("$*") to callLog and exits 0, then returns a PATH prepending
+// binDir to the current process's PATH.
+func writeFakeBinOnPath(t *testing.T, binDir, name, callLog string) string {
+	t.Helper()
+	script := "#!/bin/sh\necho \"$*\" >> " + shellQuote(callLog) + "\necho '[{\"a\":1}]'\nexit 0\n"
+	if err := os.WriteFile(filepath.Join(binDir, name), []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return binDir + string(os.PathListSeparator) + os.Getenv("PATH")
+}
+
+func TestStoreSqlRoutesThroughBdInProxiedMode(t *testing.T) {
+	cityPath := t.TempDir()
+	binDir := t.TempDir()
+	callLog := filepath.Join(t.TempDir(), "bd-calls.log")
+	path := writeFakeBinOnPath(t, binDir, "bd", callLog)
+
+	result := runPortResolveScript(t, `store_sql csv "SELECT 1"`,
+		"GC_CITY_PATH="+cityPath,
+		"GC_BEADS_PROXIED=1",
+		"PATH="+path,
+	)
+	if result.code != 0 {
+		t.Fatalf("store_sql exit = %d, want 0; stderr=%s", result.code, result.stderr)
+	}
+	data, err := os.ReadFile(callLog)
+	if err != nil {
+		t.Fatalf("bd was not invoked: %v", err)
+	}
+	got := strings.TrimSpace(string(data))
+	want := "-C " + cityPath + " sql --csv SELECT 1"
+	if got != want {
+		t.Fatalf("bd invoked with %q, want %q", got, want)
+	}
+}
+
+func TestStoreSqlRoutesThroughDoltInLegacyMode(t *testing.T) {
+	cityPath := t.TempDir()
+	binDir := t.TempDir()
+	callLog := filepath.Join(t.TempDir(), "dolt-calls.log")
+	path := writeFakeBinOnPath(t, binDir, "dolt", callLog)
+
+	result := runPortResolveScript(t, `store_sql csv "SELECT 1"`,
+		"GC_CITY_PATH="+cityPath,
+		"GC_BEADS_PROXIED=0",
+		"GC_DOLT_PORT=4406",
+		"PATH="+path,
+	)
+	if result.code != 0 {
+		t.Fatalf("store_sql exit = %d, want 0; stderr=%s", result.code, result.stderr)
+	}
+	data, err := os.ReadFile(callLog)
+	if err != nil {
+		t.Fatalf("dolt was not invoked: %v", err)
+	}
+	got := strings.TrimSpace(string(data))
+	want := "--host 127.0.0.1 --port 4406 --user root --no-tls sql --result-format csv -q SELECT 1"
+	if got != want {
+		t.Fatalf("dolt invoked with %q, want %q", got, want)
+	}
+}
+
+func TestStoreDmlRowsDbQualifiedParsesRowsAffectedInProxiedMode(t *testing.T) {
+	cityPath := t.TempDir()
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "bd"), []byte("#!/bin/sh\necho '{\"rows_affected\":3}'\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := binDir + string(os.PathListSeparator) + os.Getenv("PATH")
+
+	result := runPortResolveScript(t, `store_dml_rows_db_qualified "DELETE FROM db.issues WHERE 1=0"`,
+		"GC_CITY_PATH="+cityPath,
+		"GC_BEADS_PROXIED=1",
+		"PATH="+path,
+	)
+	assertPortResolveResult(t, result, 0, "3\n", "")
+}

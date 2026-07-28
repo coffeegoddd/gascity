@@ -21,10 +21,33 @@ MIN_DOLT_BACKUP_VERSION="2.1.0"
 BACKUP_LOCK_FILE="${GC_DOLT_BACKUP_LOCK_FILE:-$GC_CITY_PATH/.gc/runtime/packs/dolt/backup-sync.lock}"
 BACKUP_LOCK_WAIT_SECONDS="${GC_DOLT_BACKUP_LOCK_WAIT_SECONDS:-5}"
 
+# dolt_sql runs this script's only SQL — the SHOW DATABASES discovery query. In
+# bd proxied-server mode bd owns the endpoint and $PORT is empty, so it routes
+# through the store_sql shim; otherwise it opens a direct dolt connection as
+# before. Without this, discovery silently returned nothing and the script
+# reported "no databases found", registering no backup remotes at all — which is
+# why gc doctor's dolt-backup check never found a `<db>-backup` remote.
+#
+# The `dolt backup add|sync|list` calls further down are unaffected: they run
+# against the on-disk repo via `cd "$db_dir"` and need no port.
 dolt_sql() {
-    DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}" \
-        run_bounded 30 \
-        dolt --host "$HOST" --port "$PORT" --user "$USER" --no-tls sql "$@"
+    if [ "${GC_BEADS_PROXIED:-0}" != 1 ]; then
+        DOLT_CLI_PASSWORD="${GC_DOLT_PASSWORD:-}" \
+            run_bounded 30 \
+            dolt --host "$HOST" --port "$PORT" --user "$USER" --no-tls sql "$@"
+        return
+    fi
+    _mb_fmt=table
+    _mb_q=""
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            -q|--query)          _mb_q="$2"; shift 2 ;;
+            -r|--result-format)  case "$2" in csv) _mb_fmt=csv ;; json) _mb_fmt=json ;; esac; shift 2 ;;
+            -r*)                 case "${1#-r}" in csv) _mb_fmt=csv ;; json) _mb_fmt=json ;; esac; shift ;;
+            *)                   [ -z "$_mb_q" ] && _mb_q="$1"; shift ;;
+        esac
+    done
+    STORE_SQL_TIMEOUT=30 store_sql "$_mb_fmt" "$_mb_q"
 }
 
 dolt_version_at_least() {
