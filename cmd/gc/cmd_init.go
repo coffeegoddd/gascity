@@ -82,10 +82,11 @@ type wizardConfig struct {
 	configName       string // canonical values: "minimal", "gastown", "gascity", "custom", or "empty"
 	defaultProvider  string // selected default provider key
 	providers        []string
-	provider         string                // compatibility mirror for older internal callers
-	startCommand     string                // custom start command (workspace-level)
-	bootstrapProfile string                // hosted bootstrap profile, or "" for local defaults
-	hostedDolt       hostedDoltInitOptions // external/hosted Dolt ledger endpoint (disabled when zero)
+	provider         string                   // compatibility mirror for older internal callers
+	startCommand     string                   // custom start command (workspace-level)
+	bootstrapProfile string                   // hosted bootstrap profile, or "" for local defaults
+	hostedDolt       hostedDoltInitOptions    // external/hosted Dolt ledger endpoint (disabled when zero)
+	proxiedServer    proxiedServerInitOptions // opt-in bd proxied-server mode (disabled when zero)
 	err              error
 }
 
@@ -326,6 +327,7 @@ func newInitCmd(stdout, stderr io.Writer) *cobra.Command {
 	var doltUserFlag string
 	var doltDatabaseFlag string
 	var doltProjectIDFlag string
+	var proxiedServerFlag bool
 	var skipProviderReadiness bool
 	var preserveExisting bool
 	var jsonOut bool
@@ -384,7 +386,8 @@ committed workspace — e.g. from a bootstrap.sh shipped in the repo).`,
 				Database:  doltDatabaseFlag,
 				ProjectID: doltProjectIDFlag,
 			}, os.Getenv)
-			wiz, flagMode, err := initWizardConfigFromFlags(runCmd, providerFlag, defaultProviderFlag, providersFlag, templateFlag, bootstrapProfileFlag, hosted, skipProviderReadiness)
+			proxiedServer := proxiedServerInitOptions{Enabled: proxiedServerFlag}
+			wiz, flagMode, err := initWizardConfigFromFlags(runCmd, providerFlag, defaultProviderFlag, providersFlag, templateFlag, bootstrapProfileFlag, hosted, proxiedServer, skipProviderReadiness)
 			if err != nil {
 				fmt.Fprintf(stderr, "gc init: %v\n", err) //nolint:errcheck // best-effort stderr
 				return err
@@ -409,6 +412,7 @@ committed workspace — e.g. from a bootstrap.sh shipped in the repo).`,
 	cmd.Flags().StringVar(&doltUserFlag, "dolt-user", "", "external/hosted Dolt user (or "+envDoltUser+"); optional")
 	cmd.Flags().StringVar(&doltDatabaseFlag, "dolt-database", "", "hosted beads project database, e.g. bd_prj_… (or "+envDoltDatabase+"); required with --dolt-host")
 	cmd.Flags().StringVar(&doltProjectIDFlag, "dolt-project-id", "", "authoritative beads project_id for the identity handshake (or "+envBeadsProjectID+"); derived from a bd_<id> --dolt-database when omitted")
+	cmd.Flags().BoolVar(&proxiedServerFlag, "proxied-server", false, "opt in to bd's proxied-server mode: bd owns the Dolt sql-server lifecycle (port, spawn, idle-shutdown, credentials) instead of gascity managing it; incompatible with --dolt-host")
 	cmd.Flags().BoolVar(&skipProviderReadiness, "skip-provider-readiness", false, "skip provider login/readiness checks during init and continue startup")
 	cmd.Flags().BoolVar(&noStart, "no-start", false, "initialize files and imports without registering or starting the city")
 	cmd.Flags().BoolVar(&preserveExisting, "preserve-existing", false, "keep any pre-authored pack.toml, city.toml, or agent prompt files instead of overwriting them")
@@ -429,6 +433,9 @@ committed workspace — e.g. from a bootstrap.sh shipped in the repo).`,
 		cmd.MarkFlagsMutuallyExclusive(doltFlag, "file")
 		cmd.MarkFlagsMutuallyExclusive(doltFlag, "from")
 	}
+	cmd.MarkFlagsMutuallyExclusive("proxied-server", "file")
+	cmd.MarkFlagsMutuallyExclusive("proxied-server", "from")
+	cmd.MarkFlagsMutuallyExclusive("proxied-server", "dolt-host")
 	_ = cmd.Flags().MarkHidden("provider")
 	return cmd
 }
@@ -597,17 +604,20 @@ func initWizardConfig(providerFlag, bootstrapProfileFlag string, skipProviderRea
 	}, nil
 }
 
-func initWizardConfigFromFlags(cmd *cobra.Command, providerFlag, defaultProviderFlag string, providersFlag []string, templateFlag, bootstrapProfileFlag string, hosted hostedDoltInitOptions, skipProviderReadiness bool) (wizardConfig, string, error) {
+func initWizardConfigFromFlags(cmd *cobra.Command, providerFlag, defaultProviderFlag string, providersFlag []string, templateFlag, bootstrapProfileFlag string, hosted hostedDoltInitOptions, proxiedServer proxiedServerInitOptions, skipProviderReadiness bool) (wizardConfig, string, error) {
 	legacyChanged := cmd.Flags().Changed("provider")
 	defaultChanged := cmd.Flags().Changed("default-provider")
 	providersChanged := cmd.Flags().Changed("providers")
 	templateChanged := cmd.Flags().Changed("template")
 	bootstrapChanged := strings.TrimSpace(bootstrapProfileFlag) != ""
 
-	if !legacyChanged && !defaultChanged && !providersChanged && !templateChanged && !bootstrapChanged && !hosted.enabled() {
+	if !legacyChanged && !defaultChanged && !providersChanged && !templateChanged && !bootstrapChanged && !hosted.enabled() && !proxiedServer.enabled() {
 		return wizardConfig{}, "", nil
 	}
 	if err := hosted.validate(); err != nil {
+		return wizardConfig{}, "", err
+	}
+	if err := proxiedServer.validate(hosted); err != nil {
 		return wizardConfig{}, "", err
 	}
 	if legacyChanged && defaultChanged {
@@ -664,6 +674,7 @@ func initWizardConfigFromFlags(cmd *cobra.Command, providerFlag, defaultProvider
 		provider:         defaultProvider,
 		bootstrapProfile: bootstrapProfile,
 		hostedDolt:       hosted,
+		proxiedServer:    proxiedServer,
 	}, mode, nil
 }
 
@@ -1388,6 +1399,13 @@ func doInit(fs fsys.FS, cityPath string, wiz wizardConfig, nameOverride string, 
 			fmt.Fprintf(stderr, "gc init: %v\n", err) //nolint:errcheck // best-effort stderr
 			return 1
 		}
+	}
+	if wiz.proxiedServer.enabled() {
+		if err := wiz.proxiedServer.validate(wiz.hostedDolt); err != nil {
+			fmt.Fprintf(stderr, "gc init: %v\n", err) //nolint:errcheck // best-effort stderr
+			return 1
+		}
+		wiz.proxiedServer.applyToCityConfig(&cfg)
 	}
 	cityPrefix := strings.TrimSpace(cfg.Workspace.Prefix)
 

@@ -3786,7 +3786,7 @@ func TestInitWizardConfigFromFlagsRejectsUnknownTemplate(t *testing.T) {
 		t.Fatal(err)
 	}
 	template, _ := cmd.Flags().GetString("template")
-	if _, _, err := initWizardConfigFromFlags(cmd, "", "", nil, template, "", hostedDoltInitOptions{}, false); err == nil {
+	if _, _, err := initWizardConfigFromFlags(cmd, "", "", nil, template, "", hostedDoltInitOptions{}, proxiedServerInitOptions{}, false); err == nil {
 		t.Fatal("expected error for unknown template")
 	}
 }
@@ -3835,7 +3835,7 @@ func TestInitWizardConfigFromFlagsDefaultProviderInfersProviders(t *testing.T) {
 		t.Fatal(err)
 	}
 	defaultProvider, _ := cmd.Flags().GetString("default-provider")
-	wiz, mode, err := initWizardConfigFromFlags(cmd, "", defaultProvider, nil, "", "", hostedDoltInitOptions{}, false)
+	wiz, mode, err := initWizardConfigFromFlags(cmd, "", defaultProvider, nil, "", "", hostedDoltInitOptions{}, proxiedServerInitOptions{}, false)
 	if err != nil {
 		t.Fatalf("initWizardConfigFromFlags: %v", err)
 	}
@@ -3860,7 +3860,7 @@ func TestInitWizardConfigFromFlagsProvidersCanonicalOrder(t *testing.T) {
 	}
 	defaultProvider, _ := cmd.Flags().GetString("default-provider")
 	providers, _ := cmd.Flags().GetStringArray("providers")
-	wiz, _, err := initWizardConfigFromFlags(cmd, "", defaultProvider, providers, "", "", hostedDoltInitOptions{}, false)
+	wiz, _, err := initWizardConfigFromFlags(cmd, "", defaultProvider, providers, "", "", hostedDoltInitOptions{}, proxiedServerInitOptions{}, false)
 	if err != nil {
 		t.Fatalf("initWizardConfigFromFlags: %v", err)
 	}
@@ -3875,7 +3875,7 @@ func TestInitWizardConfigFromFlagsProvidersRequireDefault(t *testing.T) {
 		t.Fatal(err)
 	}
 	providers, _ := cmd.Flags().GetStringArray("providers")
-	if _, _, err := initWizardConfigFromFlags(cmd, "", "", providers, "", "", hostedDoltInitOptions{}, false); err == nil {
+	if _, _, err := initWizardConfigFromFlags(cmd, "", "", providers, "", "", hostedDoltInitOptions{}, proxiedServerInitOptions{}, false); err == nil {
 		t.Fatal("expected --providers without --default-provider to fail")
 	}
 }
@@ -3886,7 +3886,7 @@ func TestInitWizardConfigFromFlagsRejectsProviderListTypo(t *testing.T) {
 		t.Fatal(err)
 	}
 	provider, _ := cmd.Flags().GetString("provider")
-	_, _, err := initWizardConfigFromFlags(cmd, provider, "", nil, "", "", hostedDoltInitOptions{}, false)
+	_, _, err := initWizardConfigFromFlags(cmd, provider, "", nil, "", "", hostedDoltInitOptions{}, proxiedServerInitOptions{}, false)
 	if err == nil {
 		t.Fatal("expected deprecated --provider list typo to fail")
 	}
@@ -3905,7 +3905,7 @@ func TestInitWizardConfigFromFlagsTemplateCustomRejectsProviders(t *testing.T) {
 	}
 	template, _ := cmd.Flags().GetString("template")
 	defaultProvider, _ := cmd.Flags().GetString("default-provider")
-	if _, _, err := initWizardConfigFromFlags(cmd, "", defaultProvider, nil, template, "", hostedDoltInitOptions{}, false); err == nil {
+	if _, _, err := initWizardConfigFromFlags(cmd, "", defaultProvider, nil, template, "", hostedDoltInitOptions{}, proxiedServerInitOptions{}, false); err == nil {
 		t.Fatal("expected --template custom with provider flags to fail")
 	}
 }
