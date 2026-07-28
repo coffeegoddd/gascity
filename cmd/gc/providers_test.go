@@ -142,6 +142,58 @@ func TestRawBeadsProviderPreservesCustomExecOverride(t *testing.T) {
 	}
 }
 
+func TestCityUsesProxiedServerModeNoBeadsDir(t *testing.T) {
+	cityDir := t.TempDir()
+	if got := cityUsesProxiedServerMode(cityDir); got {
+		t.Fatalf("cityUsesProxiedServerMode() = %v, want false with no .beads dir", got)
+	}
+}
+
+func TestCityUsesProxiedServerModeEmptyCityPath(t *testing.T) {
+	if got := cityUsesProxiedServerMode(""); got {
+		t.Fatalf("cityUsesProxiedServerMode(\"\") = %v, want false", got)
+	}
+}
+
+func TestCityUsesProxiedServerModeServerMode(t *testing.T) {
+	cityDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityDir, ".beads", "metadata.json"), []byte(`{"database":"dolt","backend":"dolt","dolt_mode":"server","dolt_database":"gc"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := cityUsesProxiedServerMode(cityDir); got {
+		t.Fatalf("cityUsesProxiedServerMode() = %v, want false for dolt_mode=server", got)
+	}
+}
+
+func TestCityUsesProxiedServerModeEmbeddedMode(t *testing.T) {
+	cityDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityDir, ".beads", "metadata.json"), []byte(`{"database":"dolt","backend":"dolt","dolt_mode":"embedded","dolt_database":"gc"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := cityUsesProxiedServerMode(cityDir); got {
+		t.Fatalf("cityUsesProxiedServerMode() = %v, want false for dolt_mode=embedded", got)
+	}
+}
+
+func TestCityUsesProxiedServerModeProxiedServerMode(t *testing.T) {
+	cityDir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityDir, ".beads", "metadata.json"), []byte(`{"database":"dolt","backend":"dolt","dolt_mode":"proxied-server","dolt_database":"gc"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := cityUsesProxiedServerMode(cityDir); !got {
+		t.Fatalf("cityUsesProxiedServerMode() = %v, want true for dolt_mode=proxied-server", got)
+	}
+}
+
 func TestRawBeadsProviderForScopePreservesExplicitEnvOverride(t *testing.T) {
 	cityDir := t.TempDir()
 	rigDir := filepath.Join(cityDir, "frontend")
