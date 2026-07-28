@@ -114,28 +114,25 @@ func TestRecoverProxiedIsNoOpWhenReachable(t *testing.T) {
 	}
 }
 
-// TestRemoteCommandsProxiedNoOp proves sync/pull — which gascity keeps local-
-// only (no Dolt remotes; bd owns remotes) — exit 0 with an explanatory message
-// and never shell out to dolt. This keeps dolt-remotes-patrol from logging
-// OrderFailed.
-func TestRemoteCommandsProxiedNoOp(t *testing.T) {
-	for _, tc := range []struct {
-		name   string
-		expect string
-	}{
-		{"sync", "nothing to sync"},
-		{"pull", "nothing to pull"},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			out, code := runDoltCommandProxied(t, tc.name, "")
+// TestRemoteCommandsProxiedSkipWithNoRemote proves sync/pull enumerate the bd
+// server catalog (SHOW DATABASES) in proxied mode and route entirely through
+// `bd sql --database`, never shelling out to `dolt` directly. fakeBdDiag's
+// catalog has one non-system database ("hq") with no configured remote, so
+// each command reports a per-database "skipped (no remote)" rather than a
+// blanket no-op — sync/pull do real work in proxied mode once a remote is
+// configured (see sync_proxied_test.go / pull_proxied_test.go).
+func TestRemoteCommandsProxiedSkipWithNoRemote(t *testing.T) {
+	for _, name := range []string{"sync", "pull"} {
+		t.Run(name, func(t *testing.T) {
+			out, code := runDoltCommandProxied(t, name, "")
 			if code != 0 {
-				t.Fatalf("%s: exit=%d, want 0\n%s", tc.name, code, out)
+				t.Fatalf("%s: exit=%d, want 0\n%s", name, code, out)
 			}
-			if !strings.Contains(out, tc.expect) {
-				t.Fatalf("%s: out=%q, want to contain %q", tc.name, out, tc.expect)
+			if !strings.Contains(out, "hq: skipped (no remote)") {
+				t.Fatalf("%s: out=%q, want to contain %q", name, out, "hq: skipped (no remote)")
 			}
 			if strings.Contains(out, "dolt must not run") {
-				t.Fatalf("%s shelled out to dolt in proxied no-op mode: %q", tc.name, out)
+				t.Fatalf("%s shelled out to dolt in proxied mode: %q", name, out)
 			}
 		})
 	}

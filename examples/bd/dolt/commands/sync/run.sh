@@ -2,7 +2,9 @@
 # gc dolt sync — Push Dolt databases to their configured remotes.
 #
 # Uses the live Dolt SQL server when reachable so sync does not restart
-# active databases. Falls back to CLI mode only when no server is running.
+# active databases. Falls back to CLI mode only when no server is running
+# (legacy/external cities only — bd proxied-server mode always routes
+# through `bd sql`, since bd auto-starts its own server transparently).
 # Pushes committed branch state only; it does not auto-commit working
 # changes before pushing.
 # Use --gc to purge closed ephemeral beads before syncing.
@@ -21,15 +23,21 @@
 #
 # Environment:
 #   GC_CITY_PATH                          (required) — city root
-#   GC_BEADS_PORT                          (required) — managed dolt port
+#   GC_BEADS_PORT                          (required in legacy mode) — managed dolt port
 #   GC_BEADS_USER                          (default: root)
 #   GC_BEADS_PASSWORD                      (optional)
 #   GC_BEADS_SYNC_PUSH_TIMEOUT_SECS
-#     (default: 1800) — wall-clock bound for SQL-mode remote push. Increase for
+#     (default: 1800) — wall-clock bound for the remote push. Increase for
 #                     slow links or large first pushes (a multi-GB first push to
 #                     a fresh remote can exceed the prior fixed 120s ceiling).
 #                     Metadata queries (remote lookup, active branch) keep their
 #                     own 120s bound.
+#
+# In bd proxied-server mode (GC_BEADS_PROXIED=1), every query below routes
+# through `bd sql --database <name>` (store_sql / store_sql_db in
+# port_resolve.sh) instead of a direct `dolt --host --port` connection. bd
+# owns the endpoint, the process lifecycle, and per-database session context;
+# gascity never dials a port or reads bd's on-disk data directory directly.
 set -e
 
 dry_run=false
@@ -60,8 +68,9 @@ while [ $# -gt 0 ]; do
       echo "  --db NAME   Sync only the named database"
       echo ""
       echo "Policy:"
-      echo "  Create .no-sync in a database's .beads/dolt/<db>/ directory to"
-      echo "  exclude it from sync (reported as 'skipped (.no-sync)')."
+      echo "  Create .no-sync in a database's owning .beads/ directory (the"
+      echo "  city root for the HQ database, or a rig's .beads/ for a rig"
+      echo "  database) to exclude it from sync (reported as 'skipped (.no-sync)')."
       echo ""
       echo "Environment:"
       echo "  GC_BEADS_SYNC_FETCH_TIMEOUT_SECS  pre-push fetch bound (default 60)"
@@ -83,20 +92,11 @@ esac
 PACK_DIR="${GC_PACK_DIR:-$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)}"
 . "$PACK_DIR/assets/scripts/runtime.sh"
 
-if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
-  # In bd proxied-server mode bd owns the endpoint and per-scope Dolt remotes.
-  # gascity opens no direct connection and does not manage remotes, and this
-  # deployment is local-only (no Dolt remotes), so there is nothing to push.
-  # When bd exposes remote push through the proxy, delegate here.
-  echo "gc dolt sync: proxied-server mode — bd owns remotes; local-only city, nothing to sync."
-  exit 0
-fi
-
 beads_bd="$GC_BEADS_BD_SCRIPT"
 data_dir="$DOLT_DATA_DIR"
 
-# Wall-clock bound for SQL-mode remote push (seconds). Defaults to 1800s; the
-# prior fixed 120s ceiling SIGKILLed large first pushes that succeed when issued
+# Wall-clock bound for remote push (seconds). Defaults to 1800s; the prior
+# fixed 120s ceiling SIGKILLed large first pushes that succeed when issued
 # directly to the running sql-server. An explicitly-empty / non-numeric / any
 # numeric-zero value is rejected (not silently defaulted) so a misconfigured
 # bound fails loud instead of producing a misleading "TIMEOUT after 0s".
@@ -122,7 +122,7 @@ if [ "$push_timeout_valid" != true ]; then
   exit 2
 fi
 
-# Wall-clock bound for the SQL-mode pre-push fetch (seconds). Defaults to 60s.
+# Wall-clock bound for the pre-push fetch (seconds). Defaults to 60s.
 # A hung fetch against a sick remote must not stall the whole patrol, so the
 # fetch is bounded and a timeout skips that database without pushing. Validated
 # with the same rules as the push timeout (reject empty / non-numeric /
@@ -139,7 +139,8 @@ if [ "$fetch_timeout_valid" != true ]; then
   exit 2
 fi
 
-# Check if server is running.
+# Check if server is running (legacy/external mode only; proxied mode always
+# routes through `bd sql`, which auto-starts bd's own server as needed).
 is_running() {
   managed_runtime_tcp_reachable "$GC_BEADS_PORT"
 }
@@ -170,6 +171,24 @@ routes_files() {
   find "$GC_CITY_PATH/rigs" -path '*/.beads/routes.jsonl' 2>/dev/null || true
 }
 
+# beads_dir_for_db <name> — emit the .beads directory that owns database
+# <name> (the city root for the HQ database, or a rig's .beads/ for a rig
+# database), by scanning routes_files() for a reference to <name>. Emits
+# nothing if no route file mentions it.
+beads_dir_for_db() {
+  _bdfd_name="$1"
+  while IFS= read -r route_file; do
+    [ -f "$route_file" ] || continue
+    if grep -q "\"$_bdfd_name\"" "$route_file" 2>/dev/null; then
+      dirname "$route_file"
+      return 0
+    fi
+  done <<ROUTES_LIST
+$(routes_files)
+ROUTES_LIST
+  return 1
+}
+
 valid_database_name() {
   case "$1" in
     [A-Za-z0-9_]*)
@@ -196,6 +215,24 @@ valid_branch_name() {
       ;;
     *) return 1 ;;
   esac
+}
+
+# proxied_database_names — list user databases via the bd-owned server
+# catalog (SHOW DATABASES). bd owns the data dir in proxied mode, so a
+# filesystem scan is neither available nor authoritative; the SQL catalog is
+# (mirrors gc dolt health/list's external_database_names).
+proxied_database_names() {
+  _show_csv=$(store_sql csv "SHOW DATABASES" 2>/dev/null || true)
+  printf '%s\n' "$_show_csv" | while IFS= read -r _raw; do
+    _name=$(printf '%s' "$_raw" | tr -d '\r' | sed 's/^"//; s/"$//')
+    [ -n "$_name" ] || continue
+    [ "$_name" = "Database" ] && continue
+    case "$(printf '%s' "$_name" | tr '[:upper:]' '[:lower:]')" in
+      information_schema|mysql|dolt|dolt_cluster|performance_schema|sys|__gc_probe) continue ;;
+    esac
+    valid_database_name "$_name" || continue
+    printf '%s\n' "$_name"
+  done
 }
 
 # refspec_env_value <db> — emit the GC_BEADS_REFSPEC_<DB_UPPER> override, if any.
@@ -236,19 +273,22 @@ refspec_parts() {
   printf '%s\n%s\n' "$l" "$r"
 }
 
-# dolt_sql QUERY [TIMEOUT_SECS] — run a SQL query against the live server under a
-# wall-clock bound. The optional second arg overrides the bound; it defaults to
-# 120s, which is sized for SHORT METADATA QUERIES ONLY (remote lookup,
-# active_branch). This is a load-bearing contract: any data-transfer operation
-# (e.g. DOLT_PUSH) MUST pass its own larger bound, or it will silently re-hit
-# this 120s ceiling and be SIGKILLed mid-transfer.
-dolt_sql() {
-  query="$1"
-  tmo="${2:-120}"
-  host="${GC_BEADS_HOST:-127.0.0.1}"
-  export DOLT_CLI_PASSWORD="${GC_BEADS_PASSWORD:-}"
-  run_bounded "$tmo" dolt --host "$host" --port "$GC_BEADS_PORT" --user "$GC_BEADS_USER" --no-tls \
-    sql --result-format csv -q "$query"
+# db_sql <db> <query> [timeout_secs] — run one SQL statement with <db> as the
+# active database, under a wall-clock bound (default 120s, sized for SHORT
+# METADATA QUERIES ONLY — remote lookup, active_branch, classify counts). This
+# is a load-bearing contract: any data-transfer operation (fetch, push) MUST
+# pass its own larger bound, or it will silently re-hit this 120s ceiling and
+# be SIGKILLed mid-transfer.
+#
+# Wraps store_sql_db (port_resolve.sh): bd proxied mode routes through
+# `bd sql --database <db>`; legacy mode routes through a direct
+# `dolt --host --port --use-db <db>` connection. Callers no longer prefix
+# queries with `USE \`<db>\`;` — store_sql_db selects the database itself.
+db_sql() {
+  db_sql_db="$1"
+  db_sql_query="$2"
+  db_sql_tmo="${3:-120}"
+  STORE_SQL_TIMEOUT="$db_sql_tmo" store_sql_db "$db_sql_db" csv "$db_sql_query"
 }
 
 # classify_count <db> <revrange> — emit the dolt_log commit count for a revision
@@ -261,13 +301,13 @@ dolt_sql() {
 classify_count() {
   cc_db="$1"
   cc_range="$2"
-  cc_out=$(dolt_sql "USE \`$cc_db\`; SELECT COUNT(*) AS n FROM dolt_log('$cc_range')") || return 1
+  cc_out=$(db_sql "$cc_db" "SELECT COUNT(*) AS n FROM dolt_log('$cc_range')") || return 1
   printf '%s\n' "$cc_out" | awk -F, 'NR == 2 { gsub(/^"|"$/, "", $1); print $1; exit }'
 }
 
 find_remote_sql() {
   db="$1"
-  remote_csv=$(dolt_sql "USE \`$db\`; SELECT name, url FROM dolt_remotes LIMIT 1") || return 1
+  remote_csv=$(db_sql "$db" "SELECT name, url FROM dolt_remotes LIMIT 1") || return 1
   printf '%s\n' "$remote_csv" | awk -F, 'NR > 1 && $1 != "" {print $1 "|" $2; exit}'
 }
 
@@ -289,7 +329,7 @@ resolve_refspec_sql() {
     printf '%s\n' "$parts"
     return 0
   fi
-  if active_csv=$(dolt_sql "USE \`$db\`; SELECT active_branch()" 2>/dev/null); then
+  if active_csv=$(db_sql "$db" "SELECT active_branch()" 2>/dev/null); then
     active=$(printf '%s\n' "$active_csv" | awk 'NR > 1 && $0 != "" {gsub(/^"|"$/, ""); print; exit}')
     if [ -n "$active" ] && valid_branch_name "$active"; then
       printf '%s\n%s\n' "$active" "$active"
@@ -398,7 +438,7 @@ sync_database_sql() {
       return 1
     }
     fetch_rc=0
-    dolt_sql "USE \`$name\`; CALL DOLT_FETCH('$remote_name', '$remote_branch')" "$fetch_timeout" \
+    db_sql "$name" "CALL DOLT_FETCH('$remote_name', '$remote_branch')" "$fetch_timeout" \
       >/dev/null 2>"$fetch_err_tmp" || fetch_rc=$?
     if [ "$fetch_rc" -ne 0 ] && { grep -q "no branches found in remote" "$fetch_err_tmp" 2>/dev/null || grep -q "invalid ref spec" "$fetch_err_tmp" 2>/dev/null; }; then
       # The remote has no such branch: an empty remote ("no branches found in
@@ -474,9 +514,9 @@ sync_database_sql() {
   fi
 
   if [ "$force" = true ]; then
-    push_query="USE \`$name\`; CALL DOLT_PUSH('--force', '--set-upstream', '$remote_name', '$refspec_arg')"
+    push_query="CALL DOLT_PUSH('--force', '--set-upstream', '$remote_name', '$refspec_arg')"
   else
-    push_query="USE \`$name\`; CALL DOLT_PUSH('$remote_name', '$refspec_arg')"
+    push_query="CALL DOLT_PUSH('$remote_name', '$refspec_arg')"
   fi
   push_rc=0
   # Guard mktemp: under `set -e` a bare `$(mktemp)` failure (unwritable or
@@ -488,10 +528,10 @@ sync_database_sql() {
     echo "  $name: ERROR: cannot create temp file for push diagnostics" >&2
     return 1
   }
-  # Route push under push_timeout (not dolt_sql's 120s metadata ceiling) and
+  # Route push under push_timeout (not db_sql's 120s metadata ceiling) and
   # capture stderr so the underlying dolt diagnostic survives, preserving the
   # real exit code via `|| push_rc=$?`.
-  dolt_sql "$push_query" "$push_timeout" >/dev/null 2>"$push_err_tmp" || push_rc=$?
+  db_sql "$name" "$push_query" "$push_timeout" >/dev/null 2>"$push_err_tmp" || push_rc=$?
 
   if [ "$push_rc" -eq 0 ]; then
     echo "  $name: pushed $local_branch -> $remote_name:$remote_branch ($remote_url)"
@@ -513,7 +553,7 @@ sync_database_sql() {
 
   # Replay the captured dolt stderr, prefixed with the db name for scannable
   # multi-db output. Safe to emit unfiltered (RB6): the password reaches dolt via
-  # the DOLT_CLI_PASSWORD env var (see dolt_sql), never as an argv flag, so
+  # the DOLT_CLI_PASSWORD env var (see store_sql_db), never as an argv flag, so
   # dolt's own stderr cannot echo it back. The -s guard skips an empty capture so
   # no spurious blank line is emitted.
   if [ -s "$push_err_tmp" ]; then
@@ -587,6 +627,49 @@ sync_database_cli() {
   return 1
 }
 
+exit_code=0
+
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd proxied-server mode: enumerate databases from the server catalog (bd
+  # owns the data dir, so no filesystem scan is available), and route both
+  # the optional GC phase and the sync loop through db_sql/store_sql_db.
+  #
+  # The database list is captured to a variable and fed via a heredoc (not
+  # piped into the while loop) so `exit_code`/`no_sync` mutations inside the
+  # loop happen in THIS shell, not a subshell that would silently discard
+  # them (the same subshell-via-pipe pitfall routes_files()'s callers already
+  # avoid with the <<ROUTES_LIST heredoc idiom below).
+  _proxied_dbs=$(proxied_database_names)
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    [ -n "$db_filter" ] && [ "$name" != "$db_filter" ] && continue
+
+    if [ "$do_gc" = true ]; then
+      beads_dir=$(beads_dir_for_db "$name") || beads_dir=""
+      if [ -n "$beads_dir" ]; then
+        purge_args=""
+        [ "$dry_run" = true ] && purge_args="--dry-run"
+        purged=$(BEADS_DIR="$beads_dir" bd purge $purge_args 2>/dev/null | grep -c "purged" || true)
+        [ "$purged" -gt 0 ] && echo "Purged $purged ephemeral bead(s) from $name"
+      fi
+    fi
+
+    no_sync=false
+    if beads_dir=$(beads_dir_for_db "$name") && [ -f "$beads_dir/.no-sync" ]; then
+      no_sync=true
+    fi
+    if [ "$no_sync" = true ]; then
+      echo "  $name: skipped (.no-sync)"
+      continue
+    fi
+
+    sync_database_sql "$name" || exit_code=1
+  done <<PROXIED_DBS
+$_proxied_dbs
+PROXIED_DBS
+  exit $exit_code
+fi
+
 # Optional GC phase: purge closed ephemerals while server is still up.
 if [ "$do_gc" = true ] && [ -d "$data_dir" ]; then
   for d in "$data_dir"/*/; do
@@ -594,17 +677,7 @@ if [ "$do_gc" = true ] && [ -d "$data_dir" ]; then
     name="$(basename "$d")"
     case "$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')" in information_schema|mysql|dolt_cluster|performance_schema|sys|__gc_probe) continue ;; esac
     [ -n "$db_filter" ] && [ "$name" != "$db_filter" ] && continue
-    beads_dir=""
-    # Find the .beads directory for this database.
-    while IFS= read -r route_file; do
-      [ -f "$route_file" ] || continue
-      if grep -q "\"$name\"" "$route_file" 2>/dev/null; then
-        beads_dir="$(dirname "$route_file")"
-        break
-      fi
-    done <<ROUTES_LIST
-$(routes_files)
-ROUTES_LIST
+    beads_dir=$(beads_dir_for_db "$name") || beads_dir=""
     if [ -n "$beads_dir" ]; then
       purge_args=""
       [ "$dry_run" = true ] && purge_args="--dry-run"
@@ -614,8 +687,7 @@ ROUTES_LIST
   done
 fi
 
-# Sync each database.
-exit_code=0
+# Sync each database (legacy/external mode).
 server_running=false
 is_running && server_running=true
 if [ -d "$data_dir" ]; then

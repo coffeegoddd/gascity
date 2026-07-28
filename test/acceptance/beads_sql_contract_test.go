@@ -260,6 +260,50 @@ func TestBdSQLContract(t *testing.T) {
 	})
 }
 
+// TestBdSQLContractPushFetchRoundTrip pins that CALL DOLT_PUSH/DOLT_FETCH
+// issued via `bd sql --database` against a real proxied store behave the way
+// gc dolt sync/pull (examples/bd/dolt/commands/sync/run.sh, pull/run.sh)
+// assume: a push to a fresh file-based remote succeeds, a fetch against an
+// as-yet-empty remote fails with recognizable text (sync's first-push
+// detection greps stderr for this), and a fetch against the now-populated
+// remote succeeds. Neither command is a native `bd dolt push/pull` — those
+// have no --database flag and operate on "the project's configured
+// database" only, so a shared proxied server hosting multiple databases must
+// go through bd sql's session-context CALL DOLT_* path, exactly as this test
+// exercises.
+func TestBdSQLContractPushFetchRoundTrip(t *testing.T) {
+	dir := initProxiedBeadsDir(t)
+
+	dbLines := sqlCSV(t, dir, "SHOW DATABASES")
+	if len(dbLines) < 2 {
+		t.Fatalf("SHOW DATABASES returned no databases: %q", dbLines)
+	}
+	db := strings.Trim(dbLines[1], `"`)
+
+	remoteURL := "file://" + filepath.Join(dir, "remote")
+	requireBD(t, dir, "sql", "--database", db, "CALL DOLT_REMOTE('add', 'origin', '"+remoteURL+"')")
+
+	// A fetch against a brand-new, still-empty remote must fail recognizably:
+	// sync's first-push detection (classify_count's caller in run.sh) greps
+	// stderr for exactly this text to distinguish "first push" from a real
+	// fetch failure.
+	out, err := runBD(t, dir, "sql", "--database", db, "CALL DOLT_FETCH('origin', 'main')")
+	if err == nil {
+		t.Fatalf("fetch from an empty remote unexpectedly succeeded: %q", out)
+	}
+	if !strings.Contains(out, "no branches found in remote") && !strings.Contains(out, "invalid ref spec") {
+		t.Errorf("fetch-from-empty-remote error = %q, want it to mention \"no branches found in remote\" or \"invalid ref spec\"", out)
+	}
+
+	// The push itself — the exact mechanism gc dolt sync now uses — must
+	// succeed via bd sql --database.
+	requireBD(t, dir, "sql", "--database", db, "CALL DOLT_PUSH('origin', 'main')")
+
+	// A second fetch, now against a populated remote, must succeed — the
+	// mechanism gc dolt sync's fast-forward classification relies on.
+	requireBD(t, dir, "sql", "--database", db, "CALL DOLT_FETCH('origin', 'main')")
+}
+
 // TestBdDoltStopTearsDownProxyTopology asserts the teardown primitive the
 // suite's own cleanup depends on actually removes both processes. `bd dolt
 // stop` exiting 0 is not proof the tree is down; a leaked proxy holds a dolt
