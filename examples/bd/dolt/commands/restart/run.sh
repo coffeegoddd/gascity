@@ -41,13 +41,20 @@ fi
 # Local-managed means GC_DOLT_HOST is empty, 127.0.0.1 (the default bind),
 # or 0.0.0.0 (the explicit wildcard opt-out). Anything else names a remote
 # server whose process GC cannot manage.
-case "${GC_DOLT_HOST:-}" in
-  ''|127.0.0.1|0.0.0.0|localhost|"::1"|"[::1]") ;;
-  *)
-    echo "gc dolt restart: not supported for remote dolt servers (set GC_DOLT_HOST=127.0.0.1, GC_DOLT_HOST=0.0.0.0, or unset to manage a local server)" >&2
-    exit 1
-    ;;
-esac
+#
+# In bd proxied-server mode the endpoint is bd's and GC_DOLT_HOST is never
+# projected, so the local-vs-remote distinction does not apply: bd owns the
+# lifecycle for whatever endpoint it is fronting. Skip the guard rather than
+# let an empty host coincidentally match the local case.
+if [ "${GC_BEADS_PROXIED:-0}" != 1 ]; then
+  case "${GC_DOLT_HOST:-}" in
+    ''|127.0.0.1|0.0.0.0|localhost|"::1"|"[::1]") ;;
+    *)
+      echo "gc dolt restart: not supported for remote dolt servers (set GC_DOLT_HOST=127.0.0.1, GC_DOLT_HOST=0.0.0.0, or unset to manage a local server)" >&2
+      exit 1
+      ;;
+  esac
+fi
 
 CITY_RUNTIME_DIR="${GC_CITY_RUNTIME_DIR:-$GC_CITY_PATH/.gc/runtime}"
 PACK_STATE_DIR="${GC_PACK_STATE_DIR:-$CITY_RUNTIME_DIR/packs/dolt}"

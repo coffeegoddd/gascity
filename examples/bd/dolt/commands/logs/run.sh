@@ -33,6 +33,19 @@ done
 log_file="$DOLT_LOG_FILE"
 host="${GC_DOLT_HOST:-127.0.0.1}"
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # bd owns the log location. --proxied-server-log-path defaults to
+  # <beadsDir>/dolt/server.log (per `bd init --help`) when the operator has
+  # not overridden it with a custom path; there is no client-info file to
+  # consult for a non-default path, so this is a best-effort default rather
+  # than an authoritative lookup.
+  log_file="$GC_CITY_PATH/.beads/dolt/server.log"
+  if [ ! -f "$log_file" ]; then
+    echo "gc dolt logs: no dolt log yet (bd starts the proxied server lazily; it appears after the first access)." >&2
+    exit 0
+  fi
+fi
+
 if [ ! -f "$log_file" ]; then
   if ! is_local_dolt_host "$host"; then
     # Configured external Dolt endpoint: the server log lives on the remote

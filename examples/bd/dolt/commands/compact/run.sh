@@ -246,6 +246,17 @@ PACK_DIR="${GC_PACK_DIR:-$(unset CDPATH; cd -- "$(dirname "$0")/.." && pwd)}"
 # shellcheck disable=SC1091
 . "$PACK_DIR/assets/scripts/compact-gain-drift-proof.sh"
 
+if [ "${GC_BEADS_PROXIED:-0}" = 1 ]; then
+  # Storage maintenance is bd's responsibility in proxied-server mode (bd owns
+  # the endpoint, commit history, and Dolt GC). Delegate to `bd compact`
+  # (squash old Dolt commits + Dolt GC) for this scope. --force skips the
+  # interactive confirmation so it is safe to run as an exec order.
+  if [ "${GC_DOLT_COMPACT_DRY_RUN:-}" = 1 ]; then
+    exec bd -C "$GC_CITY_PATH" compact --dry-run
+  fi
+  exec bd -C "$GC_CITY_PATH" compact --force
+fi
+
 if [ "${GC_DOLT_MANAGED_LOCAL:-}" = "1" ]; then
   managed_port=$(managed_runtime_port "$DOLT_STATE_FILE" "$DOLT_DATA_DIR" || true)
   if [ -n "$managed_port" ]; then
