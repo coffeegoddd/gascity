@@ -400,7 +400,10 @@ func stopCityManagedBeadsProvider(cityPath string) (bool, error) {
 	if rawBeadsProvider(cityPath) != "bd" {
 		return false, nil
 	}
-	if currentResolvableManagedDoltPort(cityPath) == "" {
+	// Proxied-server mode never has a resolvable managed port (bd owns port
+	// selection entirely) but still needs `bd dolt stop` -- shutdownBeadsProvider
+	// dispatches to it (stopProxiedServerBeadsProvider) regardless of this gate.
+	if currentResolvableManagedDoltPort(cityPath) == "" && !cityUsesProxiedServerMode(cityPath) {
 		return false, nil
 	}
 	return true, shutdownBeadsProviderForStop(cityPath)

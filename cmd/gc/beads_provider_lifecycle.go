@@ -788,6 +788,9 @@ func shutdownBeadsProvider(cityPath string) error {
 	if cityUsesDoltliteBeadsBackend(cityPath) {
 		return clearManagedDoltRuntimeStateUnlessPostgres(cityPath)
 	}
+	if cityUsesProxiedServerMode(cityPath) {
+		return stopProxiedServerBeadsProvider(cityPath)
+	}
 	provider := beadsProvider(cityPath)
 	if strings.HasPrefix(provider, "exec:") {
 		if providerUsesBdStoreContract(provider) {
@@ -812,6 +815,39 @@ func shutdownBeadsProvider(cityPath string) error {
 		}
 	}
 	return nil
+}
+
+// stopProxiedServerBeadsProvider tears down a proxied-server-mode city's bd
+// proxy directly via `bd dolt stop`, bypassing the exec:gc-beads-bd "stop"
+// op entirely: that op manages a gc-owned PID file for a locally-spawned
+// dolt sql-server, which proxied-server mode never has (bd owns its own
+// proxy+child dolt lifecycle). `bd dolt stop` is idempotent -- it succeeds
+// whether or not the proxy is currently running (verified against bd
+// 1.1.0's --proxied-server support) -- so the only real failure is an
+// uninitialized scope, which is treated as nothing-to-stop rather than an
+// error, mirroring how the rest of this file treats an absent managed
+// lifecycle as a no-op.
+func stopProxiedServerBeadsProvider(cityPath string) error {
+	env := map[string]string{"BEADS_DIR": filepath.Join(cityPath, ".beads")}
+	if _, err := beads.ExecCommandRunnerWithEnv(env)(cityPath, "bd", "dolt", "stop"); err != nil {
+		if isBdUninitializedWorkspaceError(err) {
+			return nil
+		}
+		return fmt.Errorf("bd dolt stop: %w", err)
+	}
+	return nil
+}
+
+// isBdUninitializedWorkspaceError reports whether bd rejected a command
+// because the scope has no beads workspace at all (e.g. `gc stop` racing an
+// init that never completed) -- distinct from isBdAlreadyInitializedError,
+// which detects the opposite state.
+func isBdUninitializedWorkspaceError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "no active beads workspace") || strings.Contains(msg, "no beads database found")
 }
 
 // initBeadsForDir initializes bead store infrastructure in a directory.

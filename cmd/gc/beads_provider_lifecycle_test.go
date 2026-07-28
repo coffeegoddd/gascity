@@ -10804,6 +10804,83 @@ dolt.auto-start: false
 	}
 }
 
+// A city configured with [beads] backend = "proxied-server" tears down via
+// `bd dolt stop` directly -- bd owns the proxy+child dolt lifecycle, so
+// shutdownBeadsProvider must never invoke the exec:gc-beads-bd "stop" op
+// (which manages a gc-owned PID file this mode never has).
+func TestShutdownBeadsProviderProxiedServerModeCallsBdDoltStop(t *testing.T) {
+	cityPath := t.TempDir()
+	scriptCallLog := filepath.Join(cityPath, "op-calls.log")
+	script := gcBeadsBdScriptPath(cityPath)
+	if err := os.MkdirAll(filepath.Dir(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(script, []byte("#!/bin/sh\necho \"$1\" >> "+scriptCallLog+"\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bdCallLog := filepath.Join(cityPath, "bd-calls.log")
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "bd"), []byte("#!/bin/sh\necho \"$*\" >> "+bdCallLog+"\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte(`[workspace]
+name = "test-city"
+
+[beads]
+backend = "proxied-server"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("GC_BEADS", "exec:"+script)
+	t.Setenv("GC_BEADS_SCOPE_ROOT", cityPath)
+	if err := shutdownBeadsProvider(cityPath); err != nil {
+		t.Fatalf("shutdownBeadsProvider() error = %v", err)
+	}
+
+	if _, err := os.Stat(scriptCallLog); !os.IsNotExist(err) {
+		t.Fatalf("shutdownBeadsProvider() should not invoke gc-beads-bd.sh for proxied-server mode, stat err = %v", err)
+	}
+	data, err := os.ReadFile(bdCallLog)
+	if err != nil {
+		t.Fatalf("bd was not invoked: %v", err)
+	}
+	if got := strings.TrimSpace(string(data)); got != "dolt stop" {
+		t.Fatalf("bd invoked with %q, want \"dolt stop\"", got)
+	}
+}
+
+// bd dolt stop against an uninitialized scope reports "no active beads
+// workspace found" -- treated as nothing-to-stop rather than an error, the
+// same way the rest of this file treats an absent managed lifecycle.
+func TestShutdownBeadsProviderProxiedServerModeToleratesUninitializedWorkspace(t *testing.T) {
+	cityPath := t.TempDir()
+	binDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(binDir, "bd"), []byte("#!/bin/sh\necho 'Error: no active beads workspace found' >&2\nexit 1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte(`[workspace]
+name = "test-city"
+
+[beads]
+backend = "proxied-server"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := shutdownBeadsProvider(cityPath); err != nil {
+		t.Fatalf("shutdownBeadsProvider() error = %v, want nil (uninitialized workspace tolerated)", err)
+	}
+}
+
 // ── startBeadsLifecycle skips provider for external ───────────────────
 
 func TestStartBeadsLifecycleSkipsProviderForExternalHost(t *testing.T) {

@@ -780,6 +780,43 @@ func TestStopCityManagedBeadsProviderUsesProviderStateWhenPublishedStateIsMissin
 	}
 }
 
+// A proxied-server-mode city never has a resolvable managed port (bd owns
+// port selection entirely), so the no-managed-port early-return this
+// function otherwise uses to skip an unmanaged city must not apply to it --
+// it still needs shutdownBeadsProviderForStop to run bd dolt stop.
+func TestStopCityManagedBeadsProviderProxiedServerModeBypassesPortGate(t *testing.T) {
+	t.Setenv("GC_BEADS", "bd")
+	t.Setenv("GC_BEADS_SCOPE_ROOT", "")
+
+	cityDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(`[workspace]
+name = "test-city"
+
+[beads]
+backend = "proxied-server"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var shutdowns int
+	overrideShutdownBeadsProviderForStop(t, func(path string) error {
+		shutdowns++
+		assertSameTestPath(t, path, cityDir)
+		return nil
+	})
+
+	stopped, err := stopCityManagedBeadsProvider(cityDir)
+	if err != nil {
+		t.Fatalf("stopCityManagedBeadsProvider() error = %v", err)
+	}
+	if !stopped {
+		t.Fatal("stopCityManagedBeadsProvider() stopped = false, want true (proxied-server mode must bypass the no-managed-port gate)")
+	}
+	if shutdowns != 1 {
+		t.Fatalf("shutdown calls = %d, want 1", shutdowns)
+	}
+}
+
 func setupInvalidConfigManagedRuntime(t *testing.T) string {
 	t.Helper()
 
