@@ -214,6 +214,11 @@ func startBeadsLifecycle(cityPath, _ string, cfg *config.City, stderr io.Writer)
 		skipLocalDolt = !owned
 	case cityUsesDoltliteBeadsBackend(cityPath):
 		skipLocalDolt = true
+	case cityUsesProxiedServerMode(cityPath):
+		// bd owns the Dolt sql-server lifecycle entirely in this mode (port
+		// selection, spawn, idle-shutdown, credentials) -- gascity never
+		// spawns or probes a local managed Dolt server for it.
+		skipLocalDolt = true
 	}
 	if !skipLocalDolt {
 		if err := ensureBeadsProvider(cityPath); err != nil {
@@ -1535,6 +1540,14 @@ func isLegacyManagedDoltProbeDatabase(name string) bool {
 }
 
 func ensureCanonicalScopeMetadata(fs fsys.FS, scopeRoot, doltDatabase string, preserveExisting bool) error {
+	return ensureCanonicalDoltScopeMetadataWithMode(fs, scopeRoot, doltDatabase, "server", preserveExisting)
+}
+
+// ensureCanonicalDoltScopeMetadataWithMode is ensureCanonicalScopeMetadata
+// parameterized by dolt_mode, so the opt-in proxied-server mode can reuse the
+// same preserve-existing/reserved-database/validation logic while stamping
+// "proxied-server" instead of the default "server".
+func ensureCanonicalDoltScopeMetadataWithMode(fs fsys.FS, scopeRoot, doltDatabase, doltMode string, preserveExisting bool) error {
 	path := filepath.Join(scopeRoot, ".beads", "metadata.json")
 	preserveReservedExisting := false
 	if preserveExisting {
@@ -1570,7 +1583,7 @@ func ensureCanonicalScopeMetadata(fs fsys.FS, scopeRoot, doltDatabase string, pr
 	_, err = contract.EnsureCanonicalMetadata(fs, path, contract.MetadataState{
 		Database:     "dolt",
 		Backend:      "dolt",
-		DoltMode:     "server",
+		DoltMode:     doltMode,
 		DoltDatabase: doltDatabase,
 	})
 	return err
@@ -1614,6 +1627,11 @@ func ensureCanonicalDoltliteScopeMetadataForInit(fs fsys.FS, scopeRoot, doltData
 }
 
 //nolint:unparam // keep fs seam for future testable FS injection
+func ensureCanonicalProxiedServerScopeMetadataForInit(fs fsys.FS, scopeRoot, doltDatabase string) error {
+	return ensureCanonicalDoltScopeMetadataWithMode(fs, scopeRoot, doltDatabase, "proxied-server", true)
+}
+
+//nolint:unparam // keep fs seam for future testable FS injection
 func enforceCanonicalScopeMetadataForInit(fs fsys.FS, scopeRoot, doltDatabase string) error {
 	return ensureCanonicalScopeMetadata(fs, scopeRoot, doltDatabase, false)
 }
@@ -1640,12 +1658,19 @@ func normalizeCanonicalBdScopeFiles(cityPath string, cfg *config.City, warns ...
 			return fmt.Errorf("classifying city backend: %w", err)
 		} else if !usesPostgres {
 			doltDatabase := defaultScopeDoltDatabase(cityPath, cityPath, config.EffectiveHQPrefix(cfg))
-			if cityUsesDoltliteBeadsBackend(cityPath) {
+			switch {
+			case cityUsesDoltliteBeadsBackend(cityPath):
 				if err := ensureCanonicalDoltliteScopeMetadataForInit(fsys.OSFS{}, cityPath, doltDatabase); err != nil {
 					return fmt.Errorf("canonicalizing city doltlite metadata: %w", err)
 				}
-			} else if err := ensureCanonicalScopeMetadataForInit(fsys.OSFS{}, cityPath, doltDatabase); err != nil {
-				return fmt.Errorf("canonicalizing city metadata: %w", err)
+			case cityUsesProxiedServerMode(cityPath):
+				if err := ensureCanonicalProxiedServerScopeMetadataForInit(fsys.OSFS{}, cityPath, doltDatabase); err != nil {
+					return fmt.Errorf("canonicalizing city proxied-server metadata: %w", err)
+				}
+			default:
+				if err := ensureCanonicalScopeMetadataForInit(fsys.OSFS{}, cityPath, doltDatabase); err != nil {
+					return fmt.Errorf("canonicalizing city metadata: %w", err)
+				}
 			}
 		}
 	}
@@ -1657,12 +1682,19 @@ func normalizeCanonicalBdScopeFiles(cityPath string, cfg *config.City, warns ...
 			return fmt.Errorf("classifying rig %q backend: %w", cfg.Rigs[i].Name, err)
 		} else if !usesPostgres {
 			doltDatabase := defaultScopeDoltDatabase(cityPath, cfg.Rigs[i].Path, cfg.Rigs[i].EffectivePrefix())
-			if cityUsesDoltliteBeadsBackend(cityPath) {
+			switch {
+			case cityUsesDoltliteBeadsBackend(cityPath):
 				if err := ensureCanonicalDoltliteScopeMetadataForInit(fsys.OSFS{}, cfg.Rigs[i].Path, doltDatabase); err != nil {
 					return fmt.Errorf("canonicalizing rig %q doltlite metadata: %w", cfg.Rigs[i].Name, err)
 				}
-			} else if err := ensureCanonicalScopeMetadataForInit(fsys.OSFS{}, cfg.Rigs[i].Path, doltDatabase); err != nil {
-				return fmt.Errorf("canonicalizing rig %q metadata: %w", cfg.Rigs[i].Name, err)
+			case cityUsesProxiedServerMode(cityPath):
+				if err := ensureCanonicalProxiedServerScopeMetadataForInit(fsys.OSFS{}, cfg.Rigs[i].Path, doltDatabase); err != nil {
+					return fmt.Errorf("canonicalizing rig %q proxied-server metadata: %w", cfg.Rigs[i].Name, err)
+				}
+			default:
+				if err := ensureCanonicalScopeMetadataForInit(fsys.OSFS{}, cfg.Rigs[i].Path, doltDatabase); err != nil {
+					return fmt.Errorf("canonicalizing rig %q metadata: %w", cfg.Rigs[i].Name, err)
+				}
 			}
 		}
 	}

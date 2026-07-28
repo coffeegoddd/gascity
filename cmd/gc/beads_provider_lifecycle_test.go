@@ -10810,6 +10810,55 @@ dolt.auto-start: false
 	}
 }
 
+// A city configured with [beads] backend = "proxied-server" (gc init
+// --proxied-server) must never spawn or probe a locally managed Dolt server:
+// bd owns the sql-server lifecycle entirely. startBeadsLifecycle's
+// skipLocalDolt switch should skip ensureBeadsProvider's "start" op, the same
+// way it already does for doltlite and external-host cities.
+func TestStartBeadsLifecycleSkipsManagedDoltForProxiedServerMode(t *testing.T) {
+	cityPath := t.TempDir()
+	callLog := filepath.Join(cityPath, "op-calls.log")
+	script := writeManagedBdTestScript(t, "#!/bin/sh\necho \"$1\" >> "+callLog+"\nexit 2\n")
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte(`[workspace]
+name = "test-city"
+
+[beads]
+backend = "proxied-server"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("GC_BEADS", "exec:"+script)
+	t.Setenv("GC_BEADS_SCOPE_ROOT", cityPath)
+
+	cfg := &config.City{Workspace: config.Workspace{Name: "test-city"}}
+	if err := startBeadsLifecycle(cityPath, "test-city", cfg, io.Discard); err != nil {
+		t.Fatalf("startBeadsLifecycle with proxied-server mode: %v", err)
+	}
+
+	if data, err := os.ReadFile(callLog); err == nil {
+		for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+			if strings.TrimSpace(line) == "start" {
+				t.Errorf("ensureBeadsProvider('start') was called — should be skipped for proxied-server mode")
+			}
+		}
+	}
+
+	meta, ok, err := contract.LoadMetadataState(fsys.OSFS{}, filepath.Join(cityPath, ".beads", "metadata.json"))
+	if err != nil {
+		t.Fatalf("LoadMetadataState: %v", err)
+	}
+	if !ok {
+		t.Fatal("metadata.json was not written")
+	}
+	if meta.DoltMode != "proxied-server" {
+		t.Fatalf("metadata.json dolt_mode = %q, want proxied-server", meta.DoltMode)
+	}
+}
+
 func TestStartBeadsLifecyclePostgresCityPreservesManagedDoltArtifacts(t *testing.T) {
 	cityPath := t.TempDir()
 	callLog := filepath.Join(cityPath, "op-calls.log")
