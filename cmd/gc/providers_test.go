@@ -142,55 +142,58 @@ func TestRawBeadsProviderPreservesCustomExecOverride(t *testing.T) {
 	}
 }
 
-func TestCityUsesProxiedServerModeNoBeadsDir(t *testing.T) {
+func TestCityUsesProxiedServerModeNoCityToml(t *testing.T) {
 	cityDir := t.TempDir()
 	if got := cityUsesProxiedServerMode(cityDir); got {
-		t.Fatalf("cityUsesProxiedServerMode() = %v, want false with no .beads dir", got)
+		t.Fatalf("cityUsesProxiedServerMode() = %v, want false with no city.toml", got)
 	}
 }
 
-func TestCityUsesProxiedServerModeEmptyCityPath(t *testing.T) {
-	if got := cityUsesProxiedServerMode(""); got {
-		t.Fatalf("cityUsesProxiedServerMode(\"\") = %v, want false", got)
-	}
-}
-
-func TestCityUsesProxiedServerModeServerMode(t *testing.T) {
+func TestCityUsesProxiedServerModeDefaultBackend(t *testing.T) {
 	cityDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityDir, ".beads", "metadata.json"), []byte(`{"database":"dolt","backend":"dolt","dolt_mode":"server","dolt_database":"gc"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCityTomlWithBeadsBackend(t, cityDir, "")
 	if got := cityUsesProxiedServerMode(cityDir); got {
-		t.Fatalf("cityUsesProxiedServerMode() = %v, want false for dolt_mode=server", got)
+		t.Fatalf("cityUsesProxiedServerMode() = %v, want false for unset backend", got)
 	}
 }
 
-func TestCityUsesProxiedServerModeEmbeddedMode(t *testing.T) {
+func TestCityUsesProxiedServerModeDoltliteBackend(t *testing.T) {
 	cityDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityDir, ".beads", "metadata.json"), []byte(`{"database":"dolt","backend":"dolt","dolt_mode":"embedded","dolt_database":"gc"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCityTomlWithBeadsBackend(t, cityDir, "doltlite")
 	if got := cityUsesProxiedServerMode(cityDir); got {
-		t.Fatalf("cityUsesProxiedServerMode() = %v, want false for dolt_mode=embedded", got)
+		t.Fatalf("cityUsesProxiedServerMode() = %v, want false for backend=doltlite", got)
 	}
 }
 
-func TestCityUsesProxiedServerModeProxiedServerMode(t *testing.T) {
+func TestCityUsesProxiedServerModeProxiedServerBackend(t *testing.T) {
 	cityDir := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(cityDir, ".beads"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(cityDir, ".beads", "metadata.json"), []byte(`{"database":"dolt","backend":"dolt","dolt_mode":"proxied-server","dolt_database":"gc"}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	writeCityTomlWithBeadsBackend(t, cityDir, "proxied-server")
 	if got := cityUsesProxiedServerMode(cityDir); !got {
-		t.Fatalf("cityUsesProxiedServerMode() = %v, want true for dolt_mode=proxied-server", got)
+		t.Fatalf("cityUsesProxiedServerMode() = %v, want true for backend=proxied-server", got)
+	}
+}
+
+func TestCityUsesManagedDoltBeadsLifecycleExcludesProxiedServerMode(t *testing.T) {
+	cityDir := t.TempDir()
+	writeCityTomlWithBeadsBackend(t, cityDir, "proxied-server")
+	if got := cityUsesManagedDoltBeadsLifecycle(cityDir); got {
+		t.Fatalf("cityUsesManagedDoltBeadsLifecycle() = %v, want false for backend=proxied-server", got)
+	}
+}
+
+func writeCityTomlWithBeadsBackend(t *testing.T, cityDir, backend string) {
+	t.Helper()
+	body := `[workspace]
+name = "demo"
+
+[beads]
+provider = "bd"
+`
+	if backend != "" {
+		body += "backend = \"" + backend + "\"\n"
+	}
+	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

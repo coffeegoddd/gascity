@@ -18,7 +18,6 @@ import (
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/events"
 	eventsexec "github.com/gastownhall/gascity/internal/events/exec"
-	"github.com/gastownhall/gascity/internal/fsys"
 	"github.com/gastownhall/gascity/internal/mail"
 	"github.com/gastownhall/gascity/internal/mail/beadmail"
 	mailexec "github.com/gastownhall/gascity/internal/mail/exec"
@@ -655,26 +654,23 @@ func cityUsesBdStoreContract(cityPath string) bool {
 }
 
 func cityUsesManagedDoltBeadsLifecycle(cityPath string) bool {
-	return cityUsesBdStoreContract(cityPath) && !cityUsesDoltliteBeadsBackend(cityPath)
+	return cityUsesBdStoreContract(cityPath) && !cityUsesDoltliteBeadsBackend(cityPath) && !cityUsesProxiedServerMode(cityPath)
 }
 
-// cityUsesProxiedServerMode reports whether a city was initialized with
-// dolt_mode=proxied-server (the opt-in `gc init --proxied-server` mode): bd
-// owns the Dolt sql-server lifecycle entirely (port selection, spawn,
-// idle-shutdown, credentials), so gascity never spawns or probes a local
-// managed Dolt server for it. Reads the canonical dolt_mode recorded in
-// .beads/metadata.json at init time; absent or any other value (including
-// unset, "server", "embedded") reports false, leaving the managed-Dolt
-// lifecycle as the default for every city that never passed the flag.
+// cityUsesProxiedServerMode reports whether a city was configured for the
+// opt-in `gc init --proxied-server` mode: bd owns the Dolt sql-server
+// lifecycle entirely (port selection, spawn, idle-shutdown, credentials), so
+// gascity never spawns or probes a local managed Dolt server for it.
+//
+// Backed by [beads] backend = "proxied-server" in city.toml, the same
+// TOML-driven seam cityUsesDoltliteBeadsBackend already uses for "doltlite"
+// (not .beads/metadata.json, which does not exist yet on the very first
+// `gc init` pass that needs this answer). Any other backend value —
+// including unset, "dolt", "doltlite" — reports false, leaving the
+// managed-Dolt lifecycle as the default for every city that never passed
+// the flag.
 func cityUsesProxiedServerMode(cityPath string) bool {
-	if strings.TrimSpace(cityPath) == "" {
-		return false
-	}
-	meta, ok, err := contract.LoadMetadataState(fsys.OSFS{}, filepath.Join(cityPath, ".beads", "metadata.json"))
-	if err != nil || !ok {
-		return false
-	}
-	return meta.DoltMode == "proxied-server"
+	return beadsBackend(cityPath) == "proxied-server"
 }
 
 func rawBeadsProviderForScope(scopeRoot, cityPath string) string {
