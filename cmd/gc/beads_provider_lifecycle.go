@@ -2138,6 +2138,18 @@ func providerLifecycleProcessEnvFromBase(cityPath, provider string, env []string
 		clearProjectedPostgresEnv(envMap)
 		return mergeRuntimeEnv(nil, envMap)
 	}
+	if cityUsesProxiedServerMode(cityPath) {
+		// bd owns the Dolt sql-server lifecycle entirely in this mode -- none
+		// of the managed-local-dolt path/lock/config env below applies, the
+		// same way it does not apply for doltlite.
+		env = removeEnvKey(env, "GC_BEADS_BACKEND")
+		env = removeEnvKey(env, "BEADS_BACKEND")
+		env = append(env, "GC_BEADS_BACKEND=proxied-server", "BEADS_BACKEND=proxied-server")
+		envMap := runtimeEnvEntriesToMap(env)
+		clearProjectedDoltEnv(envMap)
+		clearProjectedPostgresEnv(envMap)
+		return mergeRuntimeEnv(nil, envMap)
+	}
 	for _, key := range []string{
 		"GC_PACK_STATE_DIR",
 		"GC_DOLT_DATA_DIR",

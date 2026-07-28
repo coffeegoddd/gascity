@@ -89,6 +89,14 @@ is_doltlite_backend() {
     [ "$BEADS_BACKEND" = "doltlite" ]
 }
 
+# is_proxied_server_backend reports the opt-in `gc init --proxied-server`
+# mode: bd owns the Dolt sql-server lifecycle entirely (port selection,
+# spawn, idle-shutdown, credentials) via its own --proxied-server mode, so
+# this script never resolves a managed-local Dolt port for it.
+is_proxied_server_backend() {
+    [ "$BEADS_BACKEND" = "proxied-server" ]
+}
+
 resolve_gc_bin() {
     if [ -n "${GC_BIN:-}" ]; then
         printf '%s\n' "$GC_BIN"
@@ -2499,6 +2507,26 @@ run_bd_doltlite() {
     )
 }
 
+# run_bd_proxied_server invokes bd for the opt-in --proxied-server mode: bd
+# owns port selection, spawn, idle-shutdown, and credentials entirely via its
+# own --proxied-server support, so no host/port/user/password env is passed
+# through -- pinning one here would be actively wrong (there is no fixed
+# local port to pin), unlike run_bd_pinned's managed-server case.
+run_bd_proxied_server() {
+    local dir="$1"
+    shift
+    (
+        cd "$dir" || exit 1
+        export BEADS_DIR="$dir/.beads"
+        export BEADS_BACKEND="proxied-server"
+        export GC_BEADS_BACKEND="proxied-server"
+        unset GC_DOLT_HOST GC_DOLT_PORT GC_DOLT_USER GC_DOLT_PASSWORD GC_DOLT
+        unset BEADS_DOLT_DATABASE BEADS_DOLT_PORT
+        unset BEADS_DOLT_SERVER_DATABASE BEADS_DOLT_SERVER_HOST BEADS_DOLT_SERVER_MODE BEADS_DOLT_SERVER_PORT BEADS_DOLT_SERVER_USER BEADS_DOLT_PASSWORD
+        "${BD_BIN:-bd}" "$@"
+    )
+}
+
 doltlite_bd_issue_prefix() {
     local dir="$1"
     run_bd_doltlite "$dir" config get issue_prefix 2>/dev/null | sed 's/[[:space:]]*$//' || true
@@ -2750,6 +2778,33 @@ op_init() {
         if [ "$already_ready" = true ]; then
             run_doltlite_existing_db_maintenance "$dir"
         fi
+        exit 0
+    fi
+
+    # Opt-in bd proxied-server mode (gc init --proxied-server): bd owns port
+    # selection, spawn, idle-shutdown, and credentials entirely -- there is no
+    # managed-local port to resolve or pin, so this bypasses the
+    # managed-server path below (raw dolt reachability probes, CREATE
+    # DATABASE, server lifecycle) the same way the doltlite and hosted-gateway
+    # branches do. A ready-check gate (mirroring the hosted-gateway branch
+    # above) makes re-running init on an already-initialized scope a no-op
+    # instead of erroring on bd's "already initialized" guard.
+    if is_proxied_server_backend; then
+        local database
+        database="$dolt_database"
+        if [ -z "$database" ]; then
+            database="$prefix"
+        fi
+        if ! valid_sql_name "$database"; then
+            die "invalid proxied-server database name: $database (must be alphanumeric, hyphens, underscores)"
+        fi
+        validate_bd_runtime_config_value "types.custom" "$custom_types"
+        ensure_beads_dir_permissions "$dir"
+        if ! run_bd_proxied_server "$dir" ready >/dev/null 2>&1; then
+            run_bd_proxied_server "$dir" init --quiet --proxied-server -p "$prefix" --database "$database" --skip-hooks --skip-agents "$dir" \
+                || die "bd init --proxied-server failed for $dir"
+        fi
+        ensure_beads_dir_permissions "$dir"
         exit 0
     fi
 
@@ -3206,7 +3261,15 @@ if ! load_runtime_layout_from_gc; then
     LOCK_FILE="${GC_DOLT_LOCK_FILE:-$PACK_STATE_DIR/dolt.lock}"
     CONFIG_FILE="${GC_DOLT_CONFIG_FILE:-$PACK_STATE_DIR/dolt-config.yaml}"
 fi
-if is_doltlite_backend; then
+if is_doltlite_backend || is_proxied_server_backend; then
+    # Neither backend uses gc's own managed-local $DATA_DIR
+    # (.beads/dolt by default) -- for proxied-server mode specifically, that
+    # path is also bd's own default --proxied-server-root-path, so
+    # pre-creating it here as an empty directory made bd's `ready`/init
+    # resolution treat it as a pre-existing (but unconfigured) legacy dolt
+    # data dir instead of "not yet initialized", silently bootstrapping a
+    # throwaway embedded database there instead of using its real
+    # proxied-server mode.
     mkdir -p "$PACK_STATE_DIR"
 else
     mkdir -p "$DATA_DIR" "$PACK_STATE_DIR"

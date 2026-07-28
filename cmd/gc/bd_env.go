@@ -379,8 +379,27 @@ func applyCanonicalScopeBackendEnv(env map[string]string, cityPath, scopeRoot st
 		mirrorBeadsDoltEnv(env)
 		return true, nil
 	}
+	if resolved.State.EndpointOrigin == contract.EndpointOriginInheritedCity &&
+		(meta.Backend == "" || meta.Backend == "dolt") &&
+		scopeUsesProxiedServerMode(cityPath, scopeRoot) {
+		clearProjectedDoltEnv(env)
+		clearProjectedPostgresEnv(env)
+		env["GC_BEADS_BACKEND"] = "proxied-server"
+		env["BEADS_BACKEND"] = "proxied-server"
+		mirrorBeadsDoltEnv(env)
+		return true, nil
+	}
 	switch meta.Backend {
 	case "", "dolt":
+		if scopeUsesProxiedServerMode(cityPath, scopeRoot) {
+			clearProjectedBeadsBackendEnv(env)
+			clearProjectedPostgresEnv(env)
+			clearProjectedDoltEnv(env)
+			env["GC_BEADS_BACKEND"] = "proxied-server"
+			env["BEADS_BACKEND"] = "proxied-server"
+			mirrorBeadsDoltEnv(env)
+			return true, nil
+		}
 		clearProjectedBeadsBackendEnv(env)
 		clearProjectedPostgresEnv(env)
 		target, err := contract.ResolveDoltConnectionTarget(fsys.OSFS{}, cityPath, scopeRoot)
@@ -447,6 +466,29 @@ func scopeBackendIsDoltlite(cityPath, scopeRoot string) bool {
 	}
 	return resolved.State.EndpointOrigin == contract.EndpointOriginInheritedCity &&
 		cityUsesDoltliteBeadsBackend(cityPath)
+}
+
+// scopeUsesProxiedServerMode mirrors scopeBackendIsDoltlite for the opt-in
+// bd proxied-server mode: bd owns the Dolt sql-server lifecycle entirely, so
+// no host/port should ever be resolved or projected for this scope. Checks
+// the scope's own metadata.json dolt_mode first (backend stays "dolt" for
+// this mode -- only dolt_mode distinguishes it from managed/external
+// "server"), then falls back to the city.toml-backed
+// cityUsesProxiedServerMode for the city itself or an inherited rig.
+func scopeUsesProxiedServerMode(cityPath, scopeRoot string) bool {
+	meta, ok, err := contract.LoadMetadataState(fsys.OSFS{}, scopeMetadataJSONPath(scopeRoot))
+	if err == nil && ok && meta.DoltMode != "" {
+		return meta.DoltMode == "proxied-server"
+	}
+	if samePath(cityPath, scopeRoot) {
+		return cityUsesProxiedServerMode(cityPath)
+	}
+	resolved, err := contract.ResolveScopeConfigState(fsys.OSFS{}, cityPath, scopeRoot, "")
+	if err != nil || resolved.Kind != contract.ScopeConfigAuthoritative {
+		return false
+	}
+	return resolved.State.EndpointOrigin == contract.EndpointOriginInheritedCity &&
+		cityUsesProxiedServerMode(cityPath)
 }
 
 func scopeOverridesCityBackend(cityPath, scopeRoot string) bool {
@@ -1324,6 +1366,16 @@ func bdRuntimeEnvForRigWithErrorRecoveryContext(ctx context.Context, cityPath st
 		mirrorBeadsDoltEnv(env)
 		return env, nil
 	}
+	rigProxiedServer := scopeUsesProxiedServerMode(cityPath, rigPath)
+	cityProxiedServer := scopeUsesProxiedServerMode(cityPath, cityPath)
+	if rigProxiedServer || (cityProxiedServer && !scopeOverridesCityBackend(cityPath, rigPath)) {
+		clearProjectedDoltEnv(env)
+		clearProjectedPostgresEnv(env)
+		env["GC_BEADS_BACKEND"] = "proxied-server"
+		env["BEADS_BACKEND"] = "proxied-server"
+		mirrorBeadsDoltEnv(env)
+		return env, nil
+	}
 	if err := applyResolvedRigDoltEnvContext(ctx, env, cityPath, rigPath, explicitRig, allowRecovery); err != nil {
 		clearProjectedDoltEnv(env)
 		clearProjectedPostgresEnv(env)
@@ -1421,6 +1473,14 @@ func bdRuntimeEnvWithErrorRecoveryContext(ctx context.Context, cityPath string, 
 		clearProjectedPostgresEnv(env)
 		env["GC_BEADS_BACKEND"] = "doltlite"
 		env["BEADS_BACKEND"] = "doltlite"
+		mirrorBeadsDoltEnv(env)
+		return env, nil
+	}
+	if scopeUsesProxiedServerMode(cityPath, cityPath) {
+		clearProjectedDoltEnv(env)
+		clearProjectedPostgresEnv(env)
+		env["GC_BEADS_BACKEND"] = "proxied-server"
+		env["BEADS_BACKEND"] = "proxied-server"
 		mirrorBeadsDoltEnv(env)
 		return env, nil
 	}

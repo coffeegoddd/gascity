@@ -7503,6 +7503,109 @@ func TestGcBeadsBdInitDoltliteInitializesDelegatedBdWrites(t *testing.T) {
 	}
 }
 
+// gc-beads-bd.sh's op_init must delegate to `bd init --proxied-server`
+// (instead of the managed-server `--server --server-host ... --server-port
+// ...` path) when BEADS_BACKEND=proxied-server, and bd's own subsequent
+// writes (bead CRUD) must work against the resulting proxy -- the
+// proxied-server sibling of TestGcBeadsBdInitDoltliteInitializesDelegatedBdWrites.
+func TestGcBeadsBdInitProxiedServerInitializesDelegatedBdWrites(t *testing.T) {
+	bdPath, err := exec.LookPath("bd")
+	if err != nil {
+		t.Skip("bd CLI required for proxied-server wrapper init smoke test")
+	}
+	// Unlike doltlite's init (self-contained shell/sqlite, never actually
+	// calls `bd init`), this branch delegates entirely to `bd init
+	// --proxied-server` and relies on bd's own writes -- so the resolved
+	// binary must be the real bd CLI, not this package's self-re-exec fake
+	// (bdTestCmd's "init" case is a hardcoded no-op returning 0 regardless
+	// of args/flags, which would make this test pass trivially without
+	// exercising anything). --proxied-server is EXPERIMENTAL and may also be
+	// absent from an older real bd, so probe for it explicitly.
+	helpOut, err := exec.Command(bdPath, "init", "--help").CombinedOutput()
+	if err != nil || !strings.Contains(string(helpOut), "--proxied-server") {
+		t.Skip("bd CLI on PATH does not support --proxied-server (fake/stub bd or too old); skipping proxied-server wrapper init smoke test")
+	}
+
+	cityPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityPath, ".gc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte("[workspace]\nname = \"demo\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	materializeBuiltinPacksForTest(t, cityPath)
+	script := gcBeadsBdScriptPath(cityPath)
+
+	env := sanitizedBaseEnv(append(gcBeadsBdTestHomeEnv(t),
+		"GC_CITY_PATH="+cityPath,
+		"GC_BEADS_BACKEND=proxied-server",
+		"BEADS_BACKEND=proxied-server",
+		"BD_NON_INTERACTIVE=1",
+		"BD_BIN="+bdPath,
+		"PATH="+os.Getenv("PATH"),
+	)...)
+
+	cmd := exec.Command(script, "init", cityPath, "gc", "hq")
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("gc-beads-bd proxied-server init failed: %v\n%s", err, out)
+	}
+	t.Cleanup(func() {
+		stop := exec.Command(bdPath, "dolt", "stop")
+		stop.Dir = cityPath
+		stop.Env = sanitizedBaseEnv(append(gcBeadsBdTestHomeEnv(t),
+			"BEADS_DIR="+filepath.Join(cityPath, ".beads"),
+			"PATH="+os.Getenv("PATH"),
+		)...)
+		_ = stop.Run()
+	})
+
+	metaData, err := os.ReadFile(filepath.Join(cityPath, ".beads", "metadata.json"))
+	if err != nil {
+		t.Fatalf("read metadata: %v", err)
+	}
+	metaText := string(metaData)
+	for _, want := range []string{`"backend": "dolt"`, `"dolt_mode": "proxied-server"`} {
+		if !strings.Contains(metaText, want) {
+			t.Fatalf("metadata missing %q:\n%s", want, metaText)
+		}
+	}
+
+	create := exec.Command(bdPath, "create", "--json", "probe task")
+	create.Dir = cityPath
+	create.Env = sanitizedBaseEnv(append(gcBeadsBdTestHomeEnv(t),
+		"BEADS_DIR="+filepath.Join(cityPath, ".beads"),
+		"BD_NON_INTERACTIVE=1",
+		"PATH="+os.Getenv("PATH"),
+	)...)
+	created, err := create.CombinedOutput()
+	if err != nil {
+		t.Fatalf("bd create after proxied-server init failed: %v\n%s", err, created)
+	}
+	var createdIssue struct {
+		ID    string `json:"id"`
+		Title string `json:"title"`
+	}
+	if err := json.Unmarshal(created, &createdIssue); err != nil {
+		t.Fatalf("parse bd create output: %v\n%s", err, created)
+	}
+	if !strings.HasPrefix(createdIssue.ID, "gc-") {
+		t.Fatalf("created issue ID = %q, want gc-*", createdIssue.ID)
+	}
+	if createdIssue.Title != "probe task" {
+		t.Fatalf("created issue title = %q, want probe task", createdIssue.Title)
+	}
+
+	// Re-running init on an already-initialized scope must be a no-op (the
+	// ready-check gate), not an error from bd's "already initialized" guard.
+	cmd2 := exec.Command(script, "init", cityPath, "gc", "hq")
+	cmd2.Env = env
+	if out2, err := cmd2.CombinedOutput(); err != nil {
+		t.Fatalf("gc-beads-bd proxied-server re-init failed: %v\n%s", err, out2)
+	}
+}
+
 func TestGcBeadsBdInitDoltliteRejectsUnsafeCustomTypes(t *testing.T) {
 	cityPath := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(cityPath, ".gc"), 0o755); err != nil {

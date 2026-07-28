@@ -5416,6 +5416,84 @@ dolt.auto-start: false
 	}
 }
 
+// A city configured with [beads] backend = "proxied-server" (gc init
+// --proxied-server) must project GC_BEADS_BACKEND/BEADS_BACKEND=proxied-server
+// and never a resolved Dolt host/port -- bd owns the endpoint entirely, so
+// there is nothing for gascity to resolve or dial, the same way doltlite
+// short-circuits the managed-dolt env projection.
+func TestBdRuntimeEnvForCityProxiedServerModeClearsDoltEnv(t *testing.T) {
+	t.Setenv("GC_BEADS", "bd")
+	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_BACKEND", "")
+	_ = os.Unsetenv("GC_BEADS_BACKEND")
+	t.Setenv("BEADS_BACKEND", "")
+	_ = os.Unsetenv("BEADS_BACKEND")
+
+	cityPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte(`[beads]
+provider = "bd"
+backend = "proxied-server"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	env := mustBdRuntimeEnv(t, cityPath)
+	for _, key := range []string{"GC_BEADS_BACKEND", "BEADS_BACKEND"} {
+		if got := env[key]; got != "proxied-server" {
+			t.Fatalf("%s = %q, want proxied-server", key, got)
+		}
+	}
+	for _, key := range projectedDoltEnvKeys {
+		if got, ok := env[key]; ok && got != "" {
+			t.Fatalf("%s = %q, want cleared for proxied-server mode", key, got)
+		}
+	}
+}
+
+// A rig with no own backend override inherits proxied-server mode from its
+// city, mirroring how a rig inherits doltlite.
+func TestBdRuntimeEnvForRigProxiedServerModeInheritsFromCity(t *testing.T) {
+	t.Setenv("GC_BEADS", "bd")
+	t.Setenv("GC_DOLT", "skip")
+	t.Setenv("GC_BEADS_BACKEND", "")
+	_ = os.Unsetenv("GC_BEADS_BACKEND")
+	t.Setenv("BEADS_BACKEND", "")
+	_ = os.Unsetenv("BEADS_BACKEND")
+
+	cityPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, "city.toml"), []byte(`[beads]
+provider = "bd"
+backend = "proxied-server"
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rigPath := filepath.Join(cityPath, "rigs", "frontend")
+	if err := os.MkdirAll(filepath.Join(rigPath, ".beads"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(rigPath, ".beads", "config.yaml"), []byte(`issue_prefix: frontend
+gc.endpoint_origin: inherited_city
+gc.endpoint_status: verified
+dolt.auto-start: false
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cfg := &config.City{Rigs: []config.Rig{{Name: "frontend", Path: "rigs/frontend", Prefix: "frontend"}}}
+
+	env := mustBdRuntimeEnvForRig(t, cityPath, cfg, rigPath)
+	for _, key := range []string{"GC_BEADS_BACKEND", "BEADS_BACKEND"} {
+		if got := env[key]; got != "proxied-server" {
+			t.Fatalf("%s = %q, want proxied-server (inherited from city)", key, got)
+		}
+	}
+}
+
 func TestProjectedKeysCoverage(t *testing.T) {
 	parentKeys := make([]string, 0, len(projectedBeadsBackendEnvKeys)+len(projectedPostgresEnvKeys)+len(projectedDoltEnvKeys))
 	for _, key := range projectedBeadsBackendEnvKeys {
@@ -5524,6 +5602,47 @@ dolt.auto-start: false
 	var parseErr *contract.MetadataParseError
 	if !errors.As(err, &parseErr) {
 		t.Errorf("errors.As(*MetadataParseError) = false, want true; err=%v", err)
+	}
+}
+
+// applyCanonicalScopeBackendEnv's backend=="dolt" case must not attempt to
+// resolve a Dolt connection target for dolt_mode=proxied-server -- there is
+// no host/port to resolve, bd owns the endpoint. Without this check it would
+// fall into contract.ResolveDoltConnectionTarget and either error or resolve
+// a bogus managed-local target.
+func TestApplyCanonicalScopeBackendEnvProxiedServerMode(t *testing.T) {
+	cityPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityPath, ".beads"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, ".beads", "config.yaml"), []byte(`issue_prefix: demo
+gc.endpoint_origin: managed_city
+gc.endpoint_status: verified
+dolt.auto-start: false
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cityPath, ".beads", "metadata.json"), []byte(`{"backend":"dolt","dolt_mode":"proxied-server","dolt_database":"hq"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	env := map[string]string{}
+	used, err := applyCanonicalScopeBackendEnv(env, cityPath, cityPath)
+	if err != nil {
+		t.Fatalf("applyCanonicalScopeBackendEnv() error = %v", err)
+	}
+	if !used {
+		t.Fatal("used = false, want true")
+	}
+	for _, key := range []string{"GC_BEADS_BACKEND", "BEADS_BACKEND"} {
+		if got := env[key]; got != "proxied-server" {
+			t.Fatalf("%s = %q, want proxied-server", key, got)
+		}
+	}
+	for _, key := range projectedDoltEnvKeys {
+		if got, ok := env[key]; ok && got != "" {
+			t.Fatalf("%s = %q, want cleared for proxied-server mode", key, got)
+		}
 	}
 }
 
