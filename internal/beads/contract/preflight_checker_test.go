@@ -221,6 +221,29 @@ func TestPreflightPassesOnHealthyDolt(t *testing.T) {
 	}
 }
 
+// dolt_mode=proxied-server means bd owns the endpoint and gascity opens no
+// direct connection to it, so the native store is never eligible — this
+// mirrors dolt_mode=embedded's fallback-to-per-call-bd behavior rather than
+// falling into the "unsupported dolt mode" default. See ga-ps1-mode-flag for
+// the opt-in proxied-server mode this recognizes.
+func TestPreflightBlocksNativeOnProxiedServerMode(t *testing.T) {
+	scope := "/city"
+	checker := testPreflightChecker(preflightMetadataJSON(`{
+		"backend": "dolt",
+		"dolt_mode": "proxied-server",
+		"dolt_database": "gascity",
+		"project_id": "gc-local"
+	}`), PreflightBDContext{Backend: "dolt", DoltMode: "proxied-server"}, "gc-local")
+
+	result, err := checker.Check(scope)
+	if err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+
+	assertPreflightVerdict(t, result, PreflightVerdictBlocked, false)
+	assertCheckState(t, result, PreflightCheckDoltModeSafe, PreflightCheckFail)
+}
+
 func TestPreflightAcceptsExecGcBeadsBdProviderPath(t *testing.T) {
 	scope := "/city"
 	checker := testPreflightChecker(preflightMetadataJSON(`{

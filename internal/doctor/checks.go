@@ -902,7 +902,7 @@ func activeBDStoreFromMetadata(path string) (string, string) {
 		return mode, ""
 	}
 	switch mode {
-	case "server":
+	case "server", "proxied-server":
 		return "metadata.json dolt_mode=" + mode, "dolt"
 	case "embedded", "local":
 		return "metadata.json dolt_mode=" + mode, "embeddeddolt"
