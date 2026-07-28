@@ -116,6 +116,64 @@ func TestOpenStoreAtForCityIneligibleProviderSkipsPreflight(t *testing.T) {
 	}
 }
 
+// A scope whose metadata declares dolt_mode=proxied-server (gc init
+// --proxied-server) must skip the preflight computation entirely and go
+// straight to the bd-backed store -- there is no local port to preflight
+// against, bd owns the endpoint. OpenNativeStore must never be called.
+func TestOpenStoreAtForCityProxiedServerModeSkipsPreflightAndNativeOpen(t *testing.T) {
+	t.Setenv(nativeForceFallbackEnv, "")
+	scope := "/city"
+	metadata := `{
+		"backend": "dolt",
+		"dolt_mode": "proxied-server",
+		"dolt_database": "gascity",
+		"project_id": "gc-local"
+	}`
+	bd := NewMemStore()
+
+	result, err := OpenStoreAtForCity(context.Background(), StoreOpenOptions{
+		ScopeRoot: scope,
+		Provider:  "bd",
+		// A PreflightChecker whose Check() would fatal the test if invoked --
+		// asserting the proxied-server branch short-circuits before it.
+		PreflightChecker: contract.PreflightChecker{
+			FS: func() *fsys.Fake {
+				files := fsys.NewFake()
+				files.Dirs[filepath.Join(scope, ".beads")] = true
+				files.Files[filepath.Join(scope, ".beads", "metadata.json")] = []byte(metadata)
+				return files
+			}(),
+			Provider: "bd",
+			BDContext: func(string) (contract.PreflightBDContext, error) {
+				t.Fatal("BDContext called; proxied-server mode should skip the preflight computation entirely")
+				return contract.PreflightBDContext{}, nil
+			},
+		},
+		OpenBdStore: func() (Store, error) {
+			return bd, nil
+		},
+		OpenNativeStore: func() (Store, error) {
+			t.Fatal("OpenNativeStore called for proxied-server-mode scope")
+			return nil, nil
+		},
+	})
+	if err != nil {
+		t.Fatalf("OpenStoreAtForCity() error = %v", err)
+	}
+	if result.Store != bd {
+		t.Fatalf("Store = %T %#v, want injected bd store", result.Store, result.Store)
+	}
+	if result.Diagnostic.Store != storeNameBdStore {
+		t.Fatalf("diagnostic store = %q, want %q", result.Diagnostic.Store, storeNameBdStore)
+	}
+	if result.Diagnostic.NativeStoreEligible {
+		t.Fatal("diagnostic native_store_eligible = true, want false")
+	}
+	if result.Diagnostic.PreflightGate != string(contract.PreflightCheckDoltModeSafe) {
+		t.Fatalf("preflight gate = %q, want dolt_mode_safe", result.Diagnostic.PreflightGate)
+	}
+}
+
 func TestOpenStoreAtForCityContextDriftFallsBackWithPreflightDiagnostic(t *testing.T) {
 	t.Setenv(nativeForceFallbackEnv, "")
 	scope := "/city"

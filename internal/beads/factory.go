@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/gastownhall/gascity/internal/beads/contract"
+	"github.com/gastownhall/gascity/internal/fsys"
 	"github.com/gastownhall/gascity/internal/rollout/gate"
 )
 
@@ -118,6 +119,23 @@ func OpenStoreAtForCity(ctx context.Context, opts StoreOpenOptions) (StoreOpenRe
 			NativeStoreEligible: false,
 			PreflightGate:       string(contract.PreflightCheckProviderContract),
 			PreflightReason:     fmt.Sprintf("provider %q does not use the bd contract", provider),
+		}
+		logNativeUnavailable(opts.Logger, opts.ScopeRoot, diag.PreflightGate, diag.PreflightReason)
+		return opts.openBdFallback(provider, diag)
+	}
+
+	if scopeMetadataDeclaresProxiedServerMode(opts.PreflightChecker.FS, opts.ScopeRoot) {
+		// bd owns the endpoint entirely in this mode (opt-in `gc init
+		// --proxied-server`) — there is no local port to preflight against,
+		// so this skips the preflight computation (which would otherwise
+		// attempt a live identity_match connection guaranteed to be
+		// irrelevant) and goes straight to the bd-backed store, the same
+		// destination checkDoltModeSafe's own preflight failure would reach.
+		diag := BeadsDiagnostic{
+			Store:               storeNameBdStore,
+			NativeStoreEligible: false,
+			PreflightGate:       string(contract.PreflightCheckDoltModeSafe),
+			PreflightReason:     "dolt_mode=proxied-server; bd owns the endpoint, native store is never eligible",
 		}
 		logNativeUnavailable(opts.Logger, opts.ScopeRoot, diag.PreflightGate, diag.PreflightReason)
 		return opts.openBdFallback(provider, diag)
@@ -295,6 +313,23 @@ func diagnosticFromPreflight(result contract.PreflightResult) BeadsDiagnostic {
 		}
 	}
 	return diag
+}
+
+// scopeMetadataDeclaresProxiedServerMode reports whether a scope's own
+// .beads/metadata.json declares dolt_mode=proxied-server. Absence or any
+// other value (including unset, "server", "embedded") reports false, so
+// this is a no-op for every scope that never opted into proxied-server
+// mode via `gc init --proxied-server`. fs defaults to the real filesystem
+// when nil (mirrors contract.PreflightChecker.readMetadata's own default).
+func scopeMetadataDeclaresProxiedServerMode(fs fsys.FS, scopeRoot string) bool {
+	if fs == nil {
+		fs = fsys.OSFS{}
+	}
+	meta, ok, err := contract.LoadMetadataState(fs, filepath.Join(scopeRoot, ".beads", "metadata.json"))
+	if err != nil || !ok {
+		return false
+	}
+	return meta.DoltMode == "proxied-server"
 }
 
 // scopeHasExecutableBdHooks reports whether any of the standard bd hooks
